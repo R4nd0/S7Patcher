@@ -1,0 +1,79 @@
+S7 History Edition, local build 1.12.1395 - Lua LAN research
+
+Status: research-only staging; not installed, not game-runtime tested.
+No replacement server or working LAN multiplayer is implemented by these deltas.
+
+Extraction
+- Interface.bba: 284 files / 325 directory entries.
+- Shr.bba: 732 files / 797 directory entries.
+- Every extracted file was checked against stored length and CRC32.
+- Originals were opened for reading only. Output stayed under work/.
+- extract_s7_bba.py follows the MIT-licensed Eisenmonoxid/S7Packer format.
+- 276 Lua analysis copies had only constant-table references substituted.
+  These analysis copies are not runtime Lua replacements; their original
+  obfuscator/header aliases were removed for readability.
+- The staged Lua files DO preserve their original obfuscator and all unedited
+  bytes. Only the 25 specified raw-text spans change across six files.
+
+Original Lua evidence (line numbers in work/s7-lua-decoded)
+- sessionList.lua:54 creates Online{lan=false} and LAN{lan=true}, selects
+  Online, then hides the dropdown.
+- sessionList.lua:41 passes selected lanMode to sessionCreation.
+- sessionList.lua:125/165 calls SessionStartDiscovery(selected.lan).
+- sessionList.lua:168 calls SessionGetDiscovery(false).
+- sessionList.lua:18 joins browser entries through SessionJoin(ID,false).
+- sessionCreation.lua:26 calls
+  SessionCreate(mapFilename,private,lanMode,2,false,fixedTeams,template,coop).
+- sessionCreation.lua:42 records isLAN in tracking data.
+- sessionList.lua:136, sessionCreation.lua:68, hostLobby.lua:202 and
+  joinLobby.lua:90 return to main menu when Network.IsLoggedIn() is false.
+- sessionList.lua:149-159 gates Create/Join/QuickMatch by IsNATReady().
+- mainState.lua:209-211 also blocks toSessionList/toEmpire when
+  !Game.IsConnected() && Game.InMapMode().
+- mainState.lua:152-155 raises an RDV disconnect dialog for active MP screens.
+- mainMenu.lua:128 uses the SessionCreate third bool in offline singleplayer:
+  SessionCreate(map,false,not IsLoggedIn(),1,false,false,nil).
+  Thus presence of a local session path alone does not prove functional LAN.
+
+Native confirmation from parallel disassembly (preferred over Lua inference)
+- SessionGetDiscovery(arg1 bool) chooses LAN vs Online via EDA320.
+- HE SessionJoin binding at 84F050/84F070 reads the LAN bool from Lua ARGUMENT 3.
+  The staged call is consequently SessionJoin(ID,false,lanMode), with existing
+  online invitation calls left untouched.
+- The LAN Join target at EF8E00 is a success-returning stub (mov al,1; ret4).
+  A successful Lua return from Join is NOT proof of joining a peer.
+- Native LAN Create still requires LoginGetter ED7230 and NAT readiness ED7270.
+  Lua UI gates alone cannot make offline LAN work.
+
+Scope of the research delta
+- Adds explicit LAN diagnostics (not playable) menu entry; exposes Online/LAN filter.
+- Accepts an explicit lanMode and keeps it through creation/host/join UI.
+- Routes discovery and browser join using the verified native boolean positions.
+- Bypasses Lua login, NAT, and RDV UI gates only in the LAN workflow.
+- Keeps online QuickMatch and Ubisoft invitation paths out of LAN workflow.
+- Disables LAN Join because the native implementation is a success-returning stub.
+  Its argument-position delta is recorded for correctness, not exposed as working.
+- Keeps native SessionIsInSession, ready state, slot synchronization and StartGame.
+- Keeps native start events: StartGame -> receivedStartGameMessage ->
+  state.restartWithMultiplayer -> boot.startMultiplayer -> multiplayer load screen.
+- Does not fake discovery completion, peer identity, readiness, or session success.
+
+Missing external script components / loading
+- Interface local/start.lua calls Game.LoadScript("local/core.lua") and requires
+  local.tools.boot, but those files and superMenu.lua are absent from extracted
+  Interface.bba and Shr.bba. Some implementation is elsewhere/embedded.
+- No loose-file override precedence was proved by this work. Base contains BBA,
+  Bin and support directories. No mount/DataPath configuration was found there.
+- Do not claim a loose Script/ tree overrides BBA archives without verification.
+- Use a separate repacked Interface.bba staging copy if the parent elects to test;
+  keep original hashes/backups and require all delta source hashes to match.
+
+Verification
+- prepare_s7_lan_probe.py creates six raw patched files and patch-spec.json.
+- patch-spec.json includes exact source/patched SHA256, byte offsets, before_hex,
+  replacement UTF-8 and reason. It contains small deltas, not complete game files.
+- verify_s7_lan_probe.py parsed original + patched Lua (12 successful parses).
+- Six independent byte-delta reconstructions matched the generated files and
+  expected SHA256. No game Lua, obfuscator or native network call was executed.
+- GUI layout, archive load precedence, LAN create/discovery packets, two-client
+  lobby/join/ready/start, game synchronization and disconnect handling are untested.

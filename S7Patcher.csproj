@@ -56,4 +56,9 @@
 	<ItemGroup>
 		<EmbeddedResource Include="Definitions\Definitions.bin" />
 	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="tools\lan\*.py;tools\lan\*.json;tools\lan\*.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+		<Compile Remove="tests\**\*.cs" />
+	</ItemGroup>
 </Project>

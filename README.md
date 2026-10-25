@@ -7,6 +7,57 @@ A simple application for the game "The Settlers 7 - Paths to a Kingdom".
 **Should there be any questions: [Settlers Discord Server](https://discord.gg/7SGkQtAAET).**
 
 ---
+## History Edition diagnostics (this fork)
+
+**These additions do not yet implement a complete replacement server or playable LAN multiplayer.**
+The inspected Ubisoft Connect build contains a native LAN Join function that returns success without joining a peer. Native LAN Create also retains login and NAT checks. See [LAN research and remaining blockers](docs/LAN-RESEARCH.md).
+
+Build this fork with the .NET 10 SDK (`dotnet build -c Debug`). The original patching workflow below remains available; these explicit diagnostic commands return before that workflow starts.
+
+```powershell
+S7Patcher.exe --inspect "C:\Spiele\thesettlers7"
+S7Patcher.exe --lan-experiment prepare "C:\Spiele\thesettlers7" --output "C:\S7Research\new-diagnostic"
+```
+
+- `--inspect` reads an executable or installation folder and prints JSON with SHA-256, file version and nearby network-library fingerprints. It creates no backup and changes no files. Exit codes: `0` recognized Ubisoft HE build, `1` read error, `2` invalid/missing/ambiguous input, `3` unknown executable hash. Recognition does not imply LAN compatibility.
+- `--lan-experiment prepare` requires Python 3.10 or newer on PATH and the accompanying `tools/lan` files. It writes only an archive copy and `manifest.json` into a **new**, separate directory whose parent already exists. It does not install the copy or start the game. Both `Base/Bin` and `Data/Base/Bin` layouts are supported. Original EXE/archive SHA-256 and every Lua delta's source bytes and result hash must match. Existing output directories and output inside game paths, including resolved junction targets, are rejected.
+- The staged menu is explicitly labelled **LAN diagnostics (not playable)** and disables LAN Join. Six Lua files contain 25 research edits; native networking code is unchanged. The archive writer appends replacements, preserves filename lookup tables, and checks all 284 archive files. Exit codes: `0` staged, `1` missing tool/interpreter, `2` invalid input or failed validation.
+- The supported Ubisoft HE executable hash is `4ef51632a8a193050ebe8ef3f3fe38a9b240b4aa57ff62a4f381bc0f539df64f`; the original `Interface.bba` hash is `766ae21ef06709309a68fb5bb792b0fd56373c668f02140122eef181917b0b94`. Gold, Steam HE and modified builds are not accepted for staging.
+
+Staged archives contain your local game data and must not be distributed or committed. This repository contains source code and small byte deltas only. Remove the staging directory to discard the experiment; the preparation command never changes the installed game, `Options.ini`, accounts, firewall or hosts file.
+
+### Local bootstrap configuration endpoint
+
+```powershell
+S7Patcher.exe --local-config-server --seconds 300
+```
+
+This separate mode serves only the bootstrap configuration at `http://127.0.0.1:9110/public/rendezvous/v1/configuration`. A successful HTTP response is **not a login or working multiplayer**. It does not patch, instrument or launch the game.
+
+The server creates a fresh ECDSA P-256 key in memory for each run and advertises its CNG `ECS1` public blob together with one loopback PRUDP URL. Its private key is never exported or saved. The advertised UDP port is actually bound. By default, received datagrams are counted by length and receive no protocol response. Request headers, query values, UDP contents and remote endpoints are not logged. Authentication, signing of protocol messages, a complete PRUDP session and matchmaking remain unimplemented.
+
+Add the optional boolean switch `--handshake-metadata` to passively classify structurally valid SYN/CONNECT packets. UDP events then add only `packet_type` (`syn`, `connect` or `unrecognized`) and, for recognized packets, `bytes_consumed` and `checksum_matches_zero_seed`. The latter compares the packet checksum with an **unverified zero-seed hypothesis**; even a match does not authenticate a peer or establish that the stream's actual seed is zero. Unrecognized packets omit the checksum result. Routing identifiers, signatures, cookies, keys and payloads are never logged, and the mode sends no replies. A declared packet may consume only part of a datagram; trailing bytes are not classified or included in that packet's checksum.
+
+The separate opt-in `--syn-probe` implies handshake metadata and adds a deliberately limited SYN-ACK experiment. It responds only to a loopback SYN with flags exactly `0x20` or `0x60`, stream 3, destination virtual port `0x31`, no payload or trailing frame, and a checksum matching seed zero. Its 18-byte ACK swaps virtual ports, echoes the sequence and uses a random nonzero cookie retained only in memory for up to eight senders; retries keep that sender's cookie. Reply logs contain only a fixed event, byte length and incomplete-capability flags. It never replies to CONNECT or acknowledges a login. This mode does not establish a full handshake, authentication or multiplayer, and is off by default.
+
+Both listeners bind exclusively to IPv4 loopback. HTTP defaults to port 9110; UDP defaults to a free port. Use `--http-port` or `--udp-port` to choose a port (`0` chooses a free port). `--seconds 1..86400` limits the run; without it, stop with Ctrl+C. Shutdown closes both listeners and finishes request workers before its final JSON event. Exit codes: `0` orderly stop, `1` local bind/key/I/O failure, `2` invalid arguments. No Python or external library is needed for this mode.
+
+### Diagnostic regression checks
+
+```powershell
+python -B -m unittest discover -s tests -p test_lan_tools.py -v
+dotnet run --project tests/InspectionTests -- "C:\path\to\dotnet.exe" "C:\path\to\S7Patcher\bin\Debug\net10.0\S7Patcher.dll"
+dotnet run --project tests/ConfigServerTests -- "C:\path\to\dotnet.exe" "C:\path\to\S7Patcher\bin\Debug\net10.0\S7Patcher.dll"
+dotnet run --project tests/PrudpDecoderTests
+```
+
+The tests use invented archive data and temporary files. To include the known local game in read-only integration checks, set `S7_INSTALLATION` for the Python tests and append the installation folder to the C# test command. Set `S7_TEST_TEMP` to an existing writable temporary parent if your environment restricts the system temporary directory. The Windows junction test is skipped when the environment cannot create junctions. No test installs the diagnostic archive.
+
+The config-server harness uses real loopback sockets, imports the advertised public key with Windows CNG when available, checks passive modes send no UDP answers and logs contain no test secrets, and verifies cancellation, bounded lifetimes, released ports and absence of file changes. Invented SYN/CONNECT fixtures check optional metadata and its absence by default. SYN-probe tests check exact reply fields, fixed checksum vectors, stable retry cookies, sender limits and rejected packets. The separate decoder harness checks lengths, truncated inputs, declared packet boundaries and optional checksum verification without networking. Neither harness starts a game.
+
+The BBA format/crypto implementation follows MIT-licensed [S7Packer](https://github.com/Eisenmonoxid/S7Packer); its [license](tools/lan/LICENSE.S7Packer.txt) is included. [Lua research notes](tools/lan/research-notes.txt) describe the deltas and their limitations.
+
+---
 ## Usage
 1. Make sure that the game has been launched successfully `at least once` before using the S7Patcher.
 2. Check that the latest official patch `1.12.1396` is installed (Not necessary when using the History Edition).

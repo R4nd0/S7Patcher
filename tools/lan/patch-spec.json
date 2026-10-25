@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "files": [
+    {
+      "path": "Script/local/menu/panel/menu/play/multiplayer/sessionList.lua",
+      "source_sha256": "873ce830e0805dcffff7e66a5eaab9c14c31199b19a4c7d472a672db5655cc4a",
+      "patched_sha256": "5e3bb95d98d8f1d39ceaa8c1d066c6eadfe1024d486af48ecf92b42082a0757f",
+      "edits": [
+        {
+          "offset": 14270,
+          "before_hex": "655b6e283434295d5b6e283532295d28745b6e283533295d2c66616c736529",
+          "after_utf8": "e[\"Network\"][\"SessionJoin\"](t[\"ID\"],false,l[\"lanMode\"]==true)",
+          "reason": "HE native binding reads LAN from argument 3; LAN Join itself is a native success stub"
+        },
+        {
+          "offset": 14498,
+          "before_hex": "6c5b6e283634295d5b6e283635295d287b5b6e283636295d3d28745b6e283637295d7e3d6e28313729292c5b6e283638295d3d747275657d29",
+          "after_utf8": "l[\"callbacks\"][\"toJoinLobby\"]({[\"fixedTeams\"]=(t[\"Teams\"]~=1),[\"fixedPositions\"]=true,[\"lanMode\"]=l[\"lanMode\"]==true})",
+          "reason": "Carry selected transport into joined lobby"
+        },
+        {
+          "offset": 15238,
+          "before_hex": "6c6f63616c2066756e6374696f6e20472829655b6e283434295d5b6e283937295d2866616c736529",
+          "after_utf8": "local function G()l[\"s7FilterReady\"]=false\ne[\"Network\"][\"SetIsQuickMatch\"](false)",
+          "reason": "Do not run filter callbacks against stale list widgets during recreation"
+        },
+        {
+          "offset": 15685,
+          "before_hex": "6c6f63616c2066756e6374696f6e207428296966206c5b6e28313138295d7468656e0a6c5b6e28313138295d5b6e28313139295d282d6e2831372929656e640a656e64",
+          "after_utf8": "local function t()if l[\"s7FilterReady\"] and l[\"sessionsList\"] then\nl[\"lanMode\"]=l[\"sessionsFilterList\"][\"getSelectedItemData\"]()[\"lan\"]==true\nl[\"sessionsList\"][\"removeAll\"]()\ne[\"Network\"][\"SessionStartDiscovery\"](l[\"lanMode\"])\nl[\"sessionListState\"]=r[\"waitingSessionList\"]l[\"lastDiscoveryFinished\"]=false\nend\nend",
+          "reason": "Restart native discovery when changing the actual session filter"
+        },
+        {
+          "offset": 15995,
+          "before_hex": "6c5b6e283933295d5b6e28313139295d286e2831372929655b6e283732295d5b6e28313334295d286c5b6e283933295d5b6e28313335295d282929",
+          "after_utf8": "l[\"sessionsFilterList\"][\"setSelectedIndex\"](l[\"lanMode\"] and 2 or 1)e[\"ui\"][\"show\"](l[\"sessionsFilterList\"][\"getMainFrame\"]())",
+          "reason": "Expose original Online/LAN selector and retain chosen mode"
+        },
+        {
+          "offset": 24251,
+          "before_hex": "6c5b6e28323836295d3d66616c73650a656e640a6c6f63616c2066756e6374696f6e20752829",
+          "after_utf8": "l[\"lastDiscoveryFinished\"]=false\nl[\"s7FilterReady\"]=true\nend\nlocal function u()",
+          "reason": "Enable filter callbacks only after both selector and sessions list exist"
+        },
+        {
+          "offset": 24430,
+          "before_hex": "6c6f63616c2066756e6374696f6e206328296966206e6f7420655b6e283434295d5b6e28323837295d28297468656e",
+          "after_utf8": "local function c()local s7Lan=l[\"lanMode\"]==true\nlocal s7Ready=s7Lan or e[\"Network\"][\"IsNATReady\"]()\nif not s7Lan and not e[\"Network\"][\"IsLoggedIn\"]()then",
+          "reason": "Bypass online login only while LAN selector is active"
+        },
+        {
+          "offset": 24500,
+          "before_hex": "696620655b6e283434295d5b6e28323838295d28293d3d7472756520616e64206c5b6e283433295d3d3d74727565207468656e",
+          "after_utf8": "if not s7Lan and e[\"Network\"][\"HasPendingInvite\"]()==true and l[\"shouldRepopulateInvitationList\"]==true then",
+          "reason": "Keep Ubisoft invitation processing online-only"
+        },
+        {
+          "offset": 25033,
+          "before_hex": "655b6e283434295d5b6e28323933295d28293d3d66616c7365",
+          "after_utf8": "s7Ready==false",
+          "reason": "NAT is required only for online sessions"
+        },
+        {
+          "offset": 25160,
+          "before_hex": "655b6e283434295d5b6e28323933295d28293d3d74727565",
+          "after_utf8": "s7Ready==true",
+          "reason": "Enable LAN creation without waiting for internet NAT setup"
+        },
+        {
+          "offset": 25265,
+          "before_hex": "655b6e283434295d5b6e28323933295d28293d3d66616c7365",
+          "after_utf8": "s7Ready==false",
+          "reason": "NAT is required only for online sessions"
+        },
+        {
+          "offset": 25453,
+          "before_hex": "5228296966206c5b6e28323836295d7468656e",
+          "after_utf8": "e[\"ui\"][\"enable\"](l[\"quickMatchButtonID\"],not s7Lan and s7Ready)\nif s7Lan then e[\"ui\"][\"disable\"](l[\"joinSessionButtonID\"]) end\nR()if l[\"lastDiscoveryFinished\"]then",
+          "reason": "Quick match stays online-only; LAN Join disabled because native implementation is a stub"
+        },
+        {
+          "offset": 25692,
+          "before_hex": "655b6e283434295d5b6e28323939295d2866616c736529",
+          "after_utf8": "e[\"Network\"][\"SessionGetDiscovery\"](l[\"lanMode\"]==true)",
+          "reason": "Read native discovery using its verified LAN transport bool"
+        },
+        {
+          "offset": 26284,
+          "before_hex": "66756e6374696f6e20612e6372656174652865296c5b6e283634295d3d65",
+          "after_utf8": "function a.create(e,s7Previous,s7Options)l[\"callbacks\"]=e\nif s7Options and s7Options[\"lanMode\"]~=nil then l[\"lanMode\"]=s7Options[\"lanMode\"]==true end",
+          "reason": "Accept an explicit LAN probe entry; otherwise retain selected filter"
+        },
+        {
+          "offset": 26538,
+          "before_hex": "72657475726e20610a",
+          "after_utf8": "function a.isLanMode()return l[\"lanMode\"]==true end\nreturn a\n",
+          "reason": "Expose selected mode to narrowly scope main-state offline gates"
+        }
+      ]
+    },
+    {
+      "path": "Script/local/menu/panel/menu/play/multiplayer/sessionCreation.lua",
+      "source_sha256": "79a3b7a6ead65adbb14f3c30165662257743cb30f851f900c09636c5c00e8201",
+      "patched_sha256": "c99eecfa941ac4b08dde95ba63d286b43a78ca8717dc7818d24b03d5eda773ae",
+      "edits": [
+        {
+          "offset": 10823,
+          "before_hex": "655b6e283732295d5b6e28313231295d287b5b6e28313132295d3d662c5b6e28313134295d3d612c5b6e28313232295d3d6f7d29",
+          "after_utf8": "e[\"callbacks\"][\"toHostLobby\"]({[\"fixedTeams\"]=f,[\"fixedPositions\"]=a,[\"privateSession\"]=o,[\"lanMode\"]=e[\"lanMode\"]==true})",
+          "reason": "Carry LAN flag into host lobby; original native SessionCreate stays unchanged"
+        },
+        {
+          "offset": 12641,
+          "before_hex": "6966206e6f74206c5b6e283834295d5b6e283835295d28297468656e0a655b6e283732295d5b6e28313835295d2829656e64",
+          "after_utf8": "if not e[\"lanMode\"] and not l[\"Network\"][\"IsLoggedIn\"]()then\ne[\"callbacks\"][\"toMainMenu\"]()end",
+          "reason": "Allow creation screen offline only for LAN"
+        }
+      ]
+    },
+    {
+      "path": "Script/local/menu/panel/menu/play/multiplayer/hostLobby.lua",
+      "source_sha256": "7700d17bd66071e2b845ba2878a0d775308ddd7ea44c08907001c4b4913323de",
+      "patched_sha256": "a5afcd1095f08df27c5d4690aad4623f2d23f5c30b72daee8cbf045e379deca5",
+      "edits": [
+        {
+          "offset": 45430,
+          "before_hex": "6966206e6f74206e5b6c28313334295d5b6c28343335295d28297468656e0a655b6c28323839295d5b6c28343336295d2829656e64",
+          "after_utf8": "if not e[\"lanMode\"] and not n[\"Network\"][\"IsLoggedIn\"]()then\ne[\"callbacks\"][\"toMainMenu\"]()end",
+          "reason": "Keep native session checks but skip online-login gate for LAN lobby"
+        },
+        {
+          "offset": 47535,
+          "before_hex": "66756e6374696f6e20642e637265617465286f2c612c6e296966206e207468656e",
+          "after_utf8": "function d.create(o,a,n)e[\"lanMode\"]=n and n[\"lanMode\"]==true or false\nif n then",
+          "reason": "Remember explicit LAN flag in this lobby instance"
+        },
+        {
+          "offset": 51707,
+          "before_hex": "6e5b6c28313135295d5b6c28313939295d28655b6c28323937295d2c655b6c28343538295d296e5b6c28313135295d5b6c28313939295d28655b6c28333033295d2c655b6c28343538295d29",
+          "after_utf8": "n[\"ui\"][\"show\"](e[\"inviteButtonID\"],e[\"InvitePossible\"] and not e[\"lanMode\"])n[\"ui\"][\"show\"](e[\"inviteButtonOrnamentID\"],e[\"InvitePossible\"] and not e[\"lanMode\"])",
+          "reason": "Hide Ubisoft invite overlay action for LAN host"
+        }
+      ]
+    },
+    {
+      "path": "Script/local/menu/panel/menu/play/multiplayer/joinLobby.lua",
+      "source_sha256": "853e9aea35a4a2e4d7d20b4b2f9337ff5f7e32d4d0992167e2525889470477c0",
+      "patched_sha256": "29036ddeef1721cb70aefe9eb86c5a596bc552c0be9b86e10b0500fa4c4d1809",
+      "edits": [
+        {
+          "offset": 23916,
+          "before_hex": "6966206e6f74206c5b6e28313239295d5b6e28323438295d28297468656e0a6f5b6e28313834295d5b6e28323439295d2829656e64",
+          "after_utf8": "if not o[\"lanMode\"] and not l[\"Network\"][\"IsLoggedIn\"]()then\no[\"callbacks\"][\"toMainMenu\"]()end",
+          "reason": "Keep native session checks but skip online-login gate for LAN lobby"
+        },
+        {
+          "offset": 26669,
+          "before_hex": "66756e6374696f6e20632e63726561746528652c692c6c296966206c207468656e",
+          "after_utf8": "function c.create(e,i,l)o[\"lanMode\"]=l and l[\"lanMode\"]==true or false\nif l then",
+          "reason": "Remember explicit LAN flag in this lobby instance"
+        }
+      ]
+    },
+    {
+      "path": "Script/local/menu/panel/menu/control/mainState.lua",
+      "source_sha256": "145c8e0c1054349646661d46405cf16ec2590fd269facc3b5bd2fe3aadbcb09e",
+      "patched_sha256": "f672ef6e45398a4bf0df462318c93d03e54a85a36b63b86f56fa5a4ed90c1404",
+      "edits": [
+        {
+          "offset": 29951,
+          "before_hex": "6966206e6f7428575b6e28313733295d28296f7220465b6e28313733295d28296f7220705b6e28313733295d28296f7220655b6e28323637295d5b6e28313733295d28296f72204d5b6e28313733295d28296f7220675b6e28313733295d28296f7220475b6e28313733295d2829297468656e",
+          "after_utf8": "if not(W[\"isCreated\"]()or F[\"isCreated\"]()or p[\"isCreated\"]()or e[\"loadingScreen\"][\"isCreated\"]()or M[\"isCreated\"]()or g[\"isCreated\"]()or G[\"isCreated\"]()) and\nnot(r[\"isLanMode\"]() and (r[\"isCreated\"]() or e[\"require\"](\"local.menu.panel.menu.play.multiplayer.sessionCreation\")[\"isCreated\"]() or f[\"isCreated\"]() or o[\"isCreated\"]())) then",
+          "reason": "Suppress RDV-disconnect modal only while in an explicit LAN menu/lobby"
+        },
+        {
+          "offset": 32132,
+          "before_hex": "696628695b6e28313735295d3d3d745b6e283537295d5b6e28313032295d6f7220695b6e28313735295d3d3d745b6e283537295d5b6e28313132295d29616e640a6e6f7420655b6e28313530295d5b6e28333033295d2829616e6420655b6e28313530295d5b6e28333034295d28297468656e",
+          "after_utf8": "if(i[\"actionType\"]==t[\"actionTypes\"][\"toSessionList\"]or i[\"actionType\"]==t[\"actionTypes\"][\"toEmpire\"])and\nnot(i[\"actionType\"]==t[\"actionTypes\"][\"toSessionList\"] and ((i[\"data\"] and i[\"data\"][\"lanMode\"]==true) or r[\"isLanMode\"]())) and\nnot e[\"Game\"][\"IsConnected\"]()and e[\"Game\"][\"InMapMode\"]()then",
+          "reason": "Permit explicit LAN-browser entry without online Game.IsConnected"
+        }
+      ]
+    },
+    {
+      "path": "Script/local/menu/panel/menu/sectionMenus/mainMenu.lua",
+      "source_sha256": "5c209609fec874dddc839f7c5007e265c81fa1e9b7b62ba71a7b87bbf079d27f",
+      "patched_sha256": "4857deef36e66ba4ed6c4f0240f6ab34c117c3a3c4fd9680b58aa1aa4c1e245f",
+      "edits": [
+        {
+          "offset": 30662,
+          "before_hex": "655b6e28313631295d5b6e28323936295d286e283332382929696620655b6e283735295d5b6e283831295d28293d3d66616c7365207468656e",
+          "after_utf8": "local s7LanButton=e[\"button\"][\"create\"](l[\"frame\"],{[\"x\"]=60,[\"y\"]=p-150},{\"LAN diagnostics (not playable)\",true},e[\"button\"][\"class\"][\"optionsButton\"],function()l[\"callbacks\"][\"toSessionList\"]({[\"lanMode\"]=true})end,nil,e[\"UI\"][\"Anchor\"][\"Top\"],e[\"UI\"][\"Anchor\"][\"Left\"])\ne[\"ui\"][\"setSize\"](s7LanButton,360,45)\ne[\"Network\"][\"SetPresence\"](\"AtSettlersMainMenu\")if e[\"superMenu\"][\"isCreated\"]()==false then",
+          "reason": "Add explicit LAN probe entry without spoofing IsLoggedIn globally"
+        }
+      ]
+    }
+  ]
+}

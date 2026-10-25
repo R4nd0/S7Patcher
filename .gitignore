@@ -362,3 +362,7 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /S7Patcher.sln
+
+# Local diagnostic artifacts contain game data and must not be distributed.
+*.bba
+Settlers7R.exe

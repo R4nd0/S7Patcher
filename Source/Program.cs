@@ -30,6 +30,22 @@ namespace S7Patcher.Source
 
         static void Main(string[] args)
         {
+            if (InspectionCommand.TryRun(args, out int InspectionExitCode))
+            {
+                Environment.ExitCode = InspectionExitCode;
+                return;
+            }
+            if (LanExperimentCommand.TryRun(args, out int LanExitCode))
+            {
+                Environment.ExitCode = LanExitCode;
+                return;
+            }
+            if (LocalConfigServerCommand.TryRun(args, out int ConfigServerExitCode))
+            {
+                Environment.ExitCode = ConfigServerExitCode;
+                return;
+            }
+
             Console.ForegroundColor = ConsoleColor.White;
             Console.BackgroundColor = ConsoleColor.Black;
             Console.Title = "S7Patcher - github.com/Eisenmonoxid/S7Patcher";
