@@ -83,8 +83,17 @@ advertised UDP port. By default it counts datagrams without replying.
 than the generic decoder and at most eight local sender cookies.
 `--connect-probe` additionally supports a narrowly validated empty CONNECT
 request after that SYN exchange, with a signed, separate ECDH agreement key.
-It does not handle encrypted DATA, login RPCs, matchmaking or game
-synchronization. Live acceptance of the CONNECT response remains unverified.
+The latest controlled game start progressed through the local HTTP response,
+SYN ACK and signed CONNECT ACK to 40 structurally valid DATA packets. This is
+evidence of transport progress, not a completed login or multiplayer session.
+`--data-ack-probe` adds bounded transport acknowledgements to that exchange;
+its native [DATA ACK specification](DATA-ACK-PROTOCOL.md) is documented
+separately. `--data-crypto-probe` additionally checks the
+[DATA transformation](DATA-CRYPTO-PROTOCOL.md) and reports only fixed results,
+sizes and booleans. Its owned plaintext/key buffers are cleared after each
+check. [RPC framing and reliable assembly](RPC-FRAMING-PROTOCOL.md) have been
+partly derived statically but are not implemented. Login RPCs, matchmaking
+and game synchronization remain unimplemented.
 
 The next transport stage has a separately documented
 [SYN/CONNECT wire format](HANDSHAKE-PROTOCOL.md), including byte ordering,
@@ -178,8 +187,8 @@ RendezVous stage. A configuration reply alone does not remove these dependencies
   existing game and reached `hook-ready`, but recorded no new process
   generation, constructor redirect, HTTP request or UDP datagram during its
   window. The hook timed out and confirmed cleanup; the service stopped at
-  its deadline with zero datagrams. Live SYN-ACK acceptance remains unverified
-  and requires a fresh game start while both components are ready.
+  its deadline with zero datagrams. That run supplied no evidence of live
+  SYN-ACK acceptance.
 - A later restart inside a new, active 15-minute window reached a second
   process generation but stopped with `script-process-path-mismatch` before
   installing its hook. No configuration request or UDP packet reached the
@@ -191,8 +200,8 @@ RendezVous stage. A configuration reply alone does not remove these dependencies
   stopped at its deadline with zero datagrams and a confirmed stopped event.
 - Hook identity validation now requires the reported module base to equal
   `GetModuleHandleW(NULL)` and `GetModuleFileNameW` for that exact base to
-  match the authorized path. Truncation, API failures and path aliases are
-  rejected. The external process-path/hash checks and in-memory byte guard
+  match the authorized path. At that stage, truncation, API failures and path
+  aliases were rejected. The external process-path/hash checks and in-memory byte guard
   remain. A five-second check in the running game's main menu passed these
   real Windows API checks and reached `hook-ready`, then timed out as expected
   without a new constructor call and confirmed hook cleanup. This does not
@@ -211,9 +220,42 @@ RendezVous stage. A configuration reply alone does not remove these dependencies
   the real Windows fallback APIs, not that an alias caused the startup failure.
 - Optional metadata mode now recognizes DATA using a separate parser and the
   [statically derived layout](DATA-METADATA-PROTOCOL.md). Real UDP fixtures check
-  that the default mode does not classify DATA and no mode replies to DATA.
+  that the default mode does not classify DATA and the existing passive,
+  SYN and CONNECT modes do not reply to DATA.
   Its payload is not decrypted or logged; structural recognition is not
   evidence of encryption, native acceptance or authentication.
+- The next controlled restart successfully passed the file-identity fallback
+  in one transient generation and reached `redirection-completed` in the
+  final generation. The hook reported cleanup. The differing startup path
+  was not retained, so this does not identify its spelling or explain every
+  earlier failure. The service returned HTTP 200, received an 18-byte SYN,
+  sent an 18-byte SYN ACK, received a 92-byte CONNECT and sent a 158-byte
+  signed CONNECT ACK. It then observed 40 DATA packets, repeatedly sized
+  767, 783, 799 and 95 bytes, followed by one unrecognized 14-byte datagram.
+  All recognized packets consumed the entire datagram and matched seed zero.
+  This controlled run supports progression beyond the key exchange; sender
+  process identity and the client's internal connection state were not read.
+  No DATA payload was decoded or logged, and no DATA response was sent.
+  No login, lobby or LAN compatibility was established. The service process
+  and both listeners were later absent, but no final stopped event was saved;
+  graceful shutdown is not claimed for this run.
+- The optional DATA ACK implementation passed 330 configuration-server
+  checks, including its independent 15-byte checksum vector, current DATA
+  sequence/part echo, distinct cookies, stable server session, exact retries,
+  all four permitted flag combinations and missing/unsent connection gates.
+  The build had zero warnings or errors. Independent code review found no
+  mismatch against the static specification. These are synthetic checks;
+  live ACK acceptance and reduced retries are still unverified.
+- Adding the optional crypto check brought the passing configuration-server
+  suite to 419 checks. Independent Windows BCrypt fixtures verify the exact
+  HASH/NULL/16 key derivation and CBC padding in both directions. Checks cover
+  flat and Zlib envelopes, missing/mismatched sequence suffixes, malformed or
+  unfinished compression, the 64 KiB expansion cap, context gates, real local
+  UDP fixtures and sanitized events. Review reproduced an unfinished Zlib
+  stream that ordinary .NET reads accepted despite its missing final block;
+  the guarded input now rejects it. Both builds completed without warnings
+  or errors, and the CLI tests used the final production build. These checks
+  use synthetic bytes and do not yet establish live DATA decryption.
 
 The archive and CLI checks above validate the tools. They do not validate the
 in-game menu or multiplayer compatibility. Runtime tests must be recorded

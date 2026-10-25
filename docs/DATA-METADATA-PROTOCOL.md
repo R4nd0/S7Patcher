@@ -46,7 +46,7 @@ These are context expectations, not enough to certify a packet. Native receiving
 
 Native endpoint receive compares packet session against the previously adopted peer session at `EBB984–EBB997`. If no peer session has yet been adopted, only CONNECT may establish it (`EBBB7A–EBBBFC`); DATA then follows the invalid-packet path. DATA is not exempt from session comparison as SYN is. The metadata observer can compare against its saved client CONNECT session, not the generated server session.
 
-Do **not** require DATA sequence to equal CONNECT sequence. Unreliable, non-ACK DATA receives its own incrementing endpoint counter at `EBB1AE–EBB1C2`. Reliable sends use a separate queued path; ordering and reassembly were not fully derived. Generic ACK construction echoes sequence and PartNumber (`EBBD04–EBBD1D`), but this is not a recommendation to generate DATA ACKs.
+Do **not** require DATA sequence to equal CONNECT sequence. Unreliable, non-ACK DATA receives its own incrementing endpoint counter at `EBB1AE–EBB1C2`. Reliable sends use a separate queued path; ordering and reassembly were not fully derived. Generic ACK construction echoes sequence and PartNumber (`EBBD04–EBBD1D`). The subsequent [DATA ACK analysis](DATA-ACK-PROTOCOL.md) separately establishes the conditions for an opt-in acknowledgement; passive classification alone does not enable replies.
 
 ## What is justified without decryption
 

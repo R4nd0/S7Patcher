@@ -131,7 +131,9 @@ try
     await WaitUntil(() => events.Count(item => item.Event == "udp-datagram-observed") == packets.Length, "UDP counts");
     Check(events.Where(item => item.Event == "udp-datagram-observed").Select(item => item.DatagramLength).SequenceEqual(packets.Select(item => (int?)item.Length)), "Incorrect datagram lengths");
     Check(events.Where(item => item.Event == "udp-datagram-observed").All(item => item.PacketType is null
-        && item.ChecksumMatchesZeroSeed is null && item.BytesConsumed is null), "Default mode exposed handshake metadata");
+        && item.ChecksumMatchesZeroSeed is null && item.BytesConsumed is null && item.KnownPeer is null
+        && item.ConnectReplySent is null && item.RoutingMatches is null && item.ClientSessionMatches is null
+        && item.HeaderCookieMatches is null), "Default mode exposed handshake metadata");
     using CancellationTokenSource noReply = new(TimeSpan.FromMilliseconds(150));
     try { await sender.ReceiveAsync(noReply.Token); throw new Exception("Config-only server must not answer UDP"); }
     catch (OperationCanceledException) { Check(true, "UDP has no protocol response"); }
@@ -215,7 +217,8 @@ using (CancellationTokenSource metadataStop = new())
         Check(observed[6].PacketType == "data" && observed[6].ChecksumMatchesZeroSeed == false,
             "DATA checksum mismatch concealed structural classification");
         string[] allowed = ["event", "datagram_length", "datagrams_received", "udp_protocol_implemented",
-            "packet_type", "checksum_matches_zero_seed", "bytes_consumed"];
+            "packet_type", "checksum_matches_zero_seed", "bytes_consumed", "known_peer", "connect_reply_sent",
+            "routing_matches", "client_session_matches", "header_cookie_matches"];
         foreach (ConfigServerEvent item in observed)
         {
             string json = JsonSerializer.Serialize(item, ConfigServerJsonContext.Default.ConfigServerEvent);
@@ -269,6 +272,10 @@ await Cli(2, "--local-config-server", "--syn-probe", "true");
 await Cli(2, "--local-config-server", "--syn-probe", "--syn-probe");
 await Cli(2, "--local-config-server", "--connect-probe", "true");
 await Cli(2, "--local-config-server", "--connect-probe", "--connect-probe");
+await Cli(2, "--local-config-server", "--data-ack-probe", "true");
+await Cli(2, "--local-config-server", "--data-ack-probe", "--data-ack-probe");
+await Cli(2, "--local-config-server", "--data-crypto-probe", "true");
+await Cli(2, "--local-config-server", "--data-crypto-probe", "--data-crypto-probe");
 string cliOutput = await Cli(0, "--local-config-server", "--http-port", "0", "--udp-port", "0", "--seconds", "1");
 Check(cliOutput.Contains("configuration-server-ready") && cliOutput.Contains("configuration-server-stopped"), "CLI server dispatch did not complete");
 foreach (string[] options in new string[][] {
@@ -292,6 +299,12 @@ passed += await PrudpSynProbeChecks.RunAsync();
 string connectOutput = await Cli(0, "--local-config-server", "--http-port", "0", "--connect-probe", "--seconds", "1");
 Check(connectOutput.Contains("Empty-payload SYN/CONNECT loopback probe enabled"), "CONNECT boolean switch did not enable probe mode");
 passed += await PrudpConnectProbeChecks.RunAsync();
+string dataAckOutput = await Cli(0, "--local-config-server", "--http-port", "0", "--data-ack-probe", "--seconds", "1");
+Check(dataAckOutput.Contains("DATA ACK loopback probe enabled"), "DATA ACK boolean switch did not enable probe mode");
+passed += await PrudpDataAckProbeChecks.RunAsync();
+string dataCryptoOutput = await Cli(0, "--local-config-server", "--http-port", "0", "--data-crypto-probe", "--seconds", "1");
+Check(dataCryptoOutput.Contains("DATA crypto metadata probe enabled"), "DATA crypto boolean switch did not enable probe mode");
+passed += await PrudpDataCryptoProbeChecks.RunAsync();
 Check(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(sentinel))) == originalHash && File.GetLastWriteTimeUtc(sentinel) == originalTime, "Server modified an existing file");
 Check(Directory.GetFileSystemEntries(scratch).SequenceEqual(new[] { sentinel }), "Server persisted a key, configuration or log file");
 Console.WriteLine($"PASS: {passed} config-server checks; real HTTP/UDP, Windows CNG import where supported, redacted logs, lifetime/cleanup, CLI and file immutability.");

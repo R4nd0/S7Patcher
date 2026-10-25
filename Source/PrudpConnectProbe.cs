@@ -98,6 +98,27 @@ namespace S7Patcher.Source
             return true;
         }
 
+        internal bool MatchesClientSession(byte session) => session == clientSession;
+
+        internal byte[] CreateDataAck(ReadOnlySpan<byte> request) =>
+            PrudpDataAckProbeCodec.CreateReply(request, reply[3], clientCookie);
+
+        internal byte[] DeriveDataKey()
+        {
+            using ECDiffieHellman peer = ECDiffieHellman.Create(new ECParameters
+            {
+                Curve = ECCurve.NamedCurves.nistP256,
+                Q = new ECPoint { X = clientKey.AsSpan(8, 32).ToArray(), Y = clientKey.AsSpan(40, 32).ToArray() }
+            });
+            byte[] digest = agreementKey.DeriveKeyFromHash(peer.PublicKey, HashAlgorithmName.SHA1);
+            try
+            {
+                if (digest.Length != 20) throw new CryptographicException("Unexpected SHA-1 KDF size");
+                return digest.AsSpan(0, 16).ToArray();
+            }
+            finally { CryptographicOperations.ZeroMemory(digest); }
+        }
+
         public void Dispose()
         {
             agreementKey.Dispose();
@@ -118,6 +139,7 @@ namespace S7Patcher.Source
         internal uint Cookie { get; init; }
         internal byte SourceVirtualPort { get; init; }
         internal bool SynReplySent { get; set; }
+        internal bool ConnectReplySent { get; set; }
         internal PrudpConnectProbe Connect { get; set; }
         public void Dispose() { Connect?.Dispose(); }
     }

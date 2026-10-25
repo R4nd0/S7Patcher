@@ -4,6 +4,8 @@ Executable SHA-256: `4ef51632a8a193050ebe8ef3f3fe38a9b240b4aa57ff62a4f381bc0f539
 
 Scope: static executable and public Microsoft API documentation only. No runtime packet/account values, process memory, captures or game actions were used. This establishes a narrow transport-level response for an **empty-payload CONNECT request after the local SYN exchange**, not an authenticated login response or a functioning game server.
 
+Subsequent controlled test on 2026-10-25: after local configuration and SYN exchange, the service received a 92-byte CONNECT, sent this 158-byte response and then observed 40 structurally valid DATA packets. This supports live progression beyond the signed key exchange. The game process's internal state was not inspected and DATA remained opaque; it does not establish authentication, application responses or multiplayer. See the chronological [validation record](LAN-RESEARCH.md).
+
 ## The two cookies must not be confused
 
 Let S be the local server cookie sent in SYN ACK, and C be the client's own connection cookie.
