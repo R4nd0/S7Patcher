@@ -260,6 +260,8 @@ await Cli(2, "--local-config-server", "--handshake-metadata", "--handshake-metad
 await Cli(2, "--local-config-server", "--seconds", "--handshake-metadata");
 await Cli(2, "--local-config-server", "--syn-probe", "true");
 await Cli(2, "--local-config-server", "--syn-probe", "--syn-probe");
+await Cli(2, "--local-config-server", "--connect-probe", "true");
+await Cli(2, "--local-config-server", "--connect-probe", "--connect-probe");
 string cliOutput = await Cli(0, "--local-config-server", "--http-port", "0", "--udp-port", "0", "--seconds", "1");
 Check(cliOutput.Contains("configuration-server-ready") && cliOutput.Contains("configuration-server-stopped"), "CLI server dispatch did not complete");
 foreach (string[] options in new string[][] {
@@ -280,6 +282,9 @@ using (TcpListener occupied = new(IPAddress.Loopback, 0))
 string synOutput = await Cli(0, "--local-config-server", "--http-port", "0", "--syn-probe", "--seconds", "1");
 Check(synOutput.Contains("SYN-only loopback probe enabled"), "SYN boolean switch did not enable probe mode");
 passed += await PrudpSynProbeChecks.RunAsync();
+string connectOutput = await Cli(0, "--local-config-server", "--http-port", "0", "--connect-probe", "--seconds", "1");
+Check(connectOutput.Contains("Empty-payload SYN/CONNECT loopback probe enabled"), "CONNECT boolean switch did not enable probe mode");
+passed += await PrudpConnectProbeChecks.RunAsync();
 Check(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(sentinel))) == originalHash && File.GetLastWriteTimeUtc(sentinel) == originalTime, "Server modified an existing file");
 Check(Directory.GetFileSystemEntries(scratch).SequenceEqual(new[] { sentinel }), "Server persisted a key, configuration or log file");
 Console.WriteLine($"PASS: {passed} config-server checks; real HTTP/UDP, Windows CNG import where supported, redacted logs, lifetime/cleanup, CLI and file immutability.");

@@ -31,7 +31,7 @@ namespace S7Patcher.Source
             if (!TryParse(args, out LocalConfigServerOptions options))
             {
                 Emit(new() { Event = "configuration-server-error", Reason = "invalid-arguments",
-                    Message = "Usage: S7Patcher --local-config-server [--http-port 0..65535] [--udp-port 0..65535] [--seconds 1..86400] [--handshake-metadata] [--syn-probe]" });
+                    Message = "Usage: S7Patcher --local-config-server [--http-port 0..65535] [--udp-port 0..65535] [--seconds 1..86400] [--handshake-metadata] [--syn-probe] [--connect-probe]" });
                 exitCode = 2;
                 return true;
             }
@@ -77,6 +77,13 @@ namespace S7Patcher.Source
                     options.HandshakeMetadata = true;
                     continue;
                 }
+                if (name == "--connect-probe")
+                {
+                    options.ConnectProbe = true;
+                    options.SynProbe = true;
+                    options.HandshakeMetadata = true;
+                    continue;
+                }
                 if (++index >= args.Length || !int.TryParse(args[index], NumberStyles.None, CultureInfo.InvariantCulture, out int value))
                     return false;
                 switch (name)
@@ -98,6 +105,7 @@ namespace S7Patcher.Source
         public int? Seconds { get; set; }
         public bool HandshakeMetadata { get; set; }
         public bool SynProbe { get; set; }
+        public bool ConnectProbe { get; set; }
     }
 
     internal static class LocalConfigurationServer
@@ -120,7 +128,7 @@ namespace S7Patcher.Source
             long datagrams = 0;
             long datagramBytes = 0;
             // Sender endpoints and cookies are process-local, bounded and never logged.
-            Dictionary<IPEndPoint, uint> synCookies = new();
+            Dictionary<IPEndPoint, PrudpProbePeer> peers = new();
             try
             {
                 udp.Client.Bind(new IPEndPoint(IPAddress.Loopback, options.UdpPort));
@@ -138,7 +146,9 @@ namespace S7Patcher.Source
                     Event = "configuration-server-ready", Address = "127.0.0.1", HttpPort = httpPort, UdpPort = udpPort,
                     ConfigurationPath = ConfigurationPath, AuthenticationImplemented = false, UdpProtocolImplemented = false,
                     SigningKeyPersistence = "memory-only",
-                    Message = options.SynProbe
+                    Message = options.ConnectProbe
+                        ? "Empty-payload SYN/CONNECT loopback probe enabled. Signed transport key only; no DATA response, login or authentication."
+                        : options.SynProbe
                         ? "SYN-only loopback probe enabled; zero checksum seed is a hypothesis. No CONNECT response or authentication."
                         : options.HandshakeMetadata
                         ? "Configuration endpoint only. Passive SYN/CONNECT metadata enabled; zero checksum seed is a hypothesis, not authentication. No UDP replies."
@@ -174,7 +184,7 @@ namespace S7Patcher.Source
                             Interlocked.Add(ref datagramBytes, length);
                             ConfigServerEvent observation = new() { Event = "udp-datagram-observed", DatagramLength = length,
                                 DatagramsReceived = Interlocked.Read(ref datagrams), UdpProtocolImplemented = false };
-                            if (options.HandshakeMetadata || options.SynProbe)
+                            if (options.HandshakeMetadata || options.SynProbe || options.ConnectProbe)
                             {
                                 observation.PacketType = "unrecognized";
                                 // First decode structurally without asserting an established seed.
@@ -187,23 +197,51 @@ namespace S7Patcher.Source
                                 }
                             }
                             emit(observation);
-                            if (options.SynProbe && IPAddress.IsLoopback(packet.RemoteEndPoint.Address)
+                            if ((options.SynProbe || options.ConnectProbe) && IPAddress.IsLoopback(packet.RemoteEndPoint.Address)
                                 && PrudpSynProbeCodec.TryReadRequest(packet.Buffer, out PrudpHandshakeMetadata syn))
                             {
-                                if (!synCookies.TryGetValue(packet.RemoteEndPoint, out uint cookie))
+                                if (!peers.TryGetValue(packet.RemoteEndPoint, out PrudpProbePeer peer))
                                 {
-                                    if (synCookies.Count >= 8) continue;
+                                    if (peers.Count >= 8) continue;
                                     byte[] random = new byte[4];
+                                    uint cookie;
                                     do
                                     {
                                         RandomNumberGenerator.Fill(random);
                                         cookie = BinaryPrimitives.ReadUInt32LittleEndian(random);
                                     } while (cookie == 0);
-                                    synCookies.Add(packet.RemoteEndPoint, cookie);
+                                    peer = new() { Cookie = cookie, SourceVirtualPort = syn.SourceVirtualPort };
+                                    peers.Add(packet.RemoteEndPoint, peer);
                                 }
-                                byte[] reply = PrudpSynProbeCodec.CreateReply(syn, cookie);
+                                if (options.ConnectProbe && peer.SourceVirtualPort != syn.SourceVirtualPort) continue;
+                                byte[] reply = PrudpSynProbeCodec.CreateReply(syn, peer.Cookie);
                                 await udp.SendAsync(reply, packet.RemoteEndPoint, stop.Token);
+                                peer.SynReplySent = true;
                                 emit(new() { Event = "syn-probe-reply-sent", DatagramLength = reply.Length,
+                                    AuthenticationImplemented = false, UdpProtocolImplemented = false });
+                            }
+                            else if (options.ConnectProbe && IPAddress.IsLoopback(packet.RemoteEndPoint.Address)
+                                && packet.Buffer.Length >= 3 && (packet.Buffer[2] & 7) == 1)
+                            {
+                                if (!peers.TryGetValue(packet.RemoteEndPoint, out PrudpProbePeer peer) || !peer.SynReplySent)
+                                {
+                                    emit(new() { Event = "connect-probe-request-rejected", Reason = "missing-syn-context" });
+                                    continue;
+                                }
+                                if (!PrudpConnectProbe.TryReadRequest(packet.Buffer, peer.Cookie, peer.SourceVirtualPort,
+                                    out PrudpHandshakeMetadata connect, out string rejectionReason))
+                                {
+                                    emit(new() { Event = "connect-probe-request-rejected", Reason = rejectionReason });
+                                    continue;
+                                }
+                                peer.Connect ??= new PrudpConnectProbe(packet.Buffer, connect, key);
+                                if (!peer.Connect.TryGetReply(packet.Buffer, connect, out byte[] reply))
+                                {
+                                    emit(new() { Event = "connect-probe-request-rejected", Reason = "changed-connect-context" });
+                                    continue;
+                                }
+                                await udp.SendAsync(reply, packet.RemoteEndPoint, stop.Token);
+                                emit(new() { Event = "connect-probe-reply-sent", DatagramLength = reply.Length,
                                     AuthenticationImplemented = false, UdpProtocolImplemented = false });
                             }
                         }
@@ -217,7 +255,8 @@ namespace S7Patcher.Source
             {
                 http.Stop();
                 udp.Dispose();
-                synCookies.Clear();
+                foreach (PrudpProbePeer peer in peers.Values) peer.Dispose();
+                peers.Clear();
                 emit(new() { Event = "configuration-server-stopped", DatagramsReceived = Interlocked.Read(ref datagrams),
                     DatagramBytes = Interlocked.Read(ref datagramBytes) });
             }

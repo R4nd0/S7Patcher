@@ -77,4 +77,4 @@ Reply only with the native 18-byte SYN ACK layout above. A fresh server-owned ra
 
 ## Remaining boundaries
 
-The static evidence now supports the SYN-only reply relationships. Actual client acceptance still needs a controlled local test. No CONNECT ACK fields, ECDH response, payload encryption, token RPC or authenticated service implementation is supplied here. The exact native cookie byte-for-byte derivation is unnecessary for the opaque SYN handoff and was not fully reimplemented; its own future verification logic remains a separate server responsibility.
+The static evidence now supports the SYN-only reply relationships. Actual client acceptance still needs a controlled local test. The separate [CONNECT ACK findings](CONNECT-ACK-PROTOCOL.md) now derive the next response for empty requests and distinguish the server cookie from the client cookie. Payload encryption, token RPC and authenticated service implementation remain separate work. The exact native cookie byte-for-byte derivation is unnecessary for the opaque SYN handoff and was not fully reimplemented; the local CONNECT probe checks its own issued cookie consistently.

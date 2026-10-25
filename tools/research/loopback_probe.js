@@ -2,6 +2,9 @@
 // __TARGET_PATH_JSON__ is filled by the Python watcher after file verification.
 const expectedPath = __TARGET_PATH_JSON__;
 const normalize = s => s.replace(/\//g, '\\').toLowerCase();
+// Keep BOTH allocation objects strongly reachable for the entire script.
+// A native pointer stored inside the wrapper does not keep its text alive in JS.
+const replacementStorage = {text: null, wrapper: null};
 const moduleDeadline = Date.now() + 2000;
 let moduleAttempts = 0;
 function installHook() {
@@ -26,17 +29,41 @@ if (moduleInfo === null) {
   setTimeout(installHook, 50);
   return;
 }
+// A module snapshot can disagree during startup. Accept its base only when
+// Windows identifies it as the main executable AND returns the exact authorized
+// path for that same base. No basename, suffix, short-path or prefix exceptions.
+stage = 'native-module-api-unavailable';
+const kernel32 = Process.getModuleByName('kernel32.dll');
+const getMainModule = new NativeFunction(kernel32.getExportByName('GetModuleHandleW'),
+  'pointer', ['pointer'], 'stdcall');
+const getModulePath = new NativeFunction(kernel32.getExportByName('GetModuleFileNameW'),
+  'uint32', ['pointer', 'pointer', 'uint32'], 'stdcall');
+stage = 'native-main-module-query-failed';
+const mainModule = getMainModule(ptr(0));
+if (mainModule.isNull() || !mainModule.equals(moduleInfo.base)) {
+  reject('main-module-mismatch');
+  return;
+}
 stage = 'process-path-validation-failed';
-if (normalize(moduleInfo.path) !== normalize(expectedPath)) { reject('process-path-mismatch'); return; }
+const pathCapacity = 32768;
+const pathBuffer = Memory.alloc(pathCapacity * 2);
+const pathLength = getModulePath(moduleInfo.base, pathBuffer, pathCapacity);
+if (pathLength === 0 || pathLength >= pathCapacity) {
+  reject('module-path-unavailable');
+  return;
+}
+const authoritativePath = pathBuffer.readUtf16String(pathLength);
+if (normalize(authoritativePath) !== normalize(expectedPath)) { reject('process-path-mismatch'); return; }
 const address = moduleInfo.base.add(0xA8A2A0);
 const expected = [0x55,0x8b,0xec,0x6a,0xff,0x68,0x32,0xec,0x00,0x01,0x64,0xa1,0x00,0x00,0x00,0x00];
 stage = 'target-memory-unreadable';
 const actual = new Uint8Array(address.readByteArray(expected.length));
 if (expected.some((b, i) => actual[i] !== b)) { reject('prologue-mismatch'); return; }
 stage = 'replacement-allocation-failed';
-const localText = Memory.allocUtf8String('localhost');
-const localWrapper = Memory.alloc(Process.pointerSize);
-localWrapper.writePointer(localText);
+replacementStorage.text = Memory.allocUtf8String('localhost');
+replacementStorage.wrapper = Memory.alloc(Process.pointerSize);
+replacementStorage.wrapper.writePointer(replacementStorage.text);
+Object.freeze(replacementStorage);
 let redirects = 0;
 stage = 'interceptor-install-failed';
 Interceptor.attach(address, {
@@ -63,12 +90,12 @@ Interceptor.attach(address, {
       send({event: 'unexpected-sandbox-skipped'});
       return;
     }
-    // Keep the replacement string/wrapper alive even if the controller asks
-    // to unload while this native invocation is still consuming its arguments.
+    // Pin prevents script unload during argument use; replacementStorage
+    // independently retains both allocation objects against garbage collection.
     Script.pin();
     redirects += 1;
     this.redirectId = redirects;
-    args[4] = localWrapper;
+    args[4] = replacementStorage.wrapper;
     send({event: 'sandbox-redirected', count: redirects});
   },
   onLeave() {

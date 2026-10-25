@@ -17,6 +17,8 @@ PROLOGUE = bytes.fromhex('55 8b ec 6a ff 68 32 ec 00 01 64 a1 00 00 00 00')
 CONFIG_PATH = '/public/rendezvous/v1/configuration'
 SCRIPT_FAILURE_CODES = frozenset({
     'architecture-mismatch', 'module-lookup-failed', 'module-not-ready',
+    'native-module-api-unavailable', 'native-main-module-query-failed',
+    'main-module-mismatch', 'module-path-unavailable',
     'process-path-validation-failed', 'process-path-mismatch',
     'target-memory-unreadable', 'prologue-mismatch',
     'replacement-allocation-failed', 'interceptor-install-failed',

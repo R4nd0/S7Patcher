@@ -80,15 +80,21 @@ it does not use the older Quazal Name/Values array. See the
 advertised UDP port. By default it counts datagrams without replying.
 `--handshake-metadata` enables passive structural classification;
 `--syn-probe` adds a narrow SYN-only response experiment, with stricter gates
-than the generic decoder and at most eight local sender cookies. CONNECT,
-the authenticated UDP handshake, login RPCs, matchmaking and game
-synchronization remain unimplemented.
+than the generic decoder and at most eight local sender cookies.
+`--connect-probe` additionally supports a narrowly validated empty CONNECT
+request after that SYN exchange, with a signed, separate ECDH agreement key.
+It does not handle encrypted DATA, login RPCs, matchmaking or game
+synchronization. Live acceptance of the CONNECT response remains unverified.
 
 The next transport stage has a separately documented
 [SYN/CONNECT wire format](HANDSHAKE-PROTOCOL.md), including byte ordering,
 packet boundaries, the two distinct key pairs, and unresolved session/cookie
 behavior. The [SYN ACK relationships](SYN-ACK-PROTOCOL.md) have since been
 derived separately to support a deliberately limited response experiment.
+The subsequent [CONNECT ACK findings](CONNECT-ACK-PROTOCOL.md) establish the
+two distinct cookies, server session, signed ECK1 public blob and the
+empty-payload reply. These are transport-level relationships, not a login
+implementation.
 
 Full offline operation also needs a separate
 [UbiServices session/bootstrap adapter](UBISERVICES-BOOTSTRAP.md). The normal
@@ -121,16 +127,29 @@ RendezVous stage. A configuration reply alone does not remove these dependencies
 - The observer's 32 synthetic Python tests cover bounded attachment retries,
   relaunches, stale-generation rejection, error and cancellation cleanup,
   header redaction, and hook-only completion after the constructor returns.
-  Fourteen additional scenarios run the actual JS source with mocks, including
-  fixed error categories and bounded waiting for an absent main module. Native
+  Twenty-nine additional scenarios run the actual JS source with mocks, including
+  fixed error categories, bounded waiting for an absent main module and
+  authoritative Windows main-module/path checks. Native
   Frida lifetime behavior is not established by these synthetic tests.
-- The configuration-service harness now passes 143 checks with real local HTTP/UDP
+  Four callback/lifetime checks additionally verify that a module-level holder
+  retains both replacement allocations after setup returns and through the
+  simulated native invocation. This strong reference is separate from
+  `Script.pin`, which prevents unload rather than allocation collection.
+- The configuration-service harness now passes 213 checks with real local HTTP/UDP
   sockets, Windows CNG import of the advertised ECDSA public key, error routes,
   metadata-only logging, request timeout, cancellation, port rebinding and CLI
   dispatch. The optional SYN probe is also checked for its exact reply layout,
   retry-cookie consistency, narrow request gates, and sender limit. The Debug
   build completed with zero warnings and errors; all 17
   existing CLI cases passed again after integration.
+- CONNECT probe checks independently verify the actual HTTP trust anchor and
+  signed ECK1 response using Windows CNG, import the agreement key and perform
+  ECDH with it. They check exact retry bytes, distinct client/server cookies,
+  rejection of unsupported payloads, malformed/off-curve public points and
+  changed connection tuples, plus no DATA replies and clean port release.
+  One negative test exposed a CNG invalid-point exception variant; the input
+  guard now rejects that variant instead of ending the service. These tests
+  use invented traffic and do not prove live game acceptance.
 - The isolated SYN/CONNECT decoder passed 1,893 checks and 5,000 deterministic
   malformed-input samples. These use invented bytes; they cover truncation,
   packet boundaries and an independently calculated additive checksum without
@@ -161,6 +180,23 @@ RendezVous stage. A configuration reply alone does not remove these dependencies
   window. The hook timed out and confirmed cleanup; the service stopped at
   its deadline with zero datagrams. Live SYN-ACK acceptance remains unverified
   and requires a fresh game start while both components are ready.
+- A later restart inside a new, active 15-minute window reached a second
+  process generation but stopped with `script-process-path-mismatch` before
+  installing its hook. No configuration request or UDP packet reached the
+  service. A separate read-only identity check in the resulting main menu
+  found the exact authorized executable path and preferred module base.
+  The startup snapshot's differing path was not retained, so its particular
+  representation and cause are unknown. This is a routing-guard failure,
+  not evidence that the game rejected a SYN reply. The unused service later
+  stopped at its deadline with zero datagrams and a confirmed stopped event.
+- Hook identity validation now requires the reported module base to equal
+  `GetModuleHandleW(NULL)` and `GetModuleFileNameW` for that exact base to
+  match the authorized path. Truncation, API failures and path aliases are
+  rejected. The external process-path/hash checks and in-memory byte guard
+  remain. A five-second check in the running game's main menu passed these
+  real Windows API checks and reached `hook-ready`, then timed out as expected
+  without a new constructor call and confirmed hook cleanup. This does not
+  yet verify the guard during another fresh start.
 
 The archive and CLI checks above validate the tools. They do not validate the
 in-game menu or multiplayer compatibility. Runtime tests must be recorded

@@ -86,13 +86,17 @@ cookie. That supports a SYN-only experiment. Remaining questions for a full
 handshake responder:
 
 1. Active checksum seed: the global SDK setting and empty loader default are now identified above. Remaining question is whether any indirect initialization changes `0x13786C8` or `0x1378748` before `E9B370 → E9B880`; no direct writer was found. A controlled checksum observation can test seed 0 without accessing any account token.
-2. CONNECT-specific session, sequence and cookie validation. Initial SYN routing
-   through `EB5B20` and transport vtable+0x1c is established in the linked note;
-   later packet rules must be derived separately.
-3. A server must retain and validate its own issued cookie consistently after
-   SYN. Reproducing the native `EB9BC0` generator byte for byte is unnecessary
-   for the opaque SYN handoff; a complete connection state machine is still needed.
-4. Any CONNECT payload expected before token RPC, including its AES encryption and sequence binding: `E82584–E82717` / `E86350`.
+2. CONNECT-specific session, sequence and cookie relationships are now derived
+   in the separate [CONNECT ACK findings](CONNECT-ACK-PROTOCOL.md). The local
+   probe implements only the empty-request case; live client acceptance is
+   still unverified.
+3. The CONNECT probe retains and validates its own issued SYN cookie and keeps
+   connection keys/session stable for exact retries. Reproducing the native
+   `EB9BC0` generator byte for byte is unnecessary for the opaque SYN handoff;
+   a complete connection state machine is still needed.
+4. Nonempty CONNECT payload semantics, including AES encryption and sequence
+   binding (`E82584–E82717` / `E86350`), remain unresolved. Empty payloads bypass
+   decryption on the verified receive path; the probe rejects nonempty requests.
 5. Exact post-handshake login wire protocol remains outside this pass. No LoginWithToken responder has been derived.
 
 This supports a bounded next static pass and, separately, a deliberately validated local handshake experiment once the remaining fields are established. It does not justify guessing packet bytes or claiming multiplayer compatibility.
