@@ -19,6 +19,9 @@ SCRIPT_FAILURE_CODES = frozenset({
     'architecture-mismatch', 'module-lookup-failed', 'module-not-ready',
     'native-module-api-unavailable', 'native-main-module-query-failed',
     'main-module-mismatch', 'module-path-unavailable',
+    'file-identity-path-unsupported', 'file-identity-api-unavailable',
+    'file-identity-drive-query-failed', 'file-identity-open-failed',
+    'file-identity-query-failed', 'file-identity-mismatch', 'file-identity-close-failed',
     'process-path-validation-failed', 'process-path-mismatch',
     'target-memory-unreadable', 'prologue-mismatch',
     'replacement-allocation-failed', 'interceptor-install-failed',
@@ -117,7 +120,11 @@ class RoutingState:
                 self.fail('script-' + code if known else 'script-unclassified-validation-failure')
             elif event == 'hook-ready' and payload.get('arch') == 'ia32' and not self.ready:
                 self.ready = True
-                self.emit({'event': 'hook-ready', 'generation': generation, 'arch': 'ia32'})
+                ready_event = {'event': 'hook-ready', 'generation': generation, 'arch': 'ia32'}
+                path_validation = payload.get('path_validation')
+                if type(path_validation) is str and path_validation in ('native-exact', 'native-file-identity'):
+                    ready_event['path_validation'] = path_validation
+                self.emit(ready_event)
             elif event == 'sandbox-redirected' and self.ready:
                 if self.hook_only:
                     call = payload.get('count')

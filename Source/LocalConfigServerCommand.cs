@@ -151,7 +151,7 @@ namespace S7Patcher.Source
                         : options.SynProbe
                         ? "SYN-only loopback probe enabled; zero checksum seed is a hypothesis. No CONNECT response or authentication."
                         : options.HandshakeMetadata
-                        ? "Configuration endpoint only. Passive SYN/CONNECT metadata enabled; zero checksum seed is a hypothesis, not authentication. No UDP replies."
+                        ? "Configuration endpoint only. Passive SYN/CONNECT/DATA metadata enabled; zero checksum seed is a hypothesis, not authentication. No UDP replies."
                         : "Configuration endpoint only. UDP datagrams are counted; no authentication or game protocol is implemented."
                 });
 
@@ -194,6 +194,13 @@ namespace S7Patcher.Source
                                     observation.BytesConsumed = decoded.BytesConsumed;
                                     observation.ChecksumMatchesZeroSeed = PrudpHandshakePacketDecoder.ComputeChecksum(
                                         packet.Buffer.AsSpan(0, decoded.BytesConsumed - 4), 0) == decoded.Checksum;
+                                }
+                                else if (PrudpDataPacketDecoder.TryDecode(packet.Buffer, out PrudpDataMetadata data, out _))
+                                {
+                                    observation.PacketType = "data";
+                                    observation.BytesConsumed = data.BytesConsumed;
+                                    observation.ChecksumMatchesZeroSeed = PrudpHandshakePacketDecoder.ComputeChecksum(
+                                        packet.Buffer.AsSpan(0, data.BytesConsumed - 4), 0) == data.Checksum;
                                 }
                             }
                             emit(observation);

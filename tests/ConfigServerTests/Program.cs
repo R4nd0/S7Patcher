@@ -22,6 +22,8 @@ int passed = 0;
 // Invented routing fields and an independently fixed LE-word sum: 0x73ab7230.
 byte[] syn = [0x31, 0x3f, 0x00, 0xa7, 0x11, 0x22, 0x33, 0x44,
     0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0x30, 0x72, 0xab, 0x73];
+byte[] data = [0x3f, 0x31, 0x02, 0x73, 0x11, 0x22, 0x33, 0x44,
+    0x55, 0x66, 0x87, 0xa5, 0xb9, 0xbc, 0xb7];
 void Check(bool condition, string message)
 {
     if (!condition) throw new Exception(message);
@@ -124,7 +126,7 @@ try
 
     using UdpClient sender = new(AddressFamily.InterNetwork);
     sender.Connect(IPAddress.Loopback, udpPort);
-    byte[][] packets = [Encoding.ASCII.GetBytes("test-secret-udp-payload"), [], [0, 1, 2], syn];
+    byte[][] packets = [Encoding.ASCII.GetBytes("test-secret-udp-payload"), [], [0, 1, 2], syn, data];
     foreach (byte[] packet in packets) await sender.SendAsync(packet);
     await WaitUntil(() => events.Count(item => item.Event == "udp-datagram-observed") == packets.Length, "UDP counts");
     Check(events.Where(item => item.Event == "udp-datagram-observed").Select(item => item.DatagramLength).SequenceEqual(packets.Select(item => (int?)item.Length)), "Incorrect datagram lengths");
@@ -161,7 +163,7 @@ finally
     incomplete.Dispose();
 }
 Check(events.Last().Event == "configuration-server-stopped", "Stop event preceded handler cleanup");
-Check(events.Last().DatagramsReceived == 4 && events.Last().DatagramBytes == Encoding.ASCII.GetByteCount("test-secret-udp-payload") + 3 + syn.Length, "Final UDP totals incorrect");
+Check(events.Last().DatagramsReceived == 5 && events.Last().DatagramBytes == Encoding.ASCII.GetByteCount("test-secret-udp-payload") + 3 + syn.Length + data.Length, "Final UDP totals incorrect");
 string serialized = string.Join("\n", events.Select(item => JsonSerializer.Serialize(item, ConfigServerJsonContext.Default.ConfigServerEvent)));
 Check(!serialized.Contains("test-secret") && !serialized.Contains("Authorization") && !serialized.Contains("Cookie") && !serialized.Contains("ticket="), "Diagnostics leaked request or datagram contents");
 Check(!serialized.Contains("packet_type") && !serialized.Contains("checksum_matches_zero_seed") && !serialized.Contains("bytes_consumed"), "Default JSON gained handshake fields");
@@ -191,7 +193,8 @@ using (CancellationTokenSource metadataStop = new())
         byte[] sized = [.. syn.AsSpan(0, 14).ToArray(), 0, 0, 0x30, 0x72, 0xeb, 0x73,
             .. Encoding.ASCII.GetBytes("test-secret-trailing-bytes")];
         sized[2] = 0x40;
-        byte[][] packets = [syn, badChecksum, connect, [], sized];
+        byte[] badDataChecksum = (byte[])data.Clone(); badDataChecksum[^1] ^= 1;
+        byte[][] packets = [syn, badChecksum, connect, [], sized, data, badDataChecksum];
         using UdpClient sender = new(AddressFamily.InterNetwork);
         sender.Connect(IPAddress.Loopback, metadataInfo.UdpPort!.Value);
         foreach (byte[] packet in packets) await sender.SendAsync(packet);
@@ -207,6 +210,10 @@ using (CancellationTokenSource metadataStop = new())
             "Unrecognized input asserted a checksum result or consumed packet");
         Check(observed[4].PacketType == "syn" && observed[4].ChecksumMatchesZeroSeed == true && observed[4].BytesConsumed == 20
             && observed[4].DatagramLength == sized.Length, "Checksum included data beyond declared packet boundary");
+        Check(observed[5].PacketType == "data" && observed[5].ChecksumMatchesZeroSeed == true && observed[5].BytesConsumed == 15,
+            "Minimum DATA packet was not passively classified");
+        Check(observed[6].PacketType == "data" && observed[6].ChecksumMatchesZeroSeed == false,
+            "DATA checksum mismatch concealed structural classification");
         string[] allowed = ["event", "datagram_length", "datagrams_received", "udp_protocol_implemented",
             "packet_type", "checksum_matches_zero_seed", "bytes_consumed"];
         foreach (ConfigServerEvent item in observed)
@@ -270,7 +277,7 @@ foreach (string[] options in new string[][] {
     ["--http-port", "0", "--seconds", "1", "--handshake-metadata"] })
 {
     string output = await Cli(0, ["--local-config-server", .. options]);
-    Check(output.Contains("Passive SYN/CONNECT metadata enabled") && output.Contains("configuration-server-stopped"),
+    Check(output.Contains("Passive SYN/CONNECT/DATA metadata enabled") && output.Contains("configuration-server-stopped"),
         "Boolean metadata switch failed in a supported argument position");
 }
 using (TcpListener occupied = new(IPAddress.Loopback, 0))

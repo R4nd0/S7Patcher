@@ -11,15 +11,15 @@ let count = 0;
 let lifetimeChecks = 0;
 for (const [scenario, reason] of [
   ['architecture', 'architecture-mismatch'], ['missing', 'module-not-ready'],
-  ['lookup', 'module-lookup-failed'], ['path', 'process-path-mismatch'],
+  ['lookup', 'module-lookup-failed'], ['path', 'file-identity-path-unsupported'],
   ['read', 'target-memory-unreadable'], ['bytes', 'prologue-mismatch'],
   ['allocation', 'replacement-allocation-failed'],
   ['interceptor', 'interceptor-install-failed'], ['success', null],
   ['late-success', null], ['late-bytes', 'prologue-mismatch'],
-  ['late-path', 'process-path-mismatch'], ['late-read', 'target-memory-unreadable'],
+  ['late-path', 'file-identity-path-unsupported'], ['late-read', 'target-memory-unreadable'],
   ['delayed', 'module-not-ready'],
   ['snapshot-different', null], ['path-case-slash', null],
-  ['path-short', 'process-path-mismatch'], ['path-prefix', 'process-path-mismatch'],
+  ['path-short', null], ['path-prefix', null], ['path-dots', null],
   ['native-module-missing', 'native-module-api-unavailable'],
   ['native-export-missing', 'native-module-api-unavailable'],
   ['native-constructor', 'native-module-api-unavailable'],
@@ -31,12 +31,34 @@ for (const [scenario, reason] of [
   ['native-path-throws', 'process-path-validation-failed'],
   ['native-path-read', 'process-path-validation-failed'],
   ['native-path-allocation', 'process-path-validation-failed'],
+  ['file-id-different', 'file-identity-mismatch'], ['file-volume-different', 'file-identity-mismatch'],
+  ['file-api', 'file-identity-api-unavailable'],
+  ['file-drive-throws', 'file-identity-drive-query-failed'],
+  ['file-drive-remote', 'file-identity-path-unsupported'],
+  ['file-drive-unknown', 'file-identity-path-unsupported'],
+  ['file-unc', 'file-identity-path-unsupported'], ['file-device', 'file-identity-path-unsupported'],
+  ['file-unc-prefix', 'file-identity-path-unsupported'],
+  ['file-globalroot', 'file-identity-path-unsupported'],
+  ['file-relative', 'file-identity-path-unsupported'], ['file-drive-relative', 'file-identity-path-unsupported'],
+  ['file-ads', 'file-identity-path-unsupported'], ['file-nul', 'file-identity-path-unsupported'],
+  ['file-open-first-fails', 'file-identity-open-failed'],
+  ['file-open-second-fails', 'file-identity-open-failed'],
+  ['file-open-second-throws', 'file-identity-open-failed'],
+  ['file-query-first-fails', 'file-identity-query-failed'],
+  ['file-query-second-fails', 'file-identity-query-failed'],
+  ['file-query-second-throws', 'file-identity-query-failed'],
+  ['file-query-read-throws', 'file-identity-query-failed'],
+  ['file-close-first-fails', 'file-identity-close-failed'],
+  ['file-close-first-throws', 'file-identity-close-failed'],
+  ['file-close-second-fails', 'file-identity-close-failed'],
 ]) {
   const events = [];
   const pending = [];
   const mode = scenario.startsWith('late-') ? scenario.slice(5) : scenario;
   let attaches = 0, lookups = 0, reads = 0, allocations = 0, time = 0, nativeCalls = 0;
   let callbacks, pins = 0, writtenTextAddress;
+  let fileOpens = 0, fileQueries = 0;
+  const openedHandles = [], closedHandles = [];
   const textAllocation = {allocationId: 'replacement-text'};
   const wrapperAllocation = {writePointer(value) {
     // Model a native pointer write without retaining the JS allocation object.
@@ -50,6 +72,7 @@ for (const [scenario, reason] of [
   }};
   const base = {add(offset) { assert.equal(offset, 0xA8A2A0); return address; }};
   const nullPointer = {isNull: () => true};
+  const invalidPointer = {isNull: () => false, equals: other => other === invalidPointer};
   const mainModule = {
     isNull: () => mode === 'native-main-null',
     equals: other => mode !== 'native-main-different' && other === base,
@@ -58,7 +81,20 @@ for (const [scenario, reason] of [
   if (mode === 'path') authoritativePath = 'test-secret-path';
   if (mode === 'path-short') authoritativePath = 'C:\\AUTH~1\\Settlers7R.exe';
   if (mode === 'path-prefix') authoritativePath = '\\\\?\\' + target;
+  if (mode === 'path-dots') authoritativePath = 'C:\\authorized\\.\\child\\..\\Settlers7R.exe';
   if (mode === 'path-case-slash') authoritativePath = target.toUpperCase().replaceAll('\\', '/');
+  if (mode.startsWith('file-')) authoritativePath = 'C:\\alias\\Settlers7R.exe';
+  const unsupportedPaths = {
+    'file-unc': '\\\\server\\share\\Settlers7R.exe',
+    'file-device': '\\\\.\\C:\\authorized\\Settlers7R.exe',
+    'file-unc-prefix': '\\\\?\\UNC\\server\\share\\Settlers7R.exe',
+    'file-globalroot': '\\\\?\\GLOBALROOT\\Device\\HarddiskVolume1\\Settlers7R.exe',
+    'file-relative': 'authorized\\Settlers7R.exe',
+    'file-drive-relative': 'C:authorized\\Settlers7R.exe',
+    'file-ads': target + ':stream',
+    'file-nul': target + '\0extra',
+  };
+  if (unsupportedPaths[mode]) authoritativePath = unsupportedPaths[mode];
   const pathBuffer = {readUtf16String(length) {
     if (mode === 'native-path-read') secretError();
     assert.equal(length, authoritativePath.length, 'bounded read excludes NUL');
@@ -84,12 +120,12 @@ for (const [scenario, reason] of [
         assert.equal(name, 'kernel32.dll');
         if (mode === 'native-module-missing') secretError();
         return {getExportByName(exportName) {
-          if (mode === 'native-export-missing') secretError();
+          if (mode === 'native-export-missing' || mode === 'file-api' && exportName === 'CreateFileW') secretError();
           return exportName;
         }};
       },
     },
-    ptr(value) { assert.equal(value, 0); return nullPointer; },
+    ptr(value) { assert([0, -1].includes(value)); return value === 0 ? nullPointer : invalidPointer; },
     NativeFunction: function (name, resultType, argTypes, abi) {
       assert.equal(abi, 'stdcall', 'explicit Windows ia32 ABI');
       if (mode === 'native-constructor') secretError();
@@ -101,6 +137,58 @@ for (const [scenario, reason] of [
           assert.equal(argument, nullPointer, 'NULL selects the main executable');
           if (mode === 'native-main-throws') secretError();
           return mainModule;
+        };
+      }
+      if (name === 'GetDriveTypeW') {
+        assert.equal(resultType, 'uint32');
+        assert.deepEqual(Array.from(argTypes), ['pointer']);
+        return root => {
+          assert.equal(root.text.toUpperCase(), 'C:\\');
+          if (mode === 'file-drive-throws') secretError();
+          return mode === 'file-drive-remote' ? 4 : mode === 'file-drive-unknown' ? 0 : 3;
+        };
+      }
+      if (name === 'CreateFileW') {
+        assert.equal(resultType, 'pointer');
+        assert.deepEqual(Array.from(argTypes), ['pointer', 'uint32', 'uint32', 'pointer', 'uint32', 'uint32', 'pointer']);
+        return (file, access, share, security, disposition, flags, template) => {
+          const index = fileOpens++;
+          assert.equal(file.text, index === 0 ? authoritativePath : target);
+          assert.equal(access, 0); assert.equal(share, 7); assert.equal(disposition, 3);
+          assert.equal(security, nullPointer); assert.equal(flags, 0x80); assert.equal(template, nullPointer);
+          if (mode === 'file-open-second-throws' && index === 1) secretError();
+          if (mode === 'file-open-first-fails' && index === 0 || mode === 'file-open-second-fails' && index === 1)
+            return invalidPointer;
+          const handle = {index, isNull: () => false, equals: other => other === handle};
+          openedHandles.push(index);
+          return handle;
+        };
+      }
+      if (name === 'GetFileInformationByHandleEx') {
+        assert.equal(resultType, 'int');
+        assert.deepEqual(Array.from(argTypes), ['pointer', 'int', 'pointer', 'uint32']);
+        return (handle, infoClass, buffer, length) => {
+          fileQueries += 1;
+          assert.equal(infoClass, 18); assert.equal(length, 24);
+          if (mode === 'file-query-second-throws' && handle.index === 1) secretError();
+          if (mode === 'file-query-first-fails' && handle.index === 0 || mode === 'file-query-second-fails' && handle.index === 1)
+            return 0;
+          buffer.value = Uint8Array.from({length: 24}, (_, i) => i + 1);
+          if (mode === 'file-id-different' && handle.index === 1) buffer.value[8] ^= 1;
+          if (mode === 'file-volume-different' && handle.index === 1) buffer.value[0] ^= 1;
+          return 1;
+        };
+      }
+      if (name === 'CloseHandle') {
+        assert.equal(resultType, 'int');
+        assert.deepEqual(Array.from(argTypes), ['pointer']);
+        return handle => {
+          assert(!closedHandles.includes(handle.index), 'each owned handle closes once');
+          closedHandles.push(handle.index);
+          if (mode === 'file-close-first-throws' && handle.index === 0) secretError();
+          if (mode === 'file-close-first-fails' && handle.index === 0 || mode === 'file-close-second-fails' && handle.index === 1)
+            return 0;
+          return 1;
         };
       }
       assert.equal(name, 'GetModuleFileNameW');
@@ -118,6 +206,7 @@ for (const [scenario, reason] of [
       };
     },
     Memory: {
+      allocUtf16String: text => ({text}),
       allocUtf8String: () => {
         allocations += 1;
         if (scenario === 'allocation') secretError();
@@ -129,6 +218,11 @@ for (const [scenario, reason] of [
           if (mode === 'native-path-allocation') secretError();
           return pathBuffer;
         }
+        if (size === 24) return {value: null, readByteArray(length) {
+          assert.equal(length, 24);
+          if (mode === 'file-query-read-throws') secretError();
+          return this.value.buffer;
+        }};
         assert.equal(size, 4);
         return wrapperAllocation;
       },
@@ -157,6 +251,9 @@ for (const [scenario, reason] of [
   if (reason) assert.equal(events[0].code, reason, scenario);
   assert.equal(attaches, reason === null || mode === 'interceptor' ? 1 : 0, scenario);
   assert(!JSON.stringify(events).includes('test-secret'), scenario);
+  assert.deepEqual(closedHandles, openedHandles, 'all successfully opened handles receive cleanup');
+  if (reason === 'file-identity-path-unsupported' || reason === 'file-identity-api-unavailable')
+    assert.equal(fileOpens, 0, 'unsupported paths/APIs never open a file');
   if (scenario === 'missing') {
     assert.equal(lookups, 40);
     assert.equal(time, 1950);
@@ -164,6 +261,11 @@ for (const [scenario, reason] of [
   if (scenario.startsWith('late-')) assert.equal(lookups, 4);
   if (scenario === 'delayed') assert.equal(lookups, 1, 'deadline checked before another lookup');
   if (reason === null) {
+    const expectedValidation = ['path-short', 'path-prefix', 'path-dots'].includes(mode)
+      ? 'native-file-identity' : 'native-exact';
+    assert.equal(events[0].path_validation, expectedValidation);
+    assert.equal(fileQueries, expectedValidation === 'native-file-identity' ? 2 : 0,
+      'only a native path mismatch queries file identity');
     // installHook has returned: both allocations must still have explicit JS
     // roots. Pinning the script alone cannot provide these allocation roots.
     const retained = vm.runInContext('replacementStorage', context);

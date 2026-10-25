@@ -97,6 +97,19 @@ class RoutingStateTests(unittest.TestCase):
             self.assertEqual(self.events[-1]['reason'], 'script-unclassified-validation-failure')
         self.assertNotIn('test-secret', json.dumps(self.events))
 
+    def test_hook_ready_path_validation_is_whitelisted(self):
+        for value in ('native-exact', 'native-file-identity', 'test-secret-path', {'test-secret': 1}, None):
+            with self.subTest(value=value):
+                events = []
+                state = RoutingState(events.append)
+                send(state, state.attach(), 'hook-ready', arch='ia32', path_validation=value)
+                self.assertTrue(state.ready)
+                if type(value) is str and value in ('native-exact', 'native-file-identity'):
+                    self.assertEqual(events[-1]['path_validation'], value)
+                else:
+                    self.assertNotIn('path_validation', events[-1])
+                self.assertNotIn('test-secret', json.dumps(events))
+
     def test_duplicate_detach_is_idempotent(self):
         gen = self.state.attach()
         self.state.detach(gen)

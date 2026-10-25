@@ -124,18 +124,18 @@ RendezVous stage. A configuration reply alone does not remove these dependencies
   temporal correlation with the authorized game's redirect; the HTTP socket
   did not independently establish the sender's process identity. It confirms
   the first routing milestone, not configuration acceptance or login.
-- The observer's 32 synthetic Python tests cover bounded attachment retries,
+- The observer's 33 synthetic Python tests cover bounded attachment retries,
   relaunches, stale-generation rejection, error and cancellation cleanup,
   header redaction, and hook-only completion after the constructor returns.
-  Twenty-nine additional scenarios run the actual JS source with mocks, including
+  Fifty-four additional scenarios run the actual JS source with mocks, including
   fixed error categories, bounded waiting for an absent main module and
   authoritative Windows main-module/path checks. Native
   Frida lifetime behavior is not established by these synthetic tests.
-  Four callback/lifetime checks additionally verify that a module-level holder
+  Seven callback/lifetime checks additionally verify that a module-level holder
   retains both replacement allocations after setup returns and through the
   simulated native invocation. This strong reference is separate from
   `Script.pin`, which prevents unload rather than allocation collection.
-- The configuration-service harness now passes 213 checks with real local HTTP/UDP
+- The configuration-service harness now passes 222 checks with real local HTTP/UDP
   sockets, Windows CNG import of the advertised ECDSA public key, error routes,
   metadata-only logging, request timeout, cancellation, port rebinding and CLI
   dispatch. The optional SYN probe is also checked for its exact reply layout,
@@ -150,7 +150,7 @@ RendezVous stage. A configuration reply alone does not remove these dependencies
   One negative test exposed a CNG invalid-point exception variant; the input
   guard now rejects that variant instead of ending the service. These tests
   use invented traffic and do not prove live game acceptance.
-- The isolated SYN/CONNECT decoder passed 1,893 checks and 5,000 deterministic
+- The isolated SYN/CONNECT and DATA decoders passed 2,871 checks and 10,000 deterministic
   malformed-input samples. These use invented bytes; they cover truncation,
   packet boundaries and an independently calculated additive checksum without
   treating an unknown seed as verified or establishing peer authentication.
@@ -197,6 +197,23 @@ RendezVous stage. A configuration reply alone does not remove these dependencies
   real Windows API checks and reached `hook-ready`, then timed out as expected
   without a new constructor call and confirmed hook cleanup. This does not
   yet verify the guard during another fresh start.
+- A fresh run with the exact Windows path guard again stopped on a path
+  mismatch before redirection, with no HTTP or UDP reaching the service. The
+  resulting main-menu process reported the expected path afterward. The host
+  check resolves path aliases while the earlier native check compared text;
+  the differing startup string was not retained, so its cause remains unknown.
+- A native path mismatch now permits a narrowly scoped file-identity check:
+  metadata handles must identify the same volume and 128-bit file ID, and both
+  handles must close successfully before any hook is installed. A five-second
+  live check deliberately supplied a `..` alias already proven to resolve to
+  the authorized file. It reached `hook-ready` with `native-file-identity`,
+  then timed out without reinitialization and confirmed cleanup. This verifies
+  the real Windows fallback APIs, not that an alias caused the startup failure.
+- Optional metadata mode now recognizes DATA using a separate parser and the
+  [statically derived layout](DATA-METADATA-PROTOCOL.md). Real UDP fixtures check
+  that the default mode does not classify DATA and no mode replies to DATA.
+  Its payload is not decrypted or logged; structural recognition is not
+  evidence of encryption, native acceptance or authentication.
 
 The archive and CLI checks above validate the tools. They do not validate the
 in-game menu or multiplayer compatibility. Runtime tests must be recorded

@@ -122,4 +122,5 @@ for (int sample = 0; sample < 5000; sample++)
         Check(decoded.ChecksumVerification == PrudpChecksumVerification.Unverified, "Random input was authenticated without a supplied seed");
     }
 }
-Console.WriteLine($"PASS: {passed} decoder checks plus 5000 malformed-input samples; invented fixtures only, no networking or game data.");
+passed += DataDecoderChecks.Run();
+Console.WriteLine($"PASS: {passed} decoder checks plus 10000 malformed-input samples; invented fixtures only, no networking or game data.");

@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../Source/PrudpHandshakePacketDecoder.cs" Link="PrudpHandshakePacketDecoder.cs" />
+    <Compile Include="../../Source/PrudpDataPacketDecoder.cs" Link="PrudpDataPacketDecoder.cs" />
   </ItemGroup>
 </Project>

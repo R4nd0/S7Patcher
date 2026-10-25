@@ -158,6 +158,8 @@ internal static class PrudpConnectProbeChecks
         }
         Check(events.Any(item => item.Event == "connect-probe-request-rejected" && item.Reason == "nonempty-payload"),
             "Unsupported payload needs a fixed diagnostic reason");
+        Check(events.Any(item => item.Event == "udp-datagram-observed" && item.PacketType == "data"),
+            "CONNECT mode did not passively classify subsequent DATA");
         string[] allowed = ["event", "reason", "datagram_length", "authentication_implemented", "udp_protocol_implemented"];
         foreach (ConfigServerEvent item in events.Where(item => item.Event.StartsWith("connect-probe-")))
         {
