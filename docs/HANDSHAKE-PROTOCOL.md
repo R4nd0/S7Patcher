@@ -16,7 +16,7 @@ Client and scope: same SHA-256 `4ef51632a8a193050ebe8ef3f3fe38a9b240b4aa57ff62a4
 | 8 | 2 | sequence ID | E870EF |
 | 10 | 4 | connection signature, only SYN/CONNECT | E871C6 |
 
-Type is low three bits of byte 2. The native debug switch `E848A1 → E84A98` names 0 SYN, 1 CONNECT, 2 DATA, 3 ROUTE, 4 DISCONNECT, 5 PING, 6 USER, 7 RAW. Flag 0x08 is ACK; 0x10 is reliable; 0x20 requests acknowledgement; 0x40 adds a payload-length field; 0x80 selects the AES handshake extension. The last four flag interpretations are supported by native branching, not by borrowing a foreign packet layout.
+Type is low three bits of byte 2. The native debug jump table `E848A1 → E84A98` maps 0 SYN, 1 CONNECT, 2 DATA, 3 DISCONNECT, 4 PING, 5 USER, 6 ROUTE, 7 RAW. The table order differs from the address order of its nearby handlers. Flag 0x08 is ACK; 0x10 is reliable; 0x20 requests acknowledgement; 0x40 adds a payload-length field; 0x80 selects the AES handshake extension on CONNECT. The last four flag interpretations are supported by native branching, not by borrowing a foreign packet layout.
 
 For CONNECT (`type == 1`) with 0x80 set, `E8727D–E8783F` consumes these extensions directly after the connection signature:
 

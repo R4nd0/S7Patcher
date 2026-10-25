@@ -6,12 +6,15 @@ using System.Security.Cryptography;
 
 namespace S7Patcher.Source
 {
-    // Default HE stream-3 transformation only; never returns plaintext or RPC data.
+    // Default inspection returns metadata only. The explicit local-login probe may
+    // consume verified plaintext synchronously; owned backing storage is then zeroed.
+    internal delegate void PrudpPlaintextHandler(ReadOnlySpan<byte> plaintext);
     internal static class PrudpDataCryptoProbe
     {
         internal const int PlaintextLimit = 65536; // Conservative probe cap, not a native protocol limit.
 
-        internal static PrudpDataCryptoResult Inspect(ReadOnlySpan<byte> packet, PrudpProbePeer peer)
+        internal static PrudpDataCryptoResult Inspect(ReadOnlySpan<byte> packet, PrudpProbePeer peer,
+            PrudpPlaintextHandler consume = null)
         {
             if (!PrudpDataAckProbeCodec.TryReadRequest(packet, peer, out var data, out _))
                 return new() { Outcome = "outside-data-crypto-context" };
@@ -23,14 +26,15 @@ namespace S7Patcher.Source
             try
             {
                 key = peer.Connect.DeriveDataKey();
-                return InspectBody(body, BinaryPrimitives.ReadUInt16LittleEndian(packet[8..]), key);
+                return InspectBody(body, BinaryPrimitives.ReadUInt16LittleEndian(packet[8..]), key, consume);
             }
             catch (CryptographicException) { return new() { Outcome = "key-derivation-failed", SerializedPayloadLength = body.Length }; }
             catch (PlatformNotSupportedException) { return new() { Outcome = "key-derivation-failed", SerializedPayloadLength = body.Length }; }
             finally { if (key != null) CryptographicOperations.ZeroMemory(key); }
         }
 
-        internal static PrudpDataCryptoResult InspectBody(ReadOnlySpan<byte> body, ushort sequence, ReadOnlySpan<byte> key)
+        internal static PrudpDataCryptoResult InspectBody(ReadOnlySpan<byte> body, ushort sequence, ReadOnlySpan<byte> key,
+            PrudpPlaintextHandler consume = null)
         {
             PrudpDataCryptoResult result = new() { SerializedPayloadLength = body.Length };
             if (body.IsEmpty) return result with { Outcome = "empty-body-bypassed" };
@@ -87,6 +91,7 @@ namespace S7Patcher.Source
                 }
                 if (decoded.Length < 2) return result with { Outcome = "missing-sequence-suffix" };
                 bool matches = BinaryPrimitives.ReadUInt16LittleEndian(decoded[^2..]) == sequence;
+                if (matches) consume?.Invoke(decoded[..^2]);
                 return result with { Outcome = matches ? "decoded-sequence-matched" : "sequence-mismatch",
                     DecodedPayloadLength = decoded.Length - 2, SequenceMatches = matches };
             }

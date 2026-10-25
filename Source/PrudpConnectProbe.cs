@@ -100,6 +100,11 @@ namespace S7Patcher.Source
 
         internal bool MatchesClientSession(byte session) => session == clientSession;
 
+        internal ushort InitialClientDataSequence => unchecked((ushort)(sequence + 1));
+
+        internal byte[] CreateDataPacket(ushort dataSequence, ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> key) =>
+            PrudpDataPacketEncoder.Encode(reply[0], reply[1], reply[3], clientCookie, dataSequence, 0, plaintext, key);
+
         internal byte[] CreateDataAck(ReadOnlySpan<byte> request) =>
             PrudpDataAckProbeCodec.CreateReply(request, reply[3], clientCookie);
 

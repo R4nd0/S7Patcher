@@ -1,0 +1,162 @@
+using System;
+using System.Buffers.Binary;
+using System.Collections.Generic;
+using System.Net;
+using System.Security.Cryptography;
+
+namespace S7Patcher.Source
+{
+    // Single-threaded bounded experiment, not a complete PRUDP endpoint. Every
+    // plaintext message is consumed in memory, then zeroed. Timers are probe policy.
+    internal sealed class PrudpLocalLoginSession : IDisposable
+    {
+        internal const int RetryMilliseconds = 1000;
+        internal const int MaximumTransmissions = 4;
+        internal const int LifetimeMilliseconds = 120000;
+        private readonly PrudpProbePeer peer;
+        private readonly ReliableMessageAssembler assembler;
+        private readonly LocalLoginRpcEngine rpc;
+        private readonly byte[] key;
+        private readonly long createdAt;
+        private readonly Dictionary<ushort, Pending> pending = new();
+        private ushort nextOutgoing = 1;
+        private int responseCount;
+        private bool closed;
+
+        internal PrudpLocalLoginSession(PrudpProbePeer peer, IPEndPoint endpoint, string authUrl, long now)
+        {
+            if (peer?.ConnectReplySent != true || peer.Connect == null)
+                throw new ArgumentException("Established CONNECT context required");
+            this.peer = peer;
+            rpc = new(peer.SourceVirtualPort, endpoint, authUrl);
+            try { key = peer.Connect.DeriveDataKey(); }
+            catch { rpc.Dispose(); throw; }
+            assembler = new(peer.Connect.InitialClientDataSequence);
+            createdAt = now;
+        }
+
+        internal int PendingCount => pending.Count;
+        internal bool Closed => closed;
+
+        internal PrudpDataCryptoResult ProcessData(ReadOnlySpan<byte> packet, Action<ConfigServerEvent> emit)
+        {
+            if (closed) return new() { Outcome = "local-login-session-closed" };
+            if (!PrudpDataAckProbeCodec.TryReadRequest(packet, peer, out _, out _)
+                || (packet[2] & 0xf8) is not (0x30 or 0x70))
+                return new() { Outcome = "local-login-requires-reliable-data" };
+            ushort sequence = BinaryPrimitives.ReadUInt16LittleEndian(packet[8..]);
+            byte part = packet[10];
+            ReliableEnqueueResult queued = ReliableEnqueueResult.Accepted;
+            PrudpDataCryptoResult result = PrudpDataCryptoProbe.Inspect(packet, peer,
+                plaintext => queued = assembler.AddFragment(sequence, part, plaintext));
+            if (result.SequenceMatches != true) return result;
+            if (queued != ReliableEnqueueResult.Accepted)
+                emit(new() { Event = "local-login-fragment-observed", Reason = queued.ToString() });
+            while (assembler.TryTakeMessage(out byte[] message))
+            {
+                byte[] response = null;
+                try
+                {
+                    // At most two successful RPC responses, each one conservative
+                    // DATA fragment. Unknown subsequent services are observed only.
+                    if (responseCount >= 2 || pending.Count >= 2)
+                    {
+                        emit(new() { Event = "local-login-message-rejected", Reason = "response-budget-exhausted" });
+                        continue;
+                    }
+                    if (!rpc.TryHandle(message, out response, out string reason))
+                    {
+                        emit(new() { Event = "local-login-message-rejected", Reason = reason });
+                        continue;
+                    }
+                    if (response.Length > PrudpDataPacketEncoder.PlaintextLimit)
+                    {
+                        emit(new() { Event = "local-login-message-rejected", Reason = "response-fragment-limit" });
+                        Dispose();
+                        break;
+                    }
+                    byte[] encoded = peer.Connect.CreateDataPacket(nextOutgoing, response, key);
+                    pending.Add(nextOutgoing, new(encoded));
+                    nextOutgoing = unchecked((ushort)(nextOutgoing + 1));
+                    responseCount++;
+                    emit(new() { Event = "local-login-response-queued", Reason = reason,
+                        AuthenticationImplemented = false, UdpProtocolImplemented = false });
+                }
+                finally
+                {
+                    CryptographicOperations.ZeroMemory(message);
+                    if (response != null) CryptographicOperations.ZeroMemory(response);
+                }
+            }
+            if (!closed)
+                emit(new() { Event = "local-login-assembly-observed", Reason = assembler.LastDropReason.ToString(),
+                    BufferedFragments = assembler.BufferedFragmentCount, AssemblingFragments = assembler.FragmentsInCurrentMessage });
+            return result;
+        }
+
+        internal bool TryAcknowledge(ReadOnlySpan<byte> packet)
+        {
+            if (closed || packet.Length < 15 || (packet[2] & 0xf8) is not (0x08 or 0x48)
+                || !PrudpDataPacketDecoder.TryDecode(packet, out var data, out _, 0)
+                || data.BytesConsumed != packet.Length || data.PayloadLength != 0 || packet[10] != 0)
+                return false;
+            PrudpDataContext context = PrudpDataAckProbeCodec.GetContext(packet, peer);
+            if (!context.KnownPeer || !context.ConnectReplySent || context.RoutingMatches != true
+                || context.ClientSessionMatches != true || context.HeaderCookieMatches != true) return false;
+            ushort sequence = BinaryPrimitives.ReadUInt16LittleEndian(packet[8..]);
+            if (!pending.Remove(sequence, out Pending sent) || sent.Transmissions == 0)
+            {
+                // An ACK cannot acknowledge a packet which has not been offered
+                // for sending. Preserve it if a guessed ACK arrived early.
+                if (sent != null) pending.Add(sequence, sent);
+                return false;
+            }
+            CryptographicOperations.ZeroMemory(sent.Packet);
+            return true;
+        }
+
+        // Caller awaits sending each returned packet before any subsequent session
+        // operation. Bytes remain session-owned and must not be retained or logged.
+        internal IReadOnlyList<byte[]> TakeDue(long now, Action<ConfigServerEvent> emit)
+        {
+            List<byte[]> due = new();
+            if (closed) return due;
+            if (now - createdAt >= LifetimeMilliseconds)
+            {
+                emit(new() { Event = "local-login-session-expired", Reason = "probe-lifetime-ended" });
+                Dispose(); return due;
+            }
+            // Expiry precedes collecting references, so disposal cannot invalidate
+            // already collected packets when another outstanding entry expires.
+            foreach (Pending sent in pending.Values)
+                if (sent.Transmissions >= MaximumTransmissions && now >= sent.NextSend)
+                {
+                    emit(new() { Event = "local-login-session-expired", Reason = "response-ack-timeout" });
+                    Dispose(); return due;
+                }
+            foreach (Pending sent in pending.Values)
+            {
+                if (sent.Transmissions != 0 && now < sent.NextSend) continue;
+                sent.Transmissions++;
+                sent.NextSend = now + RetryMilliseconds;
+                due.Add(sent.Packet);
+            }
+            return due;
+        }
+
+        public void Dispose()
+        {
+            if (closed) return;
+            closed = true;
+            foreach (Pending sent in pending.Values) CryptographicOperations.ZeroMemory(sent.Packet);
+            pending.Clear(); assembler.Dispose(); rpc.Dispose(); CryptographicOperations.ZeroMemory(key);
+        }
+        private sealed class Pending
+        {
+            internal Pending(byte[] packet) => Packet = packet;
+            internal byte[] Packet { get; }
+            internal int Transmissions { get; set; }
+            internal long NextSend { get; set; }
+        }
+    }
+}

@@ -236,9 +236,11 @@ RendezVous stage. A configuration reply alone does not remove these dependencies
   This controlled run supports progression beyond the key exchange; sender
   process identity and the client's internal connection state were not read.
   No DATA payload was decoded or logged, and no DATA response was sent.
-  No login, lobby or LAN compatibility was established. The service process
-  and both listeners were later absent, but no final stopped event was saved;
-  graceful shutdown is not claimed for this run.
+  No login, lobby or LAN compatibility was established. A later read in the
+  service's host environment confirmed its final stopped event with 43
+  datagrams and 24,564 total bytes. The sandbox's live process/file view had
+  been incomplete; live readiness and shutdown checks must use the same host
+  environment as the running probe.
 - The optional DATA ACK implementation passed 330 configuration-server
   checks, including its independent 15-byte checksum vector, current DATA
   sequence/part echo, distinct cookies, stable server session, exact retries,
@@ -256,6 +258,31 @@ RendezVous stage. A configuration reply alone does not remove these dependencies
   the guarded input now rejects it. Both builds completed without warnings
   or errors, and the CLI tests used the final production build. These checks
   use synthetic bytes and do not yet establish live DATA decryption.
+- The subsequent controlled game restart used the frozen `cb1358eb` build.
+  It reached HTTP 200, SYN/CONNECT and four DATA packets of 767, 799, 799 and
+  95 bytes. All four decoded successfully and matched their encrypted
+  sequence copy; plaintext lengths were 947, 947, 947 and 48 bytes. The first
+  three used Zlib and the last used the flat envelope. All received 15-byte
+  transport ACKs. Unlike the preceding run, no repeated DATA was observed.
+  Three further 14-byte packets remained unclassified in that older build.
+  The host-side final event recorded nine datagrams / 2,612 bytes, orderly
+  service exit 0 and hook cleanup exit 0. This verifies client-to-server
+  decryption and local ACK transmission, not RPC identification, server DATA
+  acceptance or completed login. Plaintext contents were discarded, so no
+  Login method is inferred retroactively from their lengths.
+- The next implementation adds the opt-in local Login/Register experiment.
+  The full configuration-server suite passed 554 checks with zero build
+  warnings/errors. Subsequent test strengthening passed 38 isolated session
+  checks and 18 real-loopback integration checks, including exact response
+  session/cookie, authentication port and observed client port. Independent
+  Windows CNG encrypts synthetic requests and decrypts the actual responses.
+  The tests cover gaps, duplicates, stable retransmission bytes, matching and
+  malformed ACKs, expiry, disposal, sanitized events and listener release.
+  Separate deterministic suites passed 10,135 RPC codec cases, 7,817
+  assembler cases, 5,628 control-decoder cases, 1,006 argument-shape cases and
+  477 local RPC engine cases. Independent reviews found no concrete defects.
+  These counts include synthetic malformed-input cases; they do not replace
+  a live client acceptance test. Login and playable LAN are still unverified.
 
 The archive and CLI checks above validate the tools. They do not validate the
 in-game menu or multiplayer compatibility. Runtime tests must be recorded

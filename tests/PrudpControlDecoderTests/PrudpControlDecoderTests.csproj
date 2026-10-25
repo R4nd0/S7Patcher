@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Source/PrudpControlPacketDecoder.cs" Link="PrudpControlPacketDecoder.cs" />
+    <Compile Include="../../Source/PrudpHandshakePacketDecoder.cs" Link="PrudpHandshakePacketDecoder.cs" />
+  </ItemGroup>
+</Project>

@@ -13,5 +13,12 @@
     <Compile Include="../../Source/PrudpDataPacketDecoder.cs" Link="PrudpDataPacketDecoder.cs" />
     <Compile Include="../../Source/PrudpDataAckProbeCodec.cs" Link="PrudpDataAckProbeCodec.cs" />
     <Compile Include="../../Source/PrudpDataCryptoProbe.cs" Link="PrudpDataCryptoProbe.cs" />
+    <Compile Include="../../Source/PrudpDataPacketEncoder.cs" Link="PrudpDataPacketEncoder.cs" />
+    <Compile Include="../../Source/PrudpControlPacketDecoder.cs" Link="PrudpControlPacketDecoder.cs" />
+    <Compile Include="../../Source/PrudpLocalLoginSession.cs" Link="PrudpLocalLoginSession.cs" />
+    <Compile Include="../../Source/ReliableMessageAssembler.cs" Link="ReliableMessageAssembler.cs" />
+    <Compile Include="../../Source/LoginRpcCodec.cs" Link="LoginRpcCodec.cs" />
+    <Compile Include="../../Source/LoginRpcArgumentShape.cs" Link="LoginRpcArgumentShape.cs" />
+    <Compile Include="../../Source/LocalLoginRpcEngine.cs" Link="LocalLoginRpcEngine.cs" />
   </ItemGroup>
 </Project>

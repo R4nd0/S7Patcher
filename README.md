@@ -12,7 +12,7 @@ A simple application for the game "The Settlers 7 - Paths to a Kingdom".
 **These additions do not yet implement a complete replacement server or playable LAN multiplayer.**
 The inspected Ubisoft Connect build contains a native LAN Join function that returns success without joining a peer. Native LAN Create also retains login and NAT checks. See [LAN research and remaining blockers](docs/LAN-RESEARCH.md).
 
-The latest controlled game start reached the local HTTP configuration, SYN/CONNECT exchange and subsequent DATA traffic. Login and multiplayer remain unverified; the detailed validation record separates this live observation from synthetic tests.
+The latest controlled game start reached the local HTTP configuration, SYN/CONNECT exchange and four successfully decrypted DATA packets, each acknowledged locally. Login and multiplayer remain unverified; the detailed validation record separates this live observation from synthetic tests.
 
 Build this fork with the .NET 10 SDK (`dotnet build -c Debug`). The original patching workflow below remains available; these explicit diagnostic commands return before that workflow starts.
 
@@ -48,7 +48,11 @@ The opt-in `--connect-probe` includes the SYN probe and can additionally answer 
 
 In metadata-enabled modes, DATA observations also report only booleans for a known peer, successfully sent CONNECT ACK and routing/session/header-cookie matches. The cookie and session values themselves are never logged. A context match or transport ACK does not establish authentication.
 
-The additional `--data-crypto-probe` implies the ACK experiment and checks the [derived DATA transformation](docs/DATA-CRYPTO-PROTOCOL.md) for packets passing the same narrow context gates. It derives the connection key, validates AES-CBC padding, decodes the flat/Zlib envelope with a conservative 64 KiB expansion cap, and checks the encrypted sequence copy. Only fixed outcome categories, sizes and booleans are emitted. Plaintext, IVs and keys are never logged or saved; owned temporary buffers are cleared after each check. Empty bodies are reported as bypassed, not decrypted. No RPC parsing, reassembly or application response is implemented, and successful decryption would not establish a login. The default, SYN, CONNECT and ACK-only modes do not decrypt DATA.
+The additional `--data-crypto-probe` implies the ACK experiment and checks the [derived DATA transformation](docs/DATA-CRYPTO-PROTOCOL.md) for packets passing the same narrow context gates. It derives the connection key, validates AES-CBC padding, decodes the flat/Zlib envelope with a conservative 64 KiB expansion cap, and checks the encrypted sequence copy. Only fixed outcome categories, sizes and booleans are emitted. Plaintext, IVs and keys are never logged or saved; owned temporary buffers are cleared after each check. Empty bodies are reported as bypassed, not decrypted. This mode performs no RPC parsing, reassembly or application response. The default, SYN, CONNECT and ACK-only modes do not decrypt DATA.
+
+`--local-login-probe` additionally enables experimental [Login/Register handling](docs/LOCAL-LOGIN-PROBE.md). It assembles bounded reliable messages, validates known request structures without decoding tokens, and sends encrypted responses with temporary local identities. Those identities are not Ubisoft account identities and are discarded at shutdown. Reliable responses have finite retries; matching ACKs remove them. No lobby, matchmaking, game synchronization or fully offline bootstrap is implemented. Client acceptance of these new application responses still requires a controlled live test.
+
+Metadata modes also passively classify complete supported PING/DISCONNECT packets. Their payloads are not interpreted and controls receive no reply; packet length alone never identifies a control type.
 
 Both listeners bind exclusively to IPv4 loopback. HTTP defaults to port 9110; UDP defaults to a free port. Use `--http-port` or `--udp-port` to choose a port (`0` chooses a free port). `--seconds 1..86400` limits the run; without it, stop with Ctrl+C. Shutdown closes both listeners and finishes request workers before its final JSON event. Exit codes: `0` orderly stop, `1` local bind/key/I/O failure, `2` invalid arguments. No Python or external library is needed for this mode.
 
@@ -59,6 +63,11 @@ python -B -m unittest discover -s tests -p test_lan_tools.py -v
 dotnet run --project tests/InspectionTests -- "C:\path\to\dotnet.exe" "C:\path\to\S7Patcher\bin\Debug\net10.0\S7Patcher.dll"
 dotnet run --project tests/ConfigServerTests -- "C:\path\to\dotnet.exe" "C:\path\to\S7Patcher\bin\Debug\net10.0\S7Patcher.dll"
 dotnet run --project tests/PrudpDecoderTests
+dotnet run --project tests/PrudpControlDecoderTests
+dotnet run --project tests/ReliableMessageAssemblerTests
+dotnet run --project tests/LoginRpcCodecTests
+dotnet run --project tests/LoginRpcArgumentShapeTests
+dotnet run --project tests/LocalLoginRpcEngineTests
 ```
 
 The tests use invented archive data and temporary files. To include the known local game in read-only integration checks, set `S7_INSTALLATION` for the Python tests and append the installation folder to the C# test command. Set `S7_TEST_TEMP` to an existing writable temporary parent if your environment restricts the system temporary directory. The Windows junction test is skipped when the environment cannot create junctions. No test installs the diagnostic archive.

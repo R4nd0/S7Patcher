@@ -42,7 +42,7 @@ For the existing narrow probe's same endpoint and stream:
 | Client to local server | Same client source VPort; destination `0x31` | S, the server SYN cookie | Client session from CONNECT request |
 | Server to client | Source `0x31`; destination client VPort | C, the client's CONNECT cookie | Server session from CONNECT ACK |
 
-These are context expectations, not enough to certify a packet. Native receiving transport computes its own cookie and compares the incoming header signature at `EB4C3E–EB4C92`. Only SYN and PING bypass this specific comparison at `EB4C98–EB4CA5`; DATA does not. Other endpoint-lookup/recovery branches exist, so a passive probe should report match/mismatch against its known context rather than claim to reproduce the complete native routing state machine.
+These are context expectations, not enough to certify a packet. Native receiving transport computes its own cookie and compares the incoming header signature at `EB4C3E–EB4C92`. Types 0 and 5, SYN and USER according to the jump table at `E84A98`, bypass this specific comparison at `EB4C98–EB4CA5`; DATA and PING do not. Other endpoint-lookup/recovery branches exist, so a passive probe should report match/mismatch against its known context rather than claim to reproduce the complete native routing state machine.
 
 Native endpoint receive compares packet session against the previously adopted peer session at `EBB984–EBB997`. If no peer session has yet been adopted, only CONNECT may establish it (`EBBB7A–EBBBFC`); DATA then follows the invalid-packet path. DATA is not exempt from session comparison as SYN is. The metadata observer can compare against its saved client CONNECT session, not the generated server session.
 

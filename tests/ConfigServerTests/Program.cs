@@ -8,6 +8,22 @@ using System.Text;
 using System.Text.Json;
 using S7Patcher.Source;
 
+// Isolated synthetic encoder verification: no listeners or production CLI calls.
+if (args.Length == 1 && args[0] == "--encoder-only")
+{
+    Console.WriteLine($"PASS: {PrudpDataPacketEncoderChecks.Run()} isolated DATA encoder checks.");
+    return;
+}
+if (args.Length == 1 && args[0] == "--login-session-only")
+{
+    Console.WriteLine($"PASS: {LocalLoginSessionChecks.Run()} isolated local login session checks.");
+    return;
+}
+if (args.Length == 1 && args[0] == "--login-network-only")
+{
+    Console.WriteLine($"PASS: {await LocalLoginSessionChecks.RunNetworkAsync()} local login network checks.");
+    return;
+}
 if (args.Length != 2) throw new ArgumentException("Supply dotnet path and the built S7Patcher.dll path.");
 string dotnet = Path.GetFullPath(args[0]);
 string patcher = Path.GetFullPath(args[1]);
@@ -276,6 +292,8 @@ await Cli(2, "--local-config-server", "--data-ack-probe", "true");
 await Cli(2, "--local-config-server", "--data-ack-probe", "--data-ack-probe");
 await Cli(2, "--local-config-server", "--data-crypto-probe", "true");
 await Cli(2, "--local-config-server", "--data-crypto-probe", "--data-crypto-probe");
+await Cli(2, "--local-config-server", "--local-login-probe", "true");
+await Cli(2, "--local-config-server", "--local-login-probe", "--local-login-probe");
 string cliOutput = await Cli(0, "--local-config-server", "--http-port", "0", "--udp-port", "0", "--seconds", "1");
 Check(cliOutput.Contains("configuration-server-ready") && cliOutput.Contains("configuration-server-stopped"), "CLI server dispatch did not complete");
 foreach (string[] options in new string[][] {
@@ -305,6 +323,11 @@ passed += await PrudpDataAckProbeChecks.RunAsync();
 string dataCryptoOutput = await Cli(0, "--local-config-server", "--http-port", "0", "--data-crypto-probe", "--seconds", "1");
 Check(dataCryptoOutput.Contains("DATA crypto metadata probe enabled"), "DATA crypto boolean switch did not enable probe mode");
 passed += await PrudpDataCryptoProbeChecks.RunAsync();
+passed += PrudpDataPacketEncoderChecks.Run();
+string loginOutput = await Cli(0, "--local-config-server", "--http-port", "0", "--local-login-probe", "--seconds", "1");
+Check(loginOutput.Contains("Experimental local Login/Register responses enabled"), "Local login boolean switch did not enable probe mode");
+passed += LocalLoginSessionChecks.Run();
+passed += await LocalLoginSessionChecks.RunNetworkAsync();
 Check(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(sentinel))) == originalHash && File.GetLastWriteTimeUtc(sentinel) == originalTime, "Server modified an existing file");
 Check(Directory.GetFileSystemEntries(scratch).SequenceEqual(new[] { sentinel }), "Server persisted a key, configuration or log file");
 Console.WriteLine($"PASS: {passed} config-server checks; real HTTP/UDP, Windows CNG import where supported, redacted logs, lifetime/cleanup, CLI and file immutability.");
