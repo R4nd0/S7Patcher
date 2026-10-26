@@ -96,7 +96,7 @@ internal static class LocalSessionJoinChecks
             ("", "empty"), (new string('x', 2049), "too-long"), ("prudp:/address=127.0.0.1;port=4\n", "non-ascii"),
             (string.Join('|', Enumerable.Repeat(LocalSessionDisplayChecks.Route, 5)), "count"),
             (LocalSessionDisplayChecks.Route + "|", "empty-item"), ("udp:/address=127.0.0.1;port=4", "scheme"),
-            (LocalSessionDisplayChecks.Route + "#x=1", "section"), (LocalSessionDisplayChecks.Route + ";x=%20", "escaped"),
+            (LocalSessionDisplayChecks.Route + "#x=1#y=2", "section-invalid"), (LocalSessionDisplayChecks.Route + ";x=%20", "escaped"),
             ("prudp:/address=127.0.0.1;port=0", "syntax"), ("prudp:/address=0.0.0.0;port=4", "unspecified"),
             ("prudp:/address=192.0.2.1;port=4", "address-mismatch"),
             (LocalSessionDisplayChecks.Route + ";redirected=1", "redirected") })
@@ -119,6 +119,34 @@ internal static class LocalSessionJoinChecks
             out _, out var rejectedReason) && rejectedReason == "local-join-host-route-scheme", "Join lost route diagnosis");
         Check(invalidRouteRegistry.TryCopyLiveSession(visitor, "invented-space"u8, 1, out var untouched), "Route diagnostic snapshot");
         using (untouched) Check(untouched.PendingProfiles.Count == 0, "Rejected route reserved membership");
+        string sectionRoute = LocalSessionDisplayChecks.Route + "#label=fixture;custom=Option{one}";
+        Check(LocalSessionRegistry.HostRoutesOwned(Encoding.ASCII.GetBytes(sectionRoute), hp), "Custom section rejected");
+        Check(!LocalLoginRpcEngine.PrudpUrl.TryRead(sectionRoute, out _), "Game section enabled for authentication URLs");
+        Check(LocalSessionRegistry.HostRoutesOwned(Encoding.ASCII.GetBytes(sectionRoute + "|" + sectionRoute), hp), "Owned section URL list rejected");
+        foreach (string suffix in new[] { "", "x=1#y=2", "x=1;", ";x=1", "x=1;;y=2", "=value", "x=", "x=1=2",
+            "x=1;X=2", "port=4", "ADDRESS=192.0.2.1", "sid=1", "Stream=3", "redirected=true", "RVCID=9",
+            "x=%31", "x=one two", "x=1\n", "x=1\0", "x=é", "x=\\path", "x=?value", "x=one|two", "bad-name=1" })
+        {
+            string badSection = LocalSessionDisplayChecks.Route + "#" + suffix;
+            Check(!LocalLoginRpcEngine.PrudpUrl.TryReadGameRoute(badSection, out var badRoute) && badRoute == null,
+                "Unsafe or ambiguous custom section accepted");
+        }
+        Check(!LocalSessionRegistry.HostRoutesOwned(Encoding.ASCII.GetBytes(
+            "prudp:/address=192.0.2.1;port=40001#label=fixture"), hp), "Section bypassed host ownership");
+        Check(!LocalLoginRpcEngine.PrudpUrl.TryReadGameRoute(LocalSessionDisplayChecks.Route + "#x=" + new string('a', 512), out _),
+            "Custom section exceeded URL bound");
+        using var sectionRegistry = new LocalSessionRegistry(catalogueProbe: true);
+        Check(sectionRegistry.TryCreate(owner, host, LocalSessionCatalogueChecks.PublicBody(route: sectionRoute), out _, out _), "Section fixture");
+        Check(LocalSessionJoinCodec.TryReply(Request(), sectionRegistry, visitor, guest, out var sectionResponse, out var sectionReason)
+            && sectionReason == "local-join-reservation-created", "Section join rejected");
+        using (var reader = new BinaryReader(new MemoryStream(sectionResponse)))
+        {
+            reader.ReadUInt32(); ReadText(reader); reader.ReadUInt16(); reader.ReadUInt32(); ReadText(reader);
+            Check(ReadText(reader) == sectionRoute, "Join changed or stripped custom section");
+        }
+        Check(sectionRegistry.TryCopyLiveSession(visitor, "invented-space"u8, 1, out var sectionSnapshot), "Section snapshot");
+        using (sectionSnapshot) Check(sectionSnapshot.Metadata.Creation.StationUrls.SequenceEqual(Encoding.ASCII.GetBytes(sectionRoute))
+            && sectionSnapshot.PendingProfiles.Count == 1, "Stored section changed or reservation missing");
         using var privateRegistry = new LocalSessionRegistry(catalogueProbe: true);
         Check(privateRegistry.TryCreate(owner, host, LocalSessionCatalogueChecks.PublicBody(true), out _, out _), "Private fixture");
         Check(!LocalSessionJoinCodec.TryReply(Request(), privateRegistry, visitor, guest, out _, out _), "Private join accepted");

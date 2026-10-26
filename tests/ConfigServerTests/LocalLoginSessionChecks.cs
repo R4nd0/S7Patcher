@@ -550,7 +550,8 @@ internal static class LocalLoginSessionChecks
             var host = direction == 0 ? first : second;
             var visitor = direction == 0 ? second : first;
             host.Register(); visitor.Register();
-            host.Session.ProcessData(host.Data(8, 0, LocalSessionCreationChecks.Request(body: LocalSessionCatalogueChecks.PublicBody())), host.Events.Add);
+            host.Session.ProcessData(host.Data(8, 0, LocalSessionCreationChecks.Request(body: LocalSessionCatalogueChecks.PublicBody(
+                route: LocalSessionDisplayChecks.Route + (direction == 0 ? "" : "#label=fixture")))), host.Events.Add);
             host.Session.TakeDue(200, host.Events.Add);
             Check(registry.Count == 1 && host.Session.TryAcknowledge(Ack(ServerCookie, 3)), "Catalogue host create");
             byte[] search = LocalSessionDisplayChecks.Search();

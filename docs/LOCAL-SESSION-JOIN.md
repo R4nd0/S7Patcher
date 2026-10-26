@@ -131,3 +131,38 @@ encoder invocation or pending membership on rejection. Full fresh suite:
 4,952 checks. Transactional updater tests: 16. Deliverable:
 S7-LAN-Routen-Diagnose.zip, installed via Routen-Diagnose.cmd on both closed
 test copies. This is a diagnostic update, not a claimed join fix.
+
+## Native custom section support
+
+Run 18:30:21 (20261026-183021-6bbcc395-lan-server.jsonl) confirms two registered
+peers and one JoinSession_V1 rejected as local-join-host-route-section. The
+real creation URL contains '#'; its exact custom keys/values remain unlogged.
+
+Static inspection of the original hash-verified HE executable establishes:
+E5E465..E5E488 finds '#' and rejects a second one. E5E48F..E5E4AE parses the
+prefix with flag 0, then the suffix with flag 1. E5E500 splits ';', E5E53E finds
+'=', and E5E572 selects the section. Prefix address and port are handled at
+E5E583/E5E5BF; suffix key/value strings enter the separate map at object+0x20
+(E5E665..E5E6A9). Serialization E5DC03..E5DC26 emits '#' when that map is nonempty.
+The delimiter constants at 107182C, 113425C and 105AD74 are '#', ';' and '='.
+No native execution, injection or game mutation was needed for this evidence.
+
+TryReadGameRoute supports this single custom section only for game routes.
+It validates bounded printable ASCII key/value pairs, rejects duplicates across
+both sections and rejects routing names/redirect markers in the suffix as a
+conservative local policy. Login/Register parsing remains unchanged. Host
+ownership uses the parsed prefix; the original full string is retained in
+metadata and the reply, including custom data. This fixes the unconditional
+section rejection, but the next real run must still establish whether all
+remaining route and capacity checks pass and whether the client accepts the
+pending reply. No completed LAN membership or gameplay is claimed.
+
+Validation: 4,986 fresh service checks, including an encrypted two-peer join
+with a custom section, independent reply-string preservation, unchanged login
+parser restrictions, malformed/duplicate/oversized section cases, and foreign
+host rejection. The packaged updater verifies both service hashes and rejects
+the wrong prior binary. Build work/server-join-url-section, service SHA256
+f199c8da7bfe01d4729b7043ec9431dcdc365e3c13799039c26a81cca87cf4a0.
+S7-LAN-Adress-Update.zip requires the preceding route diagnostic and changes
+only the service/manifests, using the existing transactional updater. Deployment
+and real-client acceptance are pending both games closing.

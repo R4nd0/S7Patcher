@@ -23,6 +23,41 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
+### Current: native URL custom section identified and supported
+
+User reports join error after the diagnostic update. Host run 18:30:21
+(20261026-183021-6bbcc395-lan-server.jsonl) confirms two registrations, live
+catalogue/create/update and exactly one JoinSession_V1 rejected with
+local-join-host-route-section. No successful join reply yet.
+
+Static original-hash-checked inspection confirms '#' separates a custom string
+map from the routing parameters (details in LOCAL-SESSION-JOIN.md). The new
+TryReadGameRoute accepts a bounded single section, rejects ambiguous/duplicate
+keys and routing aliases in that section, retains the original complete URL
+in the reply and keeps registered-host address checks. Login/Register parsing
+is unchanged. No native files changed; game route acceptance remains untested.
+
+4,986 freshly built service checks pass, including encrypted joins with the
+custom section in one host direction, exact section preservation and malformed/
+redirect/foreign-address rejection. The packaged updater's source, payload,
+required prior hash and wrong-source rejection are independently checked.
+The transaction engine is unchanged (16 tests passed in the preceding task).
+Build work/server-join-url-section; tests work/join-section-tests.
+Service SHA256:
+f199c8da7bfe01d4729b7043ec9431dcdc365e3c13799039c26a81cca87cf4a0.
+Package outputs/S7-LAN-Adress-Update.zip (nine entries), SHA256:
+a118ba3639575c1db27ee3f63517154d0ade75840744f9faa9be805763b2872f.
+It requires the prior diagnostic service (067eb993...), current adapter/menu,
+and uses backup LocalData/Before-join-url-section-v1.
+
+User has been asked to close BOTH games and run Adress-Update.cmd on PC 2,
+without restarting. PC 1 is still on the diagnostic service pending closure.
+Then check host processes/ports, extract the verified ZIP beside the starter,
+run S7-Adress-Update/update_join_sections.py with bundled Python and the no-game
+LAN host preflight. Request one public four-slot join attempt with both games
+left open. Inspect whether further route checks fail or a reply is queued/ACKed;
+native membership/P2P/match start/synchronization remain unverified.
+
 ### Current: real join rejected by host-route validation
 
 Both PCs installed the first pending-reply service. User reports another join

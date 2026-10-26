@@ -192,6 +192,37 @@ namespace S7Patcher.Source
                 foreach (byte value in text) if (value is < 0x21 or > 0x7e) return false;
                 return true;
             }
+            // Game StationURL only. E5E465..E5E4AE splits one '#' and parses the
+            // suffix into a separate string map (+0x20), not the routing address.
+            // Return only the parsed base for ownership checks. The caller retains
+            // and transmits the original full string; never rebuild it from this view.
+            // Login/Register deliberately continue using the narrower TryRead.
+            internal static bool TryReadGameRoute(string text, out PrudpUrl url)
+            {
+                url = null;
+                if (text == null || text.Length > MaximumUrlLength) return false;
+                int separator = text.IndexOf('#');
+                if (separator < 0) return TryRead(text, out url);
+                if (separator != text.LastIndexOf('#') || separator == text.Length - 1
+                    || !TryRead(text[..separator], out var primary)) return false;
+                HashSet<string> names = new(primary.positions.Keys, StringComparer.OrdinalIgnoreCase);
+                foreach (string pair in text[(separator + 1)..].Split(';'))
+                {
+                    int equals = pair.IndexOf('=');
+                    if (equals <= 0 || equals != pair.LastIndexOf('=') || equals == pair.Length - 1) return false;
+                    foreach (char value in pair)
+                        if (value is < '!' or > '~' || value is '#' or '%' or '?' or '\\' or '|') return false;
+                    string name = pair[..equals];
+                    foreach (char value in name) if (!char.IsAsciiLetterOrDigit(value) && value != '_') return false;
+                    if (!names.Add(name)) return false;
+                    // Conservative local policy: no routing aliases or redirect
+                    // markers hidden in the separate custom-data section.
+                    foreach (string routing in new[] { "address", "port", "sid", "stream", "redirected" })
+                        if (name.Equals(routing, StringComparison.OrdinalIgnoreCase)) return false;
+                }
+                url = primary;
+                return true;
+            }
             internal static bool TryRead(string text, out PrudpUrl url)
             {
                 url = null;

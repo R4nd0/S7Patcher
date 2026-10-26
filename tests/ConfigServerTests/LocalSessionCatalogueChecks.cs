@@ -6,12 +6,12 @@ internal static class LocalSessionCatalogueChecks
 {
     private static byte[] Ddl(string value) => LocalSessionSearchChecks.Ddl(value);
     private static byte[] Map(params byte[][] entries) => LocalSessionUpdateChecks.Map(entries);
-    internal static byte[] PublicBody(bool isPrivate = false)
+    internal static byte[] PublicBody(bool isPrivate = false, string route = LocalSessionDisplayChecks.Route)
     {
         var old = LocalSessionDisplayChecks.Attributes();
         byte[] attributes = [.. old, .. Ddl("private"), 3, (byte)(isPrivate ? 1 : 0)];
         BinaryPrimitives.WriteUInt32LittleEndian(attributes, 8);
-        return LocalSessionDisplayChecks.CreateBody(attributes: attributes);
+        return LocalSessionDisplayChecks.CreateBody(route: route, attributes: attributes);
     }
     internal static byte[] Get(uint id = 1, string space = "invented-space")
     {

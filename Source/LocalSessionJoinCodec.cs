@@ -77,12 +77,10 @@ namespace S7Patcher.Source
                 if (text.Length == 0) return false;
                 reason = "local-join-host-route-scheme";
                 if (!text.StartsWith("prudp:/", StringComparison.Ordinal)) return false;
-                reason = "local-join-host-route-section";
-                if (text.Contains('#')) return false;
                 reason = "local-join-host-route-escaped";
                 if (text.Contains('%')) return false;
-                reason = "local-join-host-route-syntax";
-                if (!LocalLoginRpcEngine.PrudpUrl.TryRead(text, out var url)) return false;
+                reason = text.Contains('#') ? "local-join-host-route-section-invalid" : "local-join-host-route-syntax";
+                if (!LocalLoginRpcEngine.PrudpUrl.TryReadGameRoute(text, out var url)) return false;
                 reason = "local-join-host-route-loopback";
                 if (!url.Address.Equals(registered.Address) && System.Net.IPAddress.IsLoopback(url.Address)) return false;
                 reason = "local-join-host-route-unspecified";
