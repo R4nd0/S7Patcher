@@ -50,10 +50,16 @@ and classify only guarded callsites, without inspecting session keys or IDs.
 709 lab bootstrap checks, 69 network checks and nine real original-callsite
 comparisons pass; the default build retains 359 bootstrap checks.
 Live result: join still fails; no instrumented ticket rejection branch ran.
-Current candidate work/native-pair-ticket-transport observes C252AC transport
+Previous candidate work/native-pair-ticket-transport observes C252AC transport
 creation, C25277 internal event construction and C2C269 link result. These
 forward opaque arguments unchanged; only fixed path/result categories are
 logged. 741 bootstrap checks and 12 original-callsite comparisons pass.
+Live: guest transport entered/created and link accepted, then ticket/player
+pending. No received-ticket/internal-event or completion was established;
+user still sees the session error. Current candidate work/native-pair-ticket-host
+observes C0E961 received-ticket events, C22819 wire ticket handling, and C22611
+application approval dispatch, preserving all native operations. 793 bootstrap
+checks and 15 original-callsite comparisons pass; live result pending.
 Service remains work/server-pair-catalogue-route, unchanged in this milestone.
 Normal native behavior
 is isolated by S7_LOCAL_PAIR_LAB. No successful join or match is established.

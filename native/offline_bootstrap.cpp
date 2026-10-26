@@ -479,6 +479,30 @@ int __fastcall ObserveLabTicketLinkResult(const NativeResult* result, void*) {
         : code > 0 ? "lab-native-ticket-link-accepted" : "lab-native-ticket-link-failed");
     SetLastError(error); return code;
 }
+NativeResult* __fastcall ObserveLabTicketReceived(void* self, void*, NativeResult* result, void* event) {
+    const DWORD incoming = GetLastError(); ReportLocalStatus("lab-native-ticket-received-event"); SetLastError(incoming);
+    using Original = NativeResult* (__thiscall*)(void*, NativeResult*, void*);
+    auto* returned = Native<Original>(0xC22790)(self, result, event);
+    const DWORD error = GetLastError();
+    ReportLocalStatus(returned == result && result && result->code > 0
+        ? "lab-native-ticket-received-accepted" : "lab-native-ticket-received-failed");
+    SetLastError(error); return returned;
+}
+template<uintptr_t Target>
+NativeResult* __fastcall ObserveLabTicketSeven(void* self, void*, NativeResult* result,
+    uintptr_t b, uintptr_t c, uintptr_t d, uintptr_t e, uintptr_t f, uintptr_t g) {
+    constexpr bool wire = Target == 0xC223F0;
+    const DWORD incoming = GetLastError();
+    ReportLocalStatus(wire ? "lab-native-ticket-wire-received" : "lab-native-ticket-approval-dispatched");
+    SetLastError(incoming);
+    using Original = NativeResult* (__thiscall*)(void*, NativeResult*, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
+    auto* returned = Native<Original>(Target)(self, result, b, c, d, e, f, g);
+    const DWORD error = GetLastError();
+    const bool accepted = returned == result && result && result->code > 0;
+    ReportLocalStatus(wire ? (accepted ? "lab-native-ticket-wire-accepted" : "lab-native-ticket-wire-failed")
+        : (accepted ? "lab-native-ticket-approval-queued" : "lab-native-ticket-approval-failed"));
+    SetLastError(error); return returned;
+}
 void* __fastcall ObserveLabTicketRejection(void* output, void*, const char* text) {
     const uintptr_t caller = reinterpret_cast<uintptr_t>(_ReturnAddress()) - image_base + PreferredBase;
     using Original = void* (__thiscall*)(void*, const char*);
@@ -665,6 +689,9 @@ const Patch ConnectPatches[] = {
     {0xC252AC, {0xe8,0xff,0x6b,0x00,0x00}, reinterpret_cast<const void*>(&ObserveLabTicketTransport)},
     {0xC25277, {0xe8,0x64,0x68,0xfe,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketEvent)},
     {0xC2C269, {0xe8,0xf2,0xe1,0x8a,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketLinkResult)},
+    {0xC0E961, {0xe8,0x2a,0x3e,0x01,0x00}, reinterpret_cast<const void*>(&ObserveLabTicketReceived)},
+    {0xC22819, {0xe8,0xd2,0xfb,0xff,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketSeven<0xC223F0>)},
+    {0xC22611, {0xe8,0x6a,0x38,0xff,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketSeven<0xC15E80>)},
     {0xB7D92F, {0xe8,0xac,0x5a,0x00,0x00}, reinterpret_cast<const void*>(&ObserveLabPlayerRequest)},
     {0xB834AB, {0xe8,0xc0,0x49,0xad,0xff}, reinterpret_cast<const void*>(&ObserveLabPlayerReason)},
     {0xB8359E, {0xe8,0xcd,0x48,0xad,0xff}, reinterpret_cast<const void*>(&ObserveLabPlayerReason)},

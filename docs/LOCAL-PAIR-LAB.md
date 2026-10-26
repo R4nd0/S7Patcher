@@ -125,7 +125,15 @@ The real games created separate Profiles.xml and replay files there.
     thiscall RET 1C) and C25277 (C0BAE0, thiscall RET 1C), plus the original
     result getter at C2C269. Opaque arguments are only forwarded. Tests verify
     stack arguments, original return values and last-error preservation. Live
-    result pending; no network completion or successful join is established.
+    result: guest transport entered/created and link accepted, followed by
+    ticket/player pending; no internal event construction was observed. The
+    user still sees the session error. A positive link result only establishes
+    that initial transport request, not a completed connection or join.
+15. Static RTTI identifies C0BAE0's event as ReceiveTicketRequest. Added fixed
+    observations for the C0E961 -> C22790 event handler, C22819 -> C223F0 wire
+    handler and C22611 -> C15E80 application-approval dispatch. No event payload
+    or identity is read; forwarding and result/error preservation are tested.
+    Current candidate: work/native-pair-ticket-host; live result pending.
 
 Bounded external type/state inspection also found the main Echo implementation
 as the scheduler's only child, initialized state 3 on both slots. Its dispatcher
@@ -151,7 +159,7 @@ notification, match start and synchronization remain unverified.
 
 ## Verification
 
-Laboratory build: 741 bootstrap checks (including both exact hashes, per-byte
+Laboratory build: 793 bootstrap checks (including both exact hashes, per-byte
 digest mutation rejection, native ABI/result preservation, pump order,
 duplicate suppression, reentrancy and teardown); 69 network checks, including
 same-port distinct-address binding, UDP transfer and automatic source binding;
