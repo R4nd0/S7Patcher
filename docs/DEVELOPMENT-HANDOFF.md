@@ -35,12 +35,17 @@ see LOCAL-SESSION-JOIN.md for static evidence and validation.
 outputs/S7-LAN-Beitritt-Update.zip is prepared (nine entries, no original game
 files), SHA256 13d3315699159142758bfd2c4f9c5ac3e40a7a1743dd0c98f8b3f0edaa8cd94e.
 Source package work/join-adapter-update-package; built DLL work/native-join-build.
-User has been asked to close both games and apply Beitritt-Update.cmd on PC 2,
-then report success before restarting. PC 1 deployment is pending confirmed
-closure. Do not overwrite the running DLL. The full installer fixture was
-updated and verified; active PC 1 still has the older adapter. Existing menu
-ZIP is unchanged. Service remains unchanged and still has no successful join
-handler; next test is first native join dispatch, not a playable LAN claim.
+User confirmed both games closed and the adapter update installed on PC 2.
+PC 1's updater then completed with backup; its content ID matches the validated
+fixture (2b018d9cd23e066adc243d941c61e4cb1066c4825ab0445e16039d7f77565c1f).
+The first no-game preflight found ports occupied by the prior 17:39 test service
+PID 39668. Its exact executable, service arguments and old content ID matched;
+parent PID 42264 and all S7 processes were absent. Only that orphan was stopped,
+then the LAN preflight passed. No game was launched by the agent. User has been
+asked to start a public host lobby, start PC 2, attempt one join and leave both
+games open. Runtime result is pending. Existing menu ZIP is unchanged. Service
+remains unchanged and still has no successful join handler; this is the first
+native join dispatch test, not a playable LAN claim.
 
 ### Two real PCs: catalogue confirmed; join menu update
 
