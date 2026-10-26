@@ -488,6 +488,34 @@ NativeResult* __fastcall ObserveLabTicketReceived(void* self, void*, NativeResul
         ? "lab-native-ticket-received-accepted" : "lab-native-ticket-received-failed");
     SetLastError(error); return returned;
 }
+NativeResult* __fastcall ObserveLabPlayerTicket(void* self, void*, NativeResult* result, void* event) {
+    const DWORD incoming = GetLastError(); ReportLocalStatus("lab-native-player-ticket-entered"); SetLastError(incoming);
+    using Original = NativeResult* (__thiscall*)(void*, NativeResult*, void*);
+    auto* returned = Native<Original>(0xB86710)(self, result, event);
+    const DWORD error = GetLastError();
+    ReportLocalStatus(returned == result && result && result->code > 0
+        ? "lab-native-player-ticket-returned-positive" : "lab-native-player-ticket-failed");
+    SetLastError(error); return returned;
+}
+void* __fastcall ObserveLabTicketSessionLookup(void* self, void*, uintptr_t reference) {
+    // B86770 is reached only after the native metadata type check succeeds.
+    // Forward the lookup reference without examining or logging it.
+    using Original = void* (__thiscall*)(void*, uintptr_t);
+    auto* returned = Native<Original>(0xC0A8B0)(self, reference);
+    const DWORD error = GetLastError();
+    ReportLocalStatus(returned ? "lab-native-player-ticket-session-found" : "lab-native-player-ticket-session-missing");
+    SetLastError(error); return returned;
+}
+void __fastcall ObserveLabHostJoinGate(void* self, void*, void* event) {
+    // Exact GameSessionHandler virtual slot. C0 is the native full/in-game
+    // gate read by ED307C, not an identity or a replacement readiness value.
+    const DWORD incoming = GetLastError();
+    ReportLocalStatus(static_cast<unsigned char*>(self)[0xc0]
+        ? "lab-native-host-join-gate-closed" : "lab-native-host-join-gate-open");
+    SetLastError(incoming);
+    using Original = void (__thiscall*)(void*, void*);
+    Native<Original>(0xED3070)(self, event);
+}
 template<uintptr_t Target>
 NativeResult* __fastcall ObserveLabTicketSeven(void* self, void*, NativeResult* result,
     uintptr_t b, uintptr_t c, uintptr_t d, uintptr_t e, uintptr_t f, uintptr_t g) {
@@ -692,6 +720,9 @@ const Patch ConnectPatches[] = {
     {0xC0E961, {0xe8,0x2a,0x3e,0x01,0x00}, reinterpret_cast<const void*>(&ObserveLabTicketReceived)},
     {0xC22819, {0xe8,0xd2,0xfb,0xff,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketSeven<0xC223F0>)},
     {0xC22611, {0xe8,0x6a,0x38,0xff,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketSeven<0xC15E80>)},
+    {0xB7DA97, {0xe8,0x74,0x8c,0x00,0x00}, reinterpret_cast<const void*>(&ObserveLabPlayerTicket)},
+    {0xB86770, {0xe8,0x3b,0x41,0x08,0x00}, reinterpret_cast<const void*>(&ObserveLabTicketSessionLookup)},
+    {0x1140060, {0x70,0x30,0xed,0x00,0x00}, reinterpret_cast<const void*>(&ObserveLabHostJoinGate), true},
     {0xB7D92F, {0xe8,0xac,0x5a,0x00,0x00}, reinterpret_cast<const void*>(&ObserveLabPlayerRequest)},
     {0xB834AB, {0xe8,0xc0,0x49,0xad,0xff}, reinterpret_cast<const void*>(&ObserveLabPlayerReason)},
     {0xB8359E, {0xe8,0xcd,0x48,0xad,0xff}, reinterpret_cast<const void*>(&ObserveLabPlayerReason)},

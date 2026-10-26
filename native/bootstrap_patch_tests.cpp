@@ -25,6 +25,13 @@ NativeResult* __fastcall FakeTicketResultWords(void* self, void*, NativeResult* 
     FakeTicketWords(self, nullptr, reinterpret_cast<uintptr_t>(result), b, c, d, e, f, g);
     result->code = lab_join_code; result->detail = 123; return result;
 }
+void* __fastcall FakeTicketLookup(void* self, void*, uintptr_t reference) {
+    lab_ticket_words[0]=reinterpret_cast<uintptr_t>(self); lab_ticket_words[1]=reference;
+    SetLastError(6789); return reinterpret_cast<void*>(lab_ticket_return);
+}
+void __fastcall FakeHostJoinGate(void* self, void*, void* event) {
+    lab_dispatch_arguments[0]=self; lab_dispatch_arguments[1]=event; SetLastError(6789);
+}
 void* __fastcall FakePlayerReason(void* output, void*, const char* text, unsigned int length) {
     lab_rejection_literal = text; lab_reason_length = length; SetLastError(6789); return output;
 }
@@ -181,12 +188,16 @@ int main() {
     check(FakeJump(0xB833E0, reinterpret_cast<const void*>(&FakeSessionDispatch)));
     check(FakeJump(0xC25610, reinterpret_cast<const void*>(&FakeSessionDispatch)));
     check(FakeJump(0xC22790, reinterpret_cast<const void*>(&FakeSessionDispatch)));
+    check(FakeJump(0xB86710, reinterpret_cast<const void*>(&FakeSessionDispatch)));
     for (int code : {1, 2, 0, -1000000, -999912}) {
         NativeResult result{}; unsigned char manager[4]{}, event[4]{}; lab_join_code = code;
         check(ObserveLabSessionDispatch(manager, nullptr, &result, event) == &result);
         check(result.code == code && result.detail == 987 && GetLastError() == 6789);
         check(lab_dispatch_arguments[0] == manager && lab_dispatch_arguments[1] == &result && lab_dispatch_arguments[2] == event);
         check(ObserveLabTicketReceived(manager, nullptr, &result, event) == &result);
+        check(result.code == code && result.detail == 987 && GetLastError() == 6789);
+        check(lab_dispatch_arguments[0] == manager && lab_dispatch_arguments[1] == &result && lab_dispatch_arguments[2] == event);
+        check(ObserveLabPlayerTicket(manager, nullptr, &result, event) == &result);
         check(result.code == code && result.detail == 987 && GetLastError() == 6789);
         check(lab_dispatch_arguments[0] == manager && lab_dispatch_arguments[1] == &result && lab_dispatch_arguments[2] == event);
         check(ObserveLabPlayerRequest(manager, nullptr, &result, event) == &result);
@@ -197,6 +208,18 @@ int main() {
         check(lab_dispatch_arguments[0] == manager && lab_dispatch_arguments[1] == &result && lab_dispatch_arguments[2] == event);
     }
     lab_join_code = 1;
+    check(FakeJump(0xC0A8B0, reinterpret_cast<const void*>(&FakeTicketLookup)));
+    check(FakeJump(0xED3070, reinterpret_cast<const void*>(&FakeHostJoinGate)));
+    for (uintptr_t returned : {0u, 123u}) {
+        lab_ticket_return=returned;
+        check(ObserveLabTicketSessionLookup(reinterpret_cast<void*>(11), nullptr, 22) == reinterpret_cast<void*>(returned));
+        check(lab_ticket_words[0]==11 && lab_ticket_words[1]==22 && GetLastError()==6789);
+    }
+    for (int gate : {0,1}) {
+        unsigned char handler[0xc4]{}; handler[0xc0]=static_cast<unsigned char>(gate); unsigned char event[4]{};
+        ObserveLabHostJoinGate(handler,nullptr,event);
+        check(lab_dispatch_arguments[0]==handler && lab_dispatch_arguments[1]==event && GetLastError()==6789 && handler[0xc0]==gate);
+    }
     check(FakeJump(0xC223F0, reinterpret_cast<const void*>(&FakeTicketResultWords)));
     check(FakeJump(0xC15E80, reinterpret_cast<const void*>(&FakeTicketResultWords)));
     for (int code : {2,1,0,-999912}) {

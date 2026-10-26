@@ -59,7 +59,17 @@ pending. No received-ticket/internal-event or completion was established;
 user still sees the session error. Current candidate work/native-pair-ticket-host
 observes C0E961 received-ticket events, C22819 wire ticket handling, and C22611
 application approval dispatch, preserving all native operations. 793 bootstrap
-checks and 15 original-callsite comparisons pass; live result pending.
+checks and 15 original-callsite comparisons pass. Live result: host wire ticket
+received, native approval dispatched/queued, wire handler accepted; guest
+transport created/link accepted, request pending. The user still gets the
+session error. This establishes transport through host ticket receipt, not
+application approval or membership.
+Current candidate work/native-pair-player-ticket observes B7DA97 -> B86710
+player ticket handling, B86770 -> C0A8B0 session lookup after metadata type
+validation, and the GameSessionHandler ED3070 full/in-game gate via its exact
+virtual slot 1140060. It changes no gate or result, logs no keys/identities.
+834 bootstrap checks and 17 original-callsite comparisons plus the virtual
+slot comparison pass. Live result pending.
 Service remains work/server-pair-catalogue-route, unchanged in this milestone.
 Normal native behavior
 is isolated by S7_LOCAL_PAIR_LAB. No successful join or match is established.

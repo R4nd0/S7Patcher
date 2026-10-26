@@ -133,7 +133,18 @@ The real games created separate Profiles.xml and replay files there.
     observations for the C0E961 -> C22790 event handler, C22819 -> C223F0 wire
     handler and C22611 -> C15E80 application-approval dispatch. No event payload
     or identity is read; forwarding and result/error preservation are tested.
-    Current candidate: work/native-pair-ticket-host; live result pending.
+    Live: host wire receive, approval dispatch/queued and wire accepted were
+    observed; guest transport creation/link acceptance and pending request were
+    observed. Join still fails. This proves the request crosses to the host,
+    but does not prove that the application approved it or membership completed.
+16. Static dispatch follows RequestTicket through PlayerManager_Network's
+    B86710 to session::outEvent::JoinRequest, then SimpleSessionHandler's
+    virtual callback. The game override ED3070 rejects when its C0 full/in-game
+    boolean is set, otherwise invokes original CA36C0. The new candidate
+    observes B7DA97 -> B86710, B86770 -> C0A8B0 session lookup (after the native
+    metadata type check), and virtual slot 1140060 -> ED3070. Only presence,
+    result and the known gate boolean are classified; nothing is overridden.
+    Current candidate work/native-pair-player-ticket; live result pending.
 
 Bounded external type/state inspection also found the main Echo implementation
 as the scheduler's only child, initialized state 3 on both slots. Its dispatcher
@@ -159,7 +170,7 @@ notification, match start and synchronization remain unverified.
 
 ## Verification
 
-Laboratory build: 793 bootstrap checks (including both exact hashes, per-byte
+Laboratory build: 834 bootstrap checks (including both exact hashes, per-byte
 digest mutation rejection, native ABI/result preservation, pump order,
 duplicate suppression, reentrancy and teardown); 69 network checks, including
 same-port distinct-address binding, UDP transfer and automatic source binding;
