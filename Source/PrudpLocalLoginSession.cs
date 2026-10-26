@@ -100,7 +100,7 @@ namespace S7Patcher.Source
                     string reason;
                     // Login/Register keep their two-response budget. The opt-in
                     // keepalive service can additionally answer bounded searches
-                    // and create requests, sharing the same post-login budget.
+                    // and create/update/leave requests, sharing the same post-login budget.
                     if (search)
                     {
                         if (observedOperations.Count < 8)
@@ -139,7 +139,9 @@ namespace S7Patcher.Source
                         : LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-create-session-v1"
                             ? "local-session-create-response-queued"
                             : LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-update-session-v1"
-                                ? "local-session-update-response-queued" : "local-session-search-response-queued", Reason = reason,
+                                ? "local-session-update-response-queued"
+                                : LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-leave-session-v1"
+                                    ? "local-session-leave-response-queued" : "local-session-search-response-queued", Reason = reason,
                         AuthenticationImplemented = false, UdpProtocolImplemented = false });
                 }
                 finally
@@ -161,6 +163,8 @@ namespace S7Patcher.Source
                 return LocalSessionCreationCodec.TryReply(message, sessions, this, out response, out reason);
             if (operation == "matchmaking-update-session-v1")
                 return LocalSessionUpdateCodec.TryReply(message, sessions, this, out response, out reason);
+            if (operation == "matchmaking-leave-session-v1")
+                return LocalSessionLeaveCodec.TryReply(message, sessions, this, out response, out reason);
             if (operation != "matchmaking-search-sessions-v1")
             {
                 response = null;

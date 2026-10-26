@@ -86,6 +86,7 @@ game archive or original installation changes were needed.
 Live result with `95603b5`: the user reported a lobby with player slots. The
 service sent five replies (Login, Register, search, create and update), all
 acknowledged, with no rejection in the observed sample. This establishes lobby
-creation, not a playable match or second-client join. The next user test is to
-start a match from that open lobby, using AI/closed slots if required. Inspect
-the next operations and actual game behavior before extending the service.
+creation, not a playable match or second-client join. Follow-up investigation identified original two-slot AI and additional-human
+start restrictions; the initial AI-only multiplayer start test was unsuitable.
+The next service candidate handles leaving the host lobby and recreating it.
+See `LOCAL-SESSION-LEAVE.md` for the current test and remaining limitations.

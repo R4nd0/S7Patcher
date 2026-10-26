@@ -16,26 +16,32 @@ verified, and no second-client LAN join has been implemented or tested.
 
 The current native candidate passed 354 adapter checks, 38 network-guard checks
 and 18 original-byte comparisons, plus configuration validation. The
-current session-update candidate passes 2,834 service checks; the unchanged
+current session-leave candidate passes 3,069 service checks; the unchanged
 RPC codec previously passed 20,288 isolated assertions. Its UI archive verifies
 all 284 entries and parses.
 These are separate results, not evidence of a playable LAN match.
 
-## Current step: test match startup from the confirmed local lobby
+## Current step: verify leave/recreate and AI selection on a four-slot map
 
-The follow-up diagnostic identified `UpdateSession_V1`: two requests arrived
-after the acknowledged create response. The candidate now validates and merges
-metadata into the owner's record, with exact space/ID checks, atomic bounded
-state changes and the native void response. See `LOCAL-SESSION-UPDATES.md`.
-Build `work/server-session-update` is staged as `Server-Session-Update`; the test
-launcher selected it for the successful lobby run. Adapter and archive are unchanged.
-Update acceptance and reaching the player-slot lobby are now live-verified.
-The user has been asked to start a match from that lobby, adding AI to required
-slots or closing slots if necessary, and leave the game open. Inspect new fixed
-operation labels and replies before changing code. `GetSession`, nonempty search
-results and joining remain unimplemented; match startup remains unverified.
-The diagnostic now retains at most eight distinct fixed operation labels, so
-repeated updates cannot hide the next unsupported operation.
+The created lobby is confirmed. The user's screenshot shows LocalPlayer in the
+host slot and one free slot on a two-slot map. Original `hostLobby.lua` disables
+Against computer exactly when the slot count is two. Separately, Start demands
+another human outside slot 1; AI does not satisfy that check. Earlier advice to
+start multiplayer using only AI was incorrect. No UI restriction was patched.
+
+The same run later exposed unsupported `LeaveSession_V1`, followed by nonempty
+catalogue search rejections and an already-hosting create rejection. The new
+host-only leave handler removes the exact owned record and returns the native
+void reply. See `LOCAL-SESSION-LEAVE.md` for layout, limits and test evidence.
+Build `work/server-session-leave` is staged/hash-verified as `Server-Session-Leave`
+and selected for the next test launch. Bundle fingerprints pass; archive and
+adapter are unchanged. The user must restart to use the new service.
+
+Next live check: create a four-slot lobby, select AI in another slot, leave the
+lobby and create again without restarting. Inspect the fixed leave event and
+reply acknowledgement. Leave is not yet live-verified; full match startup,
+`GetSession`, nonempty search serialization and joining remain outstanding.
+The diagnostic retains at most eight distinct fixed operation labels.
 
 The SpaceId transfer and real `SearchSessions_V1` exchange are live-verified
 at transport level: 16 empty search replies, 18 acknowledgements including

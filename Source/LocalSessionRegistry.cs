@@ -61,6 +61,24 @@ namespace S7Patcher.Source
             }
         }
 
+        // Host-only prototype: no joined clients exist yet. Never remove another
+        // transport's record using a claimed ID, flag or trailing string.
+        internal bool TryLeave(object owner, ReadOnlySpan<byte> body, out string reason)
+        {
+            reason = "unsupported-leave-arguments";
+            if (closed || owner == null || !LocalSessionMetadata.TryReadLeaveBody(body, out var space, out uint id)) return false;
+            reason = "local-session-leave-owner-or-space-mismatch";
+            for (int i = 0; i < entries.Count; ++i)
+            {
+                Entry entry = entries[i];
+                if (entry.Id != id || !ReferenceEquals(entry.Owner, owner) || !space.SequenceEqual(entry.Space)) continue;
+                entry.Dispose(); entries.RemoveAt(i);
+                reason = "local-session-record-left";
+                return true;
+            }
+            return false;
+        }
+
         // Owned snapshot for a future GetSession serializer; the caller disposes it.
         internal bool TryGetMetadata(object owner, uint id, out LocalSessionMetadata metadata)
         {

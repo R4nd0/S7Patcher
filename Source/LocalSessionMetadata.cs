@@ -13,6 +13,17 @@ namespace S7Patcher.Source
         internal readonly Dictionary<string, byte[]> Attributes = new(StringComparer.Ordinal);
         internal readonly Dictionary<string, Dictionary<string, byte[]>> Members = new(StringComparer.Ordinal);
 
+        internal static bool TryReadLeaveBody(ReadOnlySpan<byte> body,
+            out ReadOnlySpan<byte> space, out uint sessionId)
+        {
+            space = default; sessionId = 0;
+            if (body.Length > MaximumBytes) return false;
+            Reader reader = new(body);
+            return reader.Number(out uint classes) && classes == 0 && reader.Text(out space)
+                && reader.Number(out sessionId) && sessionId is > 0 and < uint.MaxValue
+                && reader.Byte(out byte flag) && flag <= 1 && reader.Text(out _) && reader.AtEnd;
+        }
+
         internal static bool TryReadBody(ReadOnlySpan<byte> body, bool creation,
             out ReadOnlySpan<byte> space, out uint sessionId, out LocalSessionMetadata result)
         {

@@ -24,6 +24,7 @@
     <Compile Include="../../Source/LocalSessionRegistry.cs" Link="LocalSessionRegistry.cs" />
     <Compile Include="../../Source/LocalSessionMetadata.cs" Link="LocalSessionMetadata.cs" />
     <Compile Include="../../Source/LocalSessionUpdateCodec.cs" Link="LocalSessionUpdateCodec.cs" />
+    <Compile Include="../../Source/LocalSessionLeaveCodec.cs" Link="LocalSessionLeaveCodec.cs" />
     <Compile Include="../../Source/LoginRpcArgumentShape.cs" Link="LoginRpcArgumentShape.cs" />
     <Compile Include="../../Source/LocalLoginRpcEngine.cs" Link="LocalLoginRpcEngine.cs" />
   </ItemGroup>

@@ -439,6 +439,37 @@ internal static class LocalLoginSessionChecks
             fixture.Session.ProcessData(fixture.Data(40, 0, LocalSessionUpdateChecks.Request(body: LocalSessionUpdateChecks.Body(attributes: LocalSessionUpdateChecks.Map()))), fixture.Events.Add);
             Check(fixture.Session.PendingCount == 0 && fixture.Events.Count(e => e.Event == "local-session-update-response-queued") == 31
                 && fixture.Events.Any(e => e.Reason == "response-budget-exhausted"), "Updates bypassed shared response cap");
+            fixture.Session.ProcessData(fixture.Data(41, 0, LocalSessionLeaveChecks.Request()), fixture.Events.Add);
+            Check(registry.Count == 1 && fixture.Session.PendingCount == 0, "Leave mutated registry after response budget exhaustion");
+        }
+        using (LocalSessionRegistry registry = new())
+        using (Fixture host = new(keepAlive: true, sessions: registry))
+        using (Fixture visitor = new(keepAlive: true, sessions: registry))
+        {
+            host.Register(); visitor.Register();
+            host.Session.ProcessData(host.Data(8, 0, LocalSessionCreationChecks.Request()), host.Events.Add);
+            host.Session.TakeDue(200, host.Events.Add); host.Session.TryAcknowledge(Ack(ServerCookie, 3));
+            visitor.Session.ProcessData(visitor.Data(8, 0, LocalSessionLeaveChecks.Request()), visitor.Events.Add);
+            Check(registry.Count == 1 && visitor.Session.PendingCount == 0, "Visitor could remove host record");
+            byte[] leave = host.Data(9, 0, LocalSessionLeaveChecks.Request());
+            host.Session.ProcessData(leave, host.Events.Add); host.Session.ProcessData(leave, host.Events.Add);
+            Check(registry.Count == 0 && host.Session.PendingCount == 1
+                && host.Events.Count(e => e.Event == "local-session-leave-response-queued") == 1,
+                "Leave retransmission changed state or queued duplicate response");
+            byte[] reply = host.Session.TakeDue(300, host.Events.Add).Single();
+            VerifySearchResponse(reply, host.Key, 0x12345678, host.ServerSession, LocalSessionLeaveChecks.Response()); passed++;
+            Check(ReferenceEquals(reply, host.Session.TakeDue(1300, host.Events.Add).Single()), "Leave retry changed ciphertext");
+            Check(host.Session.TryAcknowledge(Ack(ServerCookie, 4)) && reply.All(b => b == 0), "Leave ACK did not clear reply");
+            host.Session.ProcessData(host.Data(10, 0, LocalSessionSearchChecks.Request()), host.Events.Add);
+            reply = host.Session.TakeDue(1400, host.Events.Add).Single();
+            VerifySearchResponse(reply, host.Key, 0x12345678, host.ServerSession); passed++;
+            Check(host.Session.TryAcknowledge(Ack(ServerCookie, 5)), "Search after leave failed");
+            host.Session.ProcessData(host.Data(11, 0, LocalSessionCreationChecks.Request()), host.Events.Add);
+            reply = host.Session.TakeDue(1500, host.Events.Add).Single();
+            VerifySearchResponse(reply, host.Key, 0x12345678, host.ServerSession, LocalSessionCreationChecks.Response(sessionId: 2)); passed++;
+            Check(registry.Count == 1 && host.Session.TryAcknowledge(Ack(ServerCookie, 6)), "Recreate after leave failed");
+            host.Session.ProcessData(host.Data(12, 0, LocalSessionLeaveChecks.Request()), host.Events.Add);
+            Check(registry.Count == 1 && host.Session.PendingCount == 0, "Old leave removed recreated session");
         }
         foreach (bool keepAlive in new[] { false, true })
         {

@@ -331,6 +331,7 @@ Check(loginOutput.Contains("Experimental local Login/Register responses enabled"
 passed += LocalSessionSearchChecks.Run();
 passed += LocalSessionCreationChecks.Run();
 passed += LocalSessionUpdateChecks.Run();
+passed += LocalSessionLeaveChecks.Run();
 passed += LocalLoginSessionChecks.Run();
 await Cli(0, "--local-config-server", "--http-port", "0", "--local-keepalive-probe", "--seconds", "1");
 passed += await LocalLoginSessionChecks.RunNetworkAsync();
