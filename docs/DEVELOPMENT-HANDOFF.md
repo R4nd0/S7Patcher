@@ -23,7 +23,16 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
-### Current: empty native ProfileID supported; candidate awaits deployment
+### Current: empty native ProfileID supported; deployed, real join pending
+
+User confirms both games closed and Profilfeld-Update installed on PC 2.
+Host inspection found no game/launcher/service and ports 9110/9111 free.
+Verified nine-entry ZIP extracted with exclusive writes on PC 1; transactional
+update completed. Installed service SHA256 da48ed8c... matches the candidate.
+Content ID: 990d2fd3b364eccedc82d3e256cc848dab678fe8aeed6fea5153d41adf0c8a9f.
+LAN host --check-only passed for .125 / .85; no game launched by the agent.
+User asked for one public four-slot join attempt from PC 2, leaving both games
+and starter windows open. Await result/logs; real join and gameplay unverified.
 
 Latest user join failure: 20261026-192411-de939fec-lan-server.jsonl, two registered
 peers and one JoinSession_V1 rejection local-join-storm-descriptor-values.
@@ -35,11 +44,9 @@ LocalStormRoute accepts empty or D-format GUID here, preserving it and keeping
 registered identity and endpoint ownership checks. See LOCAL-SESSION-JOIN.md.
 
 5,463 service checks pass, including encrypted empty-profile joins in both
-host directions and identity/address rejection. User asked to close both games,
-apply Profilfeld-Update on PC 2 and not restart. After confirmation check host
-processes/ports, extract verified ZIP, run bundled Python
-S7-Profilfeld-Update/update_empty_profile.py --bundle <test-root>, then host
---check-only and request one public four-slot join attempt. Real LAN join,
+host directions and identity/address rejection. Paired update and PC 1 preflight
+are now complete as recorded above. Inspect the next real join's response,
+acknowledgement and follow-up requests. Real LAN join,
 reverse hosting, match startup and synchronization remain unverified.
 
 Read-only live-shape harness passes current descriptor/host-only projection
@@ -51,7 +58,7 @@ outputs/S7-LAN-Profilfeld-Update.zip has nine files; SHA256:
 ZIP CRC, packaged/source updater equality, old/new payload hashes and wrong-source
 rejection pass. Requires 7d61a238...; backup LocalData/Before-empty-profile-v1.
 Transactional updater unchanged; no native/archive edits. Both installations
-remain on Kennung-Update until user confirms closed games and PC 2 update.
+now have Profilfeld-Update (PC 2 user-confirmed, PC 1 locally verified).
 
 ### Current: signed native RVCID representation; deployed, real join pending
 
