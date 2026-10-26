@@ -1,5 +1,6 @@
 #include "network_guard.h"
 #include "lan_address.h"
+#include "local_pair_lab.h"
 #include <atomic>
 #include <ws2tcpip.h>
 #include <windows.h>
@@ -25,7 +26,11 @@ bool AllowedV4(unsigned long network_order) {
         && (network_order == lan_local.load() || network_order == lan_peer.load()));
 }
 unsigned long LocalBindAddress() {
+#ifdef S7_LOCAL_PAIR_LAB
+    return htonl(local_pair_bind.load());
+#else
     return lan_configured.load(std::memory_order_acquire) ? lan_local.load() : htonl(INADDR_LOOPBACK);
+#endif
 }
 }
 bool ConfigureLanNetworkGuard(const char* local, const char* peer) {
@@ -65,9 +70,13 @@ bool BindLocalSender(SOCKET socket, const sockaddr* destination) {
     if (WSAGetLastError() != WSAEINVAL || !destination) return false;
     if (destination->sa_family == AF_INET) {
         sockaddr_in address{}; address.sin_family = AF_INET;
+#ifdef S7_LOCAL_PAIR_LAB
+        address.sin_addr.s_addr = LocalBindAddress();
+#else
         const auto* target = reinterpret_cast<const sockaddr_in*>(destination);
         address.sin_addr.s_addr = (ntohl(target->sin_addr.s_addr) >> 24) == 127
             ? htonl(INADDR_LOOPBACK) : LocalBindAddress();
+#endif
         return ::bind(socket, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == 0;
     }
     if (destination->sa_family == AF_INET6) {
@@ -104,6 +113,9 @@ int WSAAPI GuardBind(SOCKET socket, const sockaddr* address, int length) {
     if (length >= sizeof(sockaddr_in) && address->sa_family == AF_INET) {
         sockaddr_in local = *reinterpret_cast<const sockaddr_in*>(address);
         if (local.sin_addr.s_addr == INADDR_ANY) local.sin_addr.s_addr = LocalBindAddress();
+#ifdef S7_LOCAL_PAIR_LAB
+        if (local.sin_addr.s_addr == htonl(INADDR_LOOPBACK)) local.sin_addr.s_addr = LocalBindAddress();
+#endif
         return IsOfflineEndpointAllowed(reinterpret_cast<sockaddr*>(&local), sizeof(local))
             ? ::bind(socket, reinterpret_cast<sockaddr*>(&local), sizeof(local)) : DenySocket();
     }

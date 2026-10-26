@@ -75,7 +75,19 @@ namespace S7Patcher.Source
                     || address.ToString() != addressText
                     || !ushort.TryParse(portText, NumberStyles.None, CultureInfo.InvariantCulture, out ushort port) || port == 0
                     || port.ToString(CultureInfo.InvariantCulture) != portText || !seen.Add(endpoint)) return false;
-                if (address.Equals(registered.Address)) owned.Add(endpoint);
+                if (address.Equals(registered.Address)) { if (!owned.Contains(endpoint)) owned.Add(endpoint); }
+#if S7_LOCAL_PAIR_LAB
+                // The lab adapter binds both real games to loopback, but Storm
+                // enumerates the machine's physical adapter for its descriptor.
+                // Only this separately compiled laboratory service can project
+                // an explicitly selected, actually local NIC address to loopback.
+                // Preserve the real game port; never substitute the auth port.
+                else if (IsLabLoopbackProjection(registered.Address, address))
+                {
+                    string local = registered.Address + ":" + portText;
+                    if (!owned.Contains(local)) owned.Add(local);
+                }
+#endif
             }
             reason = "local-join-storm-no-owned-endpoint";
             if (owned.Count == 0) return false;
@@ -83,6 +95,25 @@ namespace S7Patcher.Source
             reason = "local-join-storm-route-owned";
             return true;
         }
+
+#if S7_LOCAL_PAIR_LAB
+        internal static bool IsLabLoopbackProjection(IPAddress registered, IPAddress advertised)
+        {
+            if (registered == null || registered.AddressFamily != AddressFamily.InterNetwork
+                || !IPAddress.IsLoopback(registered) || advertised == null) return false;
+            string selected = Environment.GetEnvironmentVariable("S7_LOCAL_PAIR_ADDRESS");
+            if (!LocalNetworkPolicy.TryPrivateAddress(selected, out var address)
+                || !advertised.Equals(address)) return false;
+            try
+            {
+                foreach (var adapter in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+                    foreach (var unicast in adapter.GetIPProperties().UnicastAddresses)
+                        if (unicast.Address.Equals(address)) return true;
+            }
+            catch (System.Net.NetworkInformation.NetworkInformationException) { return false; }
+            return false;
+        }
+#endif
 
         private static bool TryReadConnection(ReadOnlySpan<char> text, out uint connection)
         {

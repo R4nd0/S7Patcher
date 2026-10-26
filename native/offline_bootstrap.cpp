@@ -11,6 +11,7 @@
 #include "runtime_config.h"
 #include "local_connect_policy.h"
 #include "cpu_affinity.h"
+#include "local_pair_lab.h"
 
 #pragma comment(lib, "bcrypt.lib")
 #pragma comment(lib, "crypt32.lib")
@@ -439,6 +440,27 @@ bool ValidateKey(const char* encoded) {
     return valid;
 }
 
+bool AcceptExecutableDigest(const unsigned char (&actual)[32]) {
+#ifdef S7_LOCAL_PAIR_LAB
+    // Development-only builds accept exactly the two data-only variants
+    // produced by tools/local-pair/lab_executable.py. Normal builds retain
+    // the original-only guard. All PE, callsite, ABI and thread guards remain.
+    static const unsigned char lab_a[32] = {
+        0x72,0x2c,0xb6,0xe6,0x16,0x85,0x1f,0x20,0xfa,0xe9,0x0b,0x29,0xc8,0xaf,0x65,0xdf,
+        0x8a,0xa9,0x4f,0x35,0x3b,0x07,0x39,0xe4,0x4c,0x24,0x72,0x1c,0xfb,0x57,0x4e,0x13};
+    static const unsigned char lab_b[32] = {
+        0x78,0xc7,0xa4,0xb8,0x7e,0x2f,0x8d,0xce,0xb9,0x5e,0xaa,0xac,0x9a,0xb8,0xcd,0xd5,
+        0x59,0xce,0x48,0x2f,0xc8,0x00,0x12,0x93,0x45,0xe9,0x52,0xb7,0x11,0x97,0x4a,0x8a};
+    bool valid = (memcmp(actual, lab_a, 32) == 0
+                  || memcmp(actual, lab_b, 32) == 0);
+    if (valid) local_pair_bind.store(memcmp(actual, lab_a, 32) == 0
+        ? 0x7f000002u : 0x7f000003u);
+#else
+    bool valid = memcmp(actual, ExpectedHash, 32) == 0;
+#endif
+    return valid;
+}
+
 bool HashExecutable() {
     wchar_t path[32768] = {};
     DWORD length = GetModuleFileNameW(nullptr, path, static_cast<DWORD>(_countof(path)));
@@ -462,8 +484,10 @@ bool HashExecutable() {
         valid = BCryptHashData(hash, buffer, read, 0) >= 0;
     }
     unsigned char actual[32] = {};
-    if (valid) valid = BCryptFinishHash(hash, actual, sizeof(actual), 0) >= 0 &&
-                       memcmp(actual, ExpectedHash, sizeof(actual)) == 0;
+    if (valid) {
+        valid = BCryptFinishHash(hash, actual, sizeof(actual), 0) >= 0;
+        valid = valid && AcceptExecutableDigest(actual);
+    }
     if (hash) BCryptDestroyHash(hash);
     if (algorithm) BCryptCloseAlgorithmProvider(algorithm, 0);
     CloseHandle(file);

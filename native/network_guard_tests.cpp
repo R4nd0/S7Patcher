@@ -12,6 +12,9 @@
 extern "C" __declspec(dllimport) bool __cdecl S7TestInstallGuard();
 extern "C" __declspec(dllimport) bool __cdecl S7TestEndpoint(const sockaddr*, int);
 extern "C" __declspec(dllimport) bool __cdecl S7TestConfigureLan(const char*, const char*);
+#ifdef S7_LOCAL_PAIR_LAB
+extern "C" __declspec(dllimport) void __cdecl S7TestLabAddress(unsigned long);
+#endif
 static int checks = 0, failures = 0;
 static void Check(bool result, const char* label) {
     ++checks; if (!result) { ++failures; std::printf("FAIL %s\n", label); }
@@ -121,6 +124,31 @@ int main() {
           "external shell ANSI denied");
     Check(reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", L"https://example.invalid/", nullptr, nullptr, SW_HIDE)) == SE_ERR_ACCESSDENIED,
           "external shell Unicode denied");
+#ifdef S7_LOCAL_PAIR_LAB
+    S7TestLabAddress(0x7f000002);
+    SOCKET left = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    auto bind_address = Address(0);
+    Check(bind(left, reinterpret_cast<sockaddr*>(&bind_address), sizeof(bind_address)) == 0, "lab wildcard bind");
+    sockaddr_in left_address{};
+    Check(Bound(left, left_address) == 0 && ntohl(left_address.sin_addr.s_addr) == 0x7f000002, "lab A address");
+    S7TestLabAddress(0x7f000003);
+    SOCKET right = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    bind_address = Address(0x7f000001, ntohs(left_address.sin_port));
+    Check(bind(right, reinterpret_cast<sockaddr*>(&bind_address), sizeof(bind_address)) == 0, "lab same port independent bind");
+    sockaddr_in right_address{};
+    Check(Bound(right, right_address) == 0 && ntohl(right_address.sin_addr.s_addr) == 0x7f000003, "lab B address");
+    DWORD lab_timeout = 2000;
+    setsockopt(left, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&lab_timeout), sizeof(lab_timeout));
+    Check(sendto(right, "pair", 4, 0, reinterpret_cast<sockaddr*>(&left_address), sizeof(left_address)) == 4, "lab cross-address send");
+    char lab_buffer[8]{};
+    Check(recv(left, lab_buffer, sizeof(lab_buffer), 0) == 4 && memcmp(lab_buffer, "pair", 4) == 0, "lab cross-address receive");
+    SOCKET automatic = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    Check(sendto(automatic, "pair", 4, 0, reinterpret_cast<sockaddr*>(&left_address), sizeof(left_address)) == 4, "lab unbound send");
+    sockaddr_in automatic_address{};
+    Check(Bound(automatic, automatic_address) == 0 && ntohl(automatic_address.sin_addr.s_addr) == 0x7f000003, "lab automatic source address");
+    closesocket(automatic); closesocket(right); closesocket(left);
+    S7TestLabAddress(0x7f000001);
+#endif
     Check(!S7TestConfigureLan("192.168.10.10", "8.8.8.8"), "invalid LAN configuration rejected");
     Check(S7TestConfigureLan("192.168.10.10", "192.168.10.20"), "explicit LAN configuration accepted");
     auto lan_peer = Address(0xc0a80a14), unrelated = Address(0xc0a80a15);

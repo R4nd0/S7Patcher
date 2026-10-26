@@ -59,6 +59,31 @@ bool FakeJump(uintptr_t address, const void* target) {
 int main() {
     int failures = 0, checks = 0;
     auto check = [&](bool result) { ++checks; if (!result) ++failures; };
+    const char* lab_digests[] = {
+        "722cb6e616851f20fae90b29c8af65df8aa94f353b0739e44c24721cfb574e13",
+        "78c7a4b87e2f8dceb95eaaac9ab8cdd559ce482fc800129345e952b711974a8a"};
+    unsigned char digest[32]{};
+    check(!AcceptExecutableDigest(digest));
+#ifdef S7_LOCAL_PAIR_LAB
+    check(!AcceptExecutableDigest(ExpectedHash));
+#else
+    check(AcceptExecutableDigest(ExpectedHash));
+#endif
+    for (int slot = 0; slot < 2; ++slot) {
+        for (int i = 0; i < 32; ++i) {
+            char hex[3] = { lab_digests[slot][i*2], lab_digests[slot][i*2+1], 0 };
+            digest[i] = static_cast<unsigned char>(strtoul(hex, nullptr, 16));
+        }
+#ifdef S7_LOCAL_PAIR_LAB
+        check(AcceptExecutableDigest(digest));
+        check(local_pair_bind.load() == 0x7f000002u + slot);
+#else
+        check(!AcceptExecutableDigest(digest));
+#endif
+        for (int i = 0; i < 32; ++i) {
+            digest[i] ^= 1; check(!AcceptExecutableDigest(digest)); digest[i] ^= 1;
+        }
+    }
     auto* memory = static_cast<unsigned char*>(VirtualAlloc(nullptr, ExpectedImageSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
     if (!memory) return 2;
     image_base = reinterpret_cast<uintptr_t>(memory);

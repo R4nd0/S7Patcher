@@ -18,7 +18,10 @@ Unsupported `.inc`/`.def` files still need direct inspection.
 ## Local game experiments
 
 - Preserve the original installation. Change only the separate test copy.
-- The user starts and stops the game. Never launch the game yourself.
+- The user explicitly authorized local computer operation on 2026-10-26.
+  Agents may start, operate and gracefully stop the separate local test copies.
+  Do not require further manual restart tests from the user. This authorization
+  does not provide remote access to the second PC.
 - Do not overwrite a loaded adapter. Check host process paths before deployment.
 - Retain executable hash, callsite-byte, object and ABI guards.
 - Keep experiments loopback-only until LAN transport is deliberately implemented.

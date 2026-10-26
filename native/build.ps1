@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$OutputDirectory)
+param([Parameter(Mandatory=$true)][string]$OutputDirectory, [switch]$LocalPairLab)
 $ErrorActionPreference = 'Stop'
 $nativeSource = $PSScriptRoot
 $nativeOutput = [System.IO.Path]::GetFullPath($OutputDirectory)
@@ -15,6 +15,7 @@ foreach ($line in $compilerEnvironment) {
     if ($position -gt 0) { [Environment]::SetEnvironmentVariable($line.Substring(0,$position), $line.Substring($position+1), 'Process') }
 }
 $common = @('/nologo','/std:c++17','/EHsc','/MT','/W4','/WX','/D_CRT_SECURE_NO_WARNINGS','/D_WINSOCK_DEPRECATED_NO_WARNINGS')
+if ($LocalPairLab) { $common += '/DS7_LOCAL_PAIR_LAB' }
 function Compile-Native([string[]]$Arguments) {
     if ($Arguments -notcontains '/link') { $Arguments += '/link' }
     # Avoid Windows' filename-based installer detection for test executables.

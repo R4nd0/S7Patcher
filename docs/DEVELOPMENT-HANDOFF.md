@@ -24,7 +24,35 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
-### Current: independent investigation; corrected report layout, no new live test
+### Current: autonomous two-client laboratory; native link failure reproduced
+
+The user explicitly authorized operating this local computer. Two independent
+real game copies now exist under `rec/work/pair-A` and `pair-B`, with separate
+mutex names, profiles, identities and loopback addresses. See LOCAL-PAIR-LAB.md
+for exact build boundaries, local artifacts and observations. No original game
+files or system network/security settings were changed.
+
+With a shared loopback address and lab-only descriptor projection, A hosted a
+public Turminsel lobby, B discovered it and attempted a native join. The corrected
+report parser observed `link-reach-failed`, kind 0, text length 71. The visible
+error remained Sitzungsfehler (0). This is a real-game result, not a synthetic
+fixture. It is not yet proof of the cause of the earlier two-PC failure.
+
+The next build assigns 127.0.0.2 / 127.0.0.3 by full EXE hash. Both real clients
+authenticated and each owned UDP 3074, 6200 and 9103 independently. The next
+join could not be operated because Computer Use screen capture failed repeatedly
+with `FrameArrived timed out`, including after a session reset. Games and service
+were stopped; do not treat this as successful joining or ask for PC 2 updates.
+Resume local UI testing only with a valid fresh observation.
+
+Normal PC 1 test copy received the corrected diagnostic service 21a0be26...;
+PC 2 remains Gateway as last user-confirmed. Laboratory EXEs/adapters/services
+are separate from both. Laboratory checks: 361 bootstrap, 69 network, 88 platform,
+18 state, 14 CPU; 5,763 service checks. Default build: 359 bootstrap, 61 network,
+5,753 service checks. Real original: 13 read-only derivation/immutability checks.
+No completed native membership, reverse hosting, match start or sync exists.
+
+### Previous: independent investigation; corrected report layout, no new live test
 
 User: "mach alleine weiter, ich kann nicht mehr helfen". Do not repeat restart,
 update or two-PC test questions now. No new games launched, no injections and
