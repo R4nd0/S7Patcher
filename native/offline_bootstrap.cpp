@@ -196,6 +196,27 @@ void __fastcall UpdateLocalGame(void* self, void*) {
     }
     if (!game[0x28]) { NativeResult result{}; RequestLocalGame(self, nullptr, &result); }
 }
+
+bool LocalConnectionReady(void* self) {
+    if (initialization != 2 || !local_connect_probe || !self ||
+        self != *Native<void**>(0x1379E14)) return false;
+    auto* owner = *reinterpret_cast<unsigned char**>(static_cast<unsigned char*>(self) + 0xa18);
+    if (!owner || *reinterpret_cast<uintptr_t*>(owner) != image_base + 0x10919BC - PreferredBase) return false;
+    auto* game = owner + 0x50;
+    if (*reinterpret_cast<uintptr_t*>(game) != image_base + 0x109C9D8 - PreferredBase) return false;
+    auto* facade = *reinterpret_cast<unsigned char**>(game + 0x54);
+    // Report the real locally connected transport, not a fabricated Ubisoft SDK
+    // session. Pending, disconnected and differently owned objects stay false.
+    return facade && !*reinterpret_cast<void**>(facade + 0x0c) && game[0x38] && !game[0x48];
+}
+
+bool __fastcall QueryLocalLoginStatus(void* self, void*) {
+    const bool ready = LocalConnectionReady(self);
+    static volatile LONG previous = -1;
+    if (InterlockedExchange(&previous, ready ? 1 : 0) != (ready ? 1 : 0))
+        ReportLocalStatus(ready ? "local-game-login-status-connected" : "local-game-login-status-not-ready");
+    return ready;
+}
 const Patch Patches[] = {
     {0xD3C62D, {0xe8,0x1e,0x6f,0x10,0x00}, reinterpret_cast<const void*>(&ConstructLocalFacade)},
     {0xD4A083, {0xe8,0xc8,0x94,0x0f,0x00}, reinterpret_cast<const void*>(&ConstructLocalFacade)},
@@ -209,6 +230,11 @@ const Patch ConnectPatches[] = {
     {0xC9511A, {0xe8,0xc1,0x9a,0xff,0xff}, reinterpret_cast<const void*>(&RequestLocalGame)},
     {0xC956F5, {0xe8,0xe6,0x94,0xff,0xff}, reinterpret_cast<const void*>(&RequestLocalGame)},
     {0xC958CF, {0xe8,0x5c,0xa9,0xff,0xff}, reinterpret_cast<const void*>(&ConnectLocalGame)},
+    {0xED2CAE, {0xe8,0x7d,0x45,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalLoginStatus)},
+    {0xED62FC, {0xe8,0x2f,0x0f,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalLoginStatus)},
+    {0xED651D, {0xe8,0x0e,0x0d,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalLoginStatus)},
+    {0xED672C, {0xe8,0xff,0x0a,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalLoginStatus)},
+    {0xED6C2B, {0xe8,0x00,0x06,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalLoginStatus)},
     {0x1091B08, {0xc0,0x56,0xc9,0x00,0x00}, reinterpret_cast<const void*>(&UpdateLocalGame), true}
 };
 

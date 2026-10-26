@@ -80,6 +80,27 @@ int main() {
     PumpOfflineBootstrap(); check(!pump_active); // Missing facade.
     *reinterpret_cast<void**>(owner + 0xa4) = owner;
     PumpOfflineBootstrap(); check(!pump_active); // Missing update dependencies.
+    alignas(4) unsigned char facade[0x24]{};
+    *reinterpret_cast<void**>(owner + 0xa4) = facade;
+    check(!LocalConnectionReady(nullptr) && !LocalConnectionReady(owner));
+    check(!LocalConnectionReady(network)); // Disconnected.
+    owner[0x88] = 1; owner[0x98] = 1;
+    check(!LocalConnectionReady(network)); // Pending cannot claim readiness.
+    owner[0x98] = 0;
+    check(LocalConnectionReady(network));
+    local_connect_probe = false;
+    check(!LocalConnectionReady(network));
+    local_connect_probe = true; initialization = 1;
+    check(!LocalConnectionReady(network));
+    initialization = 2;
+    *reinterpret_cast<void**>(facade + 0x0c) = owner;
+    check(!LocalConnectionReady(network)); // Borrowed Ubi facade is not local.
+    *reinterpret_cast<void**>(facade + 0x0c) = nullptr;
+    *reinterpret_cast<uintptr_t*>(owner + 0x50) = 0;
+    check(!LocalConnectionReady(network));
+    *reinterpret_cast<uintptr_t*>(owner + 0x50) = image_base + 0x109C9D8 - PreferredBase;
+    *reinterpret_cast<uintptr_t*>(owner) = 0;
+    check(!LocalConnectionReady(network));
     VirtualFree(memory, 0, MEM_RELEASE);
     std::printf("%s %d bootstrap patch checks\n", failures ? "FAIL" : "PASS", checks);
     return failures ? 1 : 0;

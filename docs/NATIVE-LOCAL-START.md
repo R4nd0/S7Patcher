@@ -130,6 +130,30 @@ the initial local Login/Register exchange and native connected state; it does
 not establish persistence beyond the current probe lifetime or playable modes.
 These checks do not establish login, sustained service or LAN functionality.
 
+### Local game/menu readiness experiment
+
+After the keepalive run, the user still found the multiplayer entry missing or
+disabled. Bounded live observation confirmed the distinction: the RendezVous
+object was connected and updating, but the game-level getter `ED7230` returned
+false. Its implementation delegates to the Ubisoft session wrapper at `+A50`,
+whose `+54` virtual method is `EF3EC0`.
+
+The next opt-in build replaces the five verified calls to `ED7230` at
+`ED2CAE`, `ED62FC`, `ED651D`, `ED672C` and `ED6C2B`. The replacement checks that
+the caller is the current network singleton, that the owner/RendezVous vtables
+match, that the facade is local (null borrowed Ubi), and that its actual native
+connected bit is set while pending is clear. Disabled, initializing,
+disconnected, pending and mismatched-object cases return false. It does not
+change the SDK session predicate or synthesize NAT/session-creation success.
+
+The expanded patch/readiness suite passes 112 checks; all 14 selected native
+guards match the fingerprinted original executable. Together with the 88
+platform and 18 state checks, 218 native checks pass. Configuration/public-key
+validation also passes. The subsequent separate-copy run logged the transition
+from not-ready to locally connected, completed Login/Register with both ACKs,
+and continued answering PINGs. The user confirmed that the multiplayer entry
+became selectable. This verifies menu readiness, not a working lobby or match.
+
 ## Fast menu startup
 
 `tools/offline-ui/prepare.py` applies seven fingerprinted raw-Lua deltas to
