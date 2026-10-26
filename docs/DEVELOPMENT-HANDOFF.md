@@ -19,9 +19,10 @@ players visibly occupy the same lobby. The user subsequently confirmed both
 instances load the map and the match runs, then confirmed five minutes of play
 with inputs on both sides and no reported desync/disconnection. The reverse
 direction (A hosts, B joins) also reached a running match, confirmed by the user.
-Longer synchronization remains
-unverified. Current deployed service: work/server-pair-activity;
-adapter: work/native-pair-core-resume. Current host is A, joining guest B.
+Longer synchronization remains unverified. The successful lab used service
+work/server-pair-activity and adapter work/native-pair-core-resume. Those owned
+lab games and service are now stopped. The active real LAN host is the prepared
+work/installer-network-pump-realtest-v2 copy described below.
 
 The historical baseline passed 354 adapter checks, 38 network-guard checks
 and 18 original-byte comparisons, plus configuration validation. The
@@ -31,6 +32,69 @@ all 284 entries and parses.
 These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
+
+### Latest: v2 installed on PC2; real LAN join fails during peer link
+
+The user confirmed the new v2 package was installed into a fresh PC2 test copy.
+Both owned local lab games/service were stopped through the path-checked helper.
+PC1 now runs work/installer-network-pump-realtest-v2 through its bundled
+Launcher/launch_lan.py, role host, local 192.168.178.125, peer 192.168.178.85.
+The exact game path and launcher parent were verified; owned process metadata
+is private in work/pc1-v2-owned-launch.json. Do not stop unrelated processes.
+
+PC1 completed real Login/Register and created/updated a public four-player
+lobby, confirmed by the user. PC2 then completed Login/Register and discovery,
+sent JoinSession_V1, received the reserved join response and acknowledged both
+DATA fragments. It subsequently reported ReportJoinFailure_V1 with category
+link-reach-failed, session kind 0, text length 71. The user confirmed a join
+error; no two-PC native membership or match is established. The private host
+log is LocalData/20261027-003920-eff3bfa1-lan-server.jsonl under that PC1 copy.
+
+Read-only Windows inspection finds the host game's UDP listeners on its
+selected LAN address, including 3074/6200/9103. Its exact executable has active
+inbound TCP/UDP Allow rules for Private/Public; the active WLAN is Private.
+No additional enabled inbound Block rule with Program Any or that exact
+executable was found in ActiveStore. This does not establish PC2's firewall
+state or prove end-to-end game transport. No firewall settings were changed.
+The latest host native status has no received-ticket/host-approval observation.
+
+The user supplied PC2's latest native status. It confirms explicit LAN mode,
+local connected state, join wait pump, accepted/pending request, player/ticket
+entry, ticket transport creation/link accepted, then native join completion
+link-reach-failed. No selected earlier rejection label was present. There is no
+remote access to PC2. The ordinary service projects owned host routes
+in JoinSession but only the lab build projects them in SearchSessions; this is
+a static difference to investigate, not an established cause of this failure.
+
+An original-only -LocalNetworkPump diagnostic now adds bounded fixed socket
+categories: destination role/port class, policy/source rejection, OS send result,
+and received datagrams from the configured peer on native game ports. It neither
+changes network policy nor reads/logs payloads or identifiers. The coordinator
+UDP port is excluded so successful Login/Register cannot imply a native link.
+Winsock results/error slots are preserved, including diagnostic callbacks.
+Candidate hash a59def58f827508d06c95e2787762681f19da4f74390cf205b19f500eaa60b1e.
+Checks: 76 candidate network, 874 bootstrap, 88 platform, 18 connection, 14 CPU;
+baseline 72 network/359 bootstrap; lab 80 network/876 bootstrap. All 63 native
+callsite guards still match the untouched original. Builds retain /W4 /WX.
+
+The existing transactional updater applies this single adapter change with
+backup, exact old/new hashes and compatibility ID update. All 16 updater tests
+pass. The actual PC1 update, idempotent repeat, full inventory (only the adapter
+hash changed) and bundled LAN-host preflight pass. The helper LAN-Status.cmd
+only reads this copy's processes/ports, explicit application firewall rules,
+network profile and fixed labels since the latest bounded startup marker.
+Artifact outputs/S7-LAN-Transport-Diagnose-2026-10-27.zip contains 11 entries,
+133,433 bytes, CRC checked; no original game files or LocalData. The user has
+been asked to close PC2 and apply it to the newly installed v2 test copy, then
+report its completion without starting the game. That response is pending.
+
+PC1 was safely stopped and its launcher cleaned up its own service. It is now
+restarted with the diagnostic adapter at the same exact copy path and IPs;
+local connected state and ownership were rechecked. Current private stdout
+is work/pc1-transport-host.stdout.log, ownership work/pc1-v2-owned-launch.json.
+Next: after PC2 confirms updating, have PC1 create a new public lobby, then PC2
+start role 2 and try once. Collect PC1 labels locally and PC2 LAN-Status.cmd
+output. The adapter update is diagnostic, not a claimed fix for joining.
 
 ### Current: real one-PC match started; original-EXE LAN candidate
 
@@ -87,9 +151,8 @@ Its game/adapter/menu/runtime files are unchanged from the full install test.
 Both old outputs/S7-Local-Test and original installation remain untouched.
 No PC2 files have been changed by the agent. The LAN capability flags stay false
 pending real two-PC qualification, firewall behavior and longer actual play.
-When PC2 has installed the new ZIP in a fresh test folder, the unused prepared
-copy above can host on PC1 via its bundled Launcher/launch_lan.py. Gracefully
-stop the two owned lab games first; retain exact process/service ownership checks.
+That prepared copy is now the active PC1 LAN host; see the latest real-LAN
+result above. Retain exact process/service ownership checks when restarting it.
 
 ### Current: two-client laboratory; player join precedes ticket/session join
 

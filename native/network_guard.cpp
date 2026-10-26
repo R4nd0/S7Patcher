@@ -1,9 +1,10 @@
 #include "network_guard.h"
 #include "lan_address.h"
 #include "local_pair_lab.h"
-#ifdef S7_LOCAL_PAIR_LAB
+#if defined(S7_LOCAL_PAIR_LAB) || defined(S7_LOCAL_NETWORK_PUMP)
 #include "runtime_config.h"
 #endif
+#include "transport_observation.h"
 #include <atomic>
 #include <ws2tcpip.h>
 #include <windows.h>
@@ -62,6 +63,48 @@ bool IsOfflineEndpointAllowed(const sockaddr* address, int length) {
 }
 
 namespace {
+#ifdef S7_LOCAL_NETWORK_PUMP
+void LanObserve(uint32_t bits) {
+    static std::atomic<uint32_t> observed{0};
+    const auto fresh = bits & ~observed.fetch_or(bits);
+    using namespace transport_observation;
+    const struct { uint32_t bit; const char* label; } labels[] = {
+        {denied, "lan-game-destination-denied"}, {bind_failed, "lan-game-source-bind-failed"},
+        {port_3074, "lan-game-target-port-3074"}, {port_6200, "lan-game-target-port-6200"},
+        {port_9103, "lan-game-target-port-9103"}, {other_port, "lan-game-target-other-port"},
+        {target_self, "lan-game-target-self"}, {target_peer, "lan-game-target-configured-peer"},
+        {target_loopback, "lan-game-target-loopback"}, {target_other, "lan-game-target-outside-pair"},
+        {sent, "lan-game-datagram-sent"}, {pending, "lan-game-datagram-pending"},
+        {access_denied, "lan-game-datagram-access-denied"}, {other_error, "lan-game-datagram-other-error"},
+        {received, "lan-game-peer-datagram-received"}
+    };
+    for (const auto& label : labels) if (fresh & label.bit) ReportLocalStatus(label.label);
+}
+void LanSendResult(const sockaddr* address, int size, bool allowed, bool bound, int result, int error) {
+    if (lan_configured.load(std::memory_order_acquire) && address && size >= sizeof(sockaddr_in)
+        && address->sa_family == AF_INET) {
+        const auto* target = reinterpret_cast<const sockaddr_in*>(address);
+        LanObserve(transport_observation::Send(ntohl(target->sin_addr.s_addr), ntohs(target->sin_port),
+            ntohl(lan_local.load()), ntohl(lan_peer.load()), allowed, bound, result >= 0,
+            error == WSA_IO_PENDING, error == WSAEACCES));
+    }
+    WSASetLastError(error);
+}
+int WSAAPI LanRecvFrom(SOCKET socket, char* buffer, int length, int flags, sockaddr* address, int* size) {
+    const int result = ::recvfrom(socket, buffer, length, flags, address, size);
+    const int error = WSAGetLastError();
+    if (result >= 0 && lan_configured.load(std::memory_order_acquire) && address && size
+        && *size >= sizeof(sockaddr_in) && address->sa_family == AF_INET) {
+        const auto* source = reinterpret_cast<const sockaddr_in*>(address);
+        sockaddr_in local{}; int local_size = sizeof(local);
+        if (::getsockname(socket, reinterpret_cast<sockaddr*>(&local), &local_size) == 0
+            && local_size >= sizeof(local) && local.sin_family == AF_INET
+            && transport_observation::Receive(ntohl(source->sin_addr.s_addr), ntohs(source->sin_port),
+                ntohs(local.sin_port), ntohl(lan_peer.load()))) LanObserve(transport_observation::received);
+    }
+    WSASetLastError(error); return result;
+}
+#endif
 #ifdef S7_LOCAL_PAIR_LAB
 void LabOnce(unsigned int bit, const char* label) {
     static std::atomic<unsigned int> observed{0};
@@ -153,11 +196,18 @@ int WSAAPI GuardSend(SOCKET socket, const char* buffer, int length, int flags) {
     return PeerAllowed(socket) ? ::send(socket, buffer, length, flags) : DenySocket();
 }
 int WSAAPI GuardSendTo(SOCKET socket, const char* buffer, int length, int flags, const sockaddr* address, int size) {
-#ifdef S7_LOCAL_PAIR_LAB
+#if defined(S7_LOCAL_PAIR_LAB) || defined(S7_LOCAL_NETWORK_PUMP)
     bool allowed = address ? IsOfflineEndpointAllowed(address, size) : PeerAllowed(socket);
     bool bound = allowed && (!address || BindLocalSender(socket, address));
     int result = allowed && bound ? ::sendto(socket, buffer, length, flags, address, size) : DenySocket();
-    int error = WSAGetLastError(); LabSendResult(address, size, allowed, bound, result, error); return result;
+    int error = WSAGetLastError();
+#ifdef S7_LOCAL_PAIR_LAB
+    LabSendResult(address, size, allowed, bound, result, error);
+#endif
+#ifdef S7_LOCAL_NETWORK_PUMP
+    LanSendResult(address, size, allowed, bound, result, error);
+#endif
+    return result;
 #else
     return (address ? IsOfflineEndpointAllowed(address, size) && BindLocalSender(socket, address) : PeerAllowed(socket))
         ? ::sendto(socket, buffer, length, flags, address, size) : DenySocket();
@@ -165,11 +215,18 @@ int WSAAPI GuardSendTo(SOCKET socket, const char* buffer, int length, int flags,
 }
 int WSAAPI GuardWSASendTo(SOCKET socket, LPWSABUF buffers, DWORD count, LPDWORD sent, DWORD flags,
     const sockaddr* address, int size, LPWSAOVERLAPPED overlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINE completion) {
-#ifdef S7_LOCAL_PAIR_LAB
+#if defined(S7_LOCAL_PAIR_LAB) || defined(S7_LOCAL_NETWORK_PUMP)
     bool allowed = address ? IsOfflineEndpointAllowed(address, size) : PeerAllowed(socket);
     bool bound = allowed && (!address || BindLocalSender(socket, address));
     int result = allowed && bound ? ::WSASendTo(socket, buffers, count, sent, flags, address, size, overlapped, completion) : DenySocket();
-    int error = WSAGetLastError(); LabSendResult(address, size, allowed, bound, result, error); return result;
+    int error = WSAGetLastError();
+#ifdef S7_LOCAL_PAIR_LAB
+    LabSendResult(address, size, allowed, bound, result, error);
+#endif
+#ifdef S7_LOCAL_NETWORK_PUMP
+    LanSendResult(address, size, allowed, bound, result, error);
+#endif
+    return result;
 #else
     return (address ? IsOfflineEndpointAllowed(address, size) && BindLocalSender(socket, address) : PeerAllowed(socket))
         ? ::WSASendTo(socket, buffers, count, sent, flags, address, size, overlapped, completion) : DenySocket();
@@ -302,6 +359,8 @@ struct Binding { const char* dll; const char* name; void* replacement; };
 const Binding bindings[] = {
 #ifdef S7_LOCAL_PAIR_LAB
     BIND("WS2_32.dll", "recvfrom", LabRecvFrom),
+#elif defined(S7_LOCAL_NETWORK_PUMP)
+    BIND("WS2_32.dll", "recvfrom", LanRecvFrom),
 #endif
     BIND("WS2_32.dll", "connect", GuardConnect), BIND("WS2_32.dll", "send", GuardSend),
     BIND("WS2_32.dll", "sendto", GuardSendTo), BIND("WS2_32.dll", "WSASendTo", GuardWSASendTo),

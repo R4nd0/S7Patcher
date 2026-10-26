@@ -5,6 +5,7 @@
 #include <winhttp.h>
 #include <shellapi.h>
 #include "lan_address.h"
+#include "transport_observation.h"
 #include <cstdio>
 #include <cstring>
 #include <initializer_list>
@@ -12,6 +13,9 @@
 extern "C" __declspec(dllimport) bool __cdecl S7TestInstallGuard();
 extern "C" __declspec(dllimport) bool __cdecl S7TestEndpoint(const sockaddr*, int);
 extern "C" __declspec(dllimport) bool __cdecl S7TestConfigureLan(const char*, const char*);
+#ifdef S7_LOCAL_NETWORK_PUMP
+extern "C" __declspec(dllimport) unsigned int __cdecl S7TestTransportObservations();
+#endif
 #ifdef S7_LOCAL_PAIR_LAB
 extern "C" __declspec(dllimport) void __cdecl S7TestLabAddress(unsigned long);
 #endif
@@ -28,6 +32,27 @@ static int Bound(SOCKET socket, sockaddr_in& address) {
 }
 int main() {
     setvbuf(stdout, nullptr, _IONBF, 0);
+    {
+        using namespace transport_observation;
+        constexpr uint32_t local = 0xc0a80a0a, peer = 0xc0a80a14;
+        Check(Send(peer, 3074, local, peer, true, true, true, false, false)
+            == (port_3074 | target_peer | sent), "classify successful direct game send");
+        Check(Send(local, 6200, local, peer, true, true, false, true, false)
+            == (port_6200 | target_self | pending), "classify pending self send");
+        Check(Send(0x7f000001, 9103, local, peer, true, false, false, false, true)
+            == (port_9103 | target_loopback | bind_failed | access_denied), "classify loopback source failure");
+        Check(Send(0xc0a80a15, 5555, local, peer, false, false, false, false, true)
+            == (other_port | target_other | denied | access_denied), "classify rejected outside-pair destination");
+        Check(Send(peer, 9111, local, peer, true, true, true, false, false) == 0,
+            "coordinator packets cannot imply game transport");
+        Check(Send(peer, 3074, local, peer, true, true, false, false, false)
+            == (port_3074 | target_peer | other_error), "classify other socket failure");
+        Check(Receive(peer, 3074, 5555, peer), "peer source game port receive");
+        Check(Receive(peer, 5555, 3074, peer), "peer local game port receive");
+        Check(!Receive(peer, 9111, 5555, peer), "coordinator receive is not game receive");
+        Check(!Receive(local, 3074, 3074, peer), "self receive is not remote peer proof");
+        Check(!Receive(0xc0a80a15, 3074, 3074, peer), "unrelated receive is not peer proof");
+    }
     uint32_t parsed = 0;
     for (const char* invalid : {"", "10", "10.0.0", "010.0.0.1", "10.0.0.256", "10.0.0.1.", "10.0.0.0", "10.0.0.255", "127.0.0.1", "8.8.8.8", "172.15.1.1", "172.32.1.1", "192.169.1.1"})
         Check(!ParsePrivateLanAddress(invalid, parsed), "reject invalid LAN address");
@@ -159,6 +184,19 @@ int main() {
     auto* lan_host = gethostbyname("192.168.10.20");
     Check(lan_host && memcmp(lan_host->h_addr_list[0], &lan_peer.sin_addr, 4) == 0, "legacy DNS preserves explicit peer IP");
     Check(gethostbyname("192.168.10.21") == nullptr, "other LAN DNS rejected");
+#ifdef S7_LOCAL_NETWORK_PUMP
+    SOCKET diagnostic = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    unrelated.sin_port = htons(3074);
+    const auto before = S7TestTransportObservations();
+    Check(sendto(diagnostic, "x", 1, 0, reinterpret_cast<sockaddr*>(&unrelated), sizeof(unrelated)) == SOCKET_ERROR
+        && WSAGetLastError() == WSAEACCES, "LAN send diagnostic preserves denial and last error");
+    Check(S7TestTransportObservations() > before, "LAN diagnostic callback executed");
+    const auto observed = S7TestTransportObservations();
+    Check(WSASendTo(diagnostic, &packet, 1, &sent, 0, reinterpret_cast<sockaddr*>(&unrelated), sizeof(unrelated), nullptr, nullptr) == SOCKET_ERROR
+        && WSAGetLastError() == WSAEACCES, "LAN overlapped diagnostic preserves denial and last error");
+    Check(S7TestTransportObservations() == observed, "LAN labels bounded to once per category");
+    closesocket(diagnostic);
+#endif
     WSACleanup();
     std::printf("%s %d network guard checks\n", failures ? "FAIL" : "PASS", checks);
     return failures ? 1 : 0;
