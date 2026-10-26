@@ -515,6 +515,31 @@ internal static class LocalLoginSessionChecks
             host.Session.ProcessData(host.Data(12, 0, LocalSessionLeaveChecks.Request()), host.Events.Add);
             Check(registry.Count == 1 && host.Session.PendingCount == 0, "Old leave removed recreated session");
         }
+        using (LocalSessionRegistry registry = new(displayProbe: true))
+        using (Fixture fixture = new(keepAlive: true, sessions: registry))
+        {
+            fixture.Register();
+            fixture.Session.ProcessData(fixture.Data(8, 0, LocalSessionCreationChecks.Request(body: LocalSessionDisplayChecks.CreateBody())), fixture.Events.Add);
+            fixture.Session.TakeDue(200, fixture.Events.Add);
+            Check(registry.Count == 1 && fixture.Session.TryAcknowledge(Ack(ServerCookie, 3)), "Display transport create failed");
+            fixture.Session.ProcessData(fixture.Data(9, 0, LocalSessionLeaveChecks.Request()), fixture.Events.Add);
+            fixture.Session.TakeDue(300, fixture.Events.Add);
+            Check(registry.Count == 0 && fixture.Session.TryAcknowledge(Ack(ServerCookie, 4)), "Display transport leave failed");
+            byte[] search = LocalSessionDisplayChecks.Search();
+            Check(LocalSessionDisplayCodec.TryReply(search, registry, fixture.Session, out var expected, out _), "Display response missing");
+            Check(registry.TryCopyDisplaySnapshot(fixture.Session, out var snapshot), "Display transport snapshot missing");
+            using (snapshot) { LocalSessionDisplayChecks.Verify(expected, snapshot.Host.ProfileId); passed++; }
+            fixture.Session.ProcessData(fixture.Data(10, 0, search), fixture.Events.Add);
+            byte[] packet = fixture.Session.TakeDue(400, fixture.Events.Add).Single();
+            VerifySearchResponse(packet, fixture.Key, 0x12345678, fixture.ServerSession, expected); passed++;
+            Check(fixture.Events.Count(e => e.Reason == "local-session-display-probe-response-created") == 1,
+                "Display diagnostic event absent");
+            Check(ReferenceEquals(packet, fixture.Session.TakeDue(1400, fixture.Events.Add).Single()), "Display retry changed bytes");
+            Check(fixture.Session.TryAcknowledge(Ack(ServerCookie, 5)) && packet.All(b => b == 0), "Display ACK cleanup failed");
+            fixture.Session.Dispose();
+            Check(!registry.TryCopyDisplaySnapshot(fixture.Session, out _), "Transport teardown retained preview");
+            CryptographicOperations.ZeroMemory(expected);
+        }
         foreach (bool keepAlive in new[] { false, true })
         {
             using LocalSessionRegistry registry = new();

@@ -1,6 +1,9 @@
 # Nonempty catalogue: native layout and remaining mappings
 
-This is a static investigation, not an enabled response handler. It follows the
+This describes live-catalogue requirements, not an enabled production handler.
+The separately gated one-client display experiment is documented in
+`LOCAL-SESSION-DISPLAY-PROBE.md`; it does not resolve live catalogue semantics.
+This investigation follows the
 live-verified create/update/leave/recreate implementation. All addresses refer to
 the original HE executable hash documented in `LOCAL-SESSION-SEARCH.md`, using
 preferred base `0x400000`. No game code or packet bodies are included here.
@@ -52,6 +55,12 @@ with exactly 2 (`E4E560`) and exactly 3 (`E4E570`); it is not a boolean or a
 proven bitmask. `E4D800` selects the first member satisfying the value-2 predicate
 and returns its GUID. `E4D860` collects GUIDs satisfying the value-3 predicate.
 The exact role/status names and transitions still need confirmation.
+
+The later display probe uses the verified native zero/empty constructor values
+for unresolved fields solely as an explicit diagnostic policy. Its typed query
+reader also corrects the second request qString's interpretation to the
+`default_query` selector. Static evidence, actual metadata Variant tags and the
+remaining query-policy gaps are recorded in `LOCAL-SESSION-DISPLAY-PROBE.md`.
 
 ## Actual search-result consumption
 

@@ -1,6 +1,8 @@
 using System;
 using System.Buffers.Binary;
 using System.Text;
+using System.Collections.Generic;
+using System.Security.Cryptography;
 
 namespace S7Patcher.Source
 {
@@ -20,7 +22,8 @@ namespace S7Patcher.Source
             int callOffset = 4 + Protocol.Length + 3 + 1;
             int bodyOffset = callOffset + 4 + Method.Length + 3;
             reason = "unsupported-search-arguments";
-            if (!ValidBody(message[bodyOffset..])) return false;
+            if (!TryReadBody(message[bodyOffset..], out var query)) return false;
+            query.Dispose();
             uint callId = BinaryPrimitives.ReadUInt32LittleEndian(message[callOffset..]);
             string responseMethod = Method + "*";
             response = new byte[4 + Protocol.Length + 3 + 2 + 4 + responseMethod.Length + 3 + 8];
@@ -36,7 +39,39 @@ namespace S7Patcher.Source
             return true;
         }
 
-        private static bool ValidBody(ReadOnlySpan<byte> body)
+        internal sealed class Query : IDisposable
+        {
+            internal byte[] Space = [], Selector = [];
+            internal uint Limit;
+            internal readonly Dictionary<string, byte[]> Filters = new(StringComparer.Ordinal);
+            public void Dispose()
+            {
+                CryptographicOperations.ZeroMemory(Space); CryptographicOperations.ZeroMemory(Selector);
+                foreach (var value in Filters.Values) CryptographicOperations.ZeroMemory(value);
+                Filters.Clear(); Limit = 0;
+            }
+        }
+
+        internal static bool TryReadQuery(ReadOnlySpan<byte> message, out Query query)
+        {
+            query = null;
+            return LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-search-sessions-v1"
+                && TryReadBody(message[(4 + Protocol.Length + 3 + 1 + 4 + Method.Length + 3)..], out query);
+        }
+
+        private static bool TryReadBody(ReadOnlySpan<byte> body, out Query query)
+        {
+            query = null;
+            Query parsed = new();
+            try
+            {
+                if (!ReadBody(body, parsed)) return false;
+                query = parsed; return true;
+            }
+            finally { if (query == null) parsed.Dispose(); }
+        }
+
+        private static bool ReadBody(ReadOnlySpan<byte> body, Query query)
         {
             if (body.Length < 4 || BinaryPrimitives.ReadUInt32LittleEndian(body) != 2) return false;
             int offset = 4, classes = 0;
@@ -50,16 +85,19 @@ namespace S7Patcher.Source
                 if (flag == 0 || (classes & flag) != 0) return false;
                 classes |= flag;
             }
-            // SpaceId and session-name strings stay opaque. Then string/Variant
-            // filters and a u32 requested result limit. Values do not affect an
-            // actually empty catalogue; accept only the fully consumed shape.
-            if (!ReadString(body, ref offset, out _) || !ReadString(body, ref offset, out _)
+            // Native helper uses default_session_<space> and default_query.
+            // Retain exact bytes; this parser does not invent filter semantics.
+            if (!ReadString(body, ref offset, out var space) || !ReadString(body, ref offset, out var selector)
                 || body.Length - offset < 4) return false;
+            query.Space = space.ToArray(); query.Selector = selector.ToArray();
             uint count = BinaryPrimitives.ReadUInt32LittleEndian(body[offset..]); offset += 4;
             if (count > MaximumFilters) return false;
             for (uint i = 0; i < count; ++i)
             {
-                if (!ReadString(body, ref offset, out _) || offset >= body.Length) return false;
+                if (!ReadString(body, ref offset, out var key) || offset >= body.Length) return false;
+                string encodedKey = Convert.ToHexString(key);
+                if (query.Filters.ContainsKey(encodedKey)) return false;
+                int start = offset;
                 byte tag = body[offset++];
                 int width;
                 switch (tag)
@@ -75,8 +113,11 @@ namespace S7Patcher.Source
                 }
                 if (width > body.Length - offset) return false;
                 offset += width;
+                query.Filters.Add(encodedKey, body[start..offset].ToArray());
             }
-            return body.Length - offset == 4;
+            if (body.Length - offset != 4) return false;
+            query.Limit = BinaryPrimitives.ReadUInt32LittleEndian(body[offset..]);
+            return true;
         }
 
         private static bool ReadString(ReadOnlySpan<byte> body, ref int offset, out ReadOnlySpan<byte> text)

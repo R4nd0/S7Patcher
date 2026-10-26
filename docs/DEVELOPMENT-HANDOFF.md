@@ -23,6 +23,34 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
+### Pending user test: explicitly labelled one-client display probe
+
+`work/server-session-display` passes **4,373 service checks**, including an
+independent native-layout reader and encrypted create/leave/nonempty-search
+round trip. Build has zero warnings/errors. The new opt-in mode retains an
+owned in-memory copy only after Leave and echoes it to the same owner/Space as
+`Anzeigetest - kein Beitritt`. It does not restore a real session or enable join.
+Unresolved scalars use verified native constructor defaults as an explicit
+display-test policy, not claimed server semantics. See
+`LOCAL-SESSION-DISPLAY-PROBE.md` for evidence, filter bypass and boundaries.
+
+Deployed/hash-verified in the separate bundle as `Server-Session-Display` with
+its own `Launcher-Session-Display/launch_local.py` and
+**`Test-Sitzungsanzeige.cmd`**. The new starter selects this opt-in mode.
+The ordinary `Test-Lokale-Anmeldung.cmd` still selects `Server-Session-Leave`.
+All game/adapter/archive fingerprints remain unchanged. The deployed service
+passed a two-second startup/shutdown on ephemeral loopback ports. No game was
+launched by the agent and no loaded file was replaced. The original test game
+was still PID 48064, started at 13:48, before staging.
+
+User has been asked to fully close S7, start the **new display-test starter**,
+create a four-slot lobby, leave it and look for the labelled row in the session
+list. Leave the game open; do not join the diagnostic entry. **Await this result**
+and correlate a fresh run's fixed response reason/ACKs before further changes.
+Neither the row's display nor a live nonempty catalogue is verified yet.
+
+### Prior verified state and research
+
 The created lobby is confirmed. The user's screenshot shows LocalPlayer in the
 host slot and one free slot on a two-slot map. Original `hostLobby.lua` disables
 Against computer exactly when the slot count is two. Separately, Start demands
@@ -65,10 +93,12 @@ StationURLs. Create's second qString supplies the game's serialized StationURL
 list with Storm routing data; it must not be replaced by the login transport's
 observed endpoint. The packed session DateTime encoding is known, but its event
 meaning and other scalar semantics remain unresolved. See `LOCAL-SESSION-CATALOGUE.md`
-for anchors, implementation and next requirements. No restart is pending.
+for anchors, implementation and next requirements. These observations predate
+the separate display-probe test above.
 
-Full match startup, `GetSession`, nonempty search serialization and joining remain
-outstanding. The next step is mapping the session-record fields to real registry
+Full match startup, `GetSession`, live catalogue policy and joining remain
+outstanding. The display-only serializer is now implemented but not yet
+live-verified. The next step is mapping the session-record fields to real registry
 and transport state; see `LOCAL-SESSION-CATALOGUE.md`. Do not fabricate unknown
 scalar values or request another game restart merely to repeat the verified test.
 The diagnostic retains at most eight distinct fixed operation labels.

@@ -10,6 +10,9 @@ namespace S7Patcher.Source
     {
         internal const int MaximumSessions = 8;
         private readonly List<Entry> entries = new();
+        private readonly Dictionary<object, DisplaySnapshot> previews = new(ReferenceEqualityComparer.Instance);
+        internal bool DisplayProbe { get; }
+        internal LocalSessionRegistry(bool displayProbe = false) { DisplayProbe = displayProbe; }
         private uint nextId = 1;
         private bool closed;
         internal int Count => entries.Count;
@@ -38,6 +41,7 @@ namespace S7Patcher.Source
                 reason = "local-session-capacity-exhausted";
                 if (entries.Count >= MaximumSessions || nextId == uint.MaxValue) return false;
                 entries.Add(new(owner, nextId, body.ToArray(), space.ToArray(), metadata, host));
+                RemovePreview(owner);
                 metadata = null; host = null; // Registry now owns both.
                 id = nextId++;
                 reason = "local-session-record-created";
@@ -77,6 +81,11 @@ namespace S7Patcher.Source
             {
                 Entry entry = entries[i];
                 if (entry.Id != id || !ReferenceEquals(entry.Owner, owner) || !space.SequenceEqual(entry.Space)) continue;
+                if (DisplayProbe && (previews.ContainsKey(owner) || previews.Count < MaximumSessions))
+                {
+                    RemovePreview(owner);
+                    previews.Add(owner, new(entry.Id, entry.Space, entry.Metadata.Clone(), entry.Host.Clone()));
+                }
                 entry.Dispose(); entries.RemoveAt(i);
                 reason = "local-session-record-left";
                 return true;
@@ -112,6 +121,7 @@ namespace S7Patcher.Source
 
         internal void RemoveOwner(object owner)
         {
+            RemovePreview(owner);
             for (int i = entries.Count - 1; i >= 0; --i)
                 if (ReferenceEquals(entries[i].Owner, owner))
                 {
@@ -126,6 +136,34 @@ namespace S7Patcher.Source
             closed = true;
             foreach (Entry entry in entries) entry.Dispose();
             entries.Clear();
+            foreach (var preview in previews.Values) preview.Dispose();
+            previews.Clear();
+        }
+
+        private void RemovePreview(object owner)
+        {
+            if (owner != null && previews.Remove(owner, out var preview)) preview.Dispose();
+        }
+
+        internal bool TryCopyDisplaySnapshot(object owner, out DisplaySnapshot snapshot)
+        {
+            snapshot = null;
+            if (closed || !DisplayProbe || owner == null || !previews.TryGetValue(owner, out var value)) return false;
+            snapshot = new(value.Id, value.Space, value.Metadata.Clone(), value.Host.Clone());
+            return true;
+        }
+
+        // NOT a live session. Same-owner, explicitly enabled display experiment.
+        // Leave still removes the real record; this copy cannot be joined/updated.
+        internal sealed class DisplaySnapshot(uint id, ReadOnlySpan<byte> space, LocalSessionMetadata metadata,
+            LocalLoginRpcEngine.RegisteredPeer host) : IDisposable
+        {
+            internal uint Id { get; } = id;
+            internal byte[] Space { get; } = space.ToArray();
+            internal LocalSessionMetadata Metadata { get; } = metadata;
+            internal LocalLoginRpcEngine.RegisteredPeer Host { get; } = host;
+            public void Dispose()
+            { CryptographicOperations.ZeroMemory(Space); Metadata.Dispose(); Host.Dispose(); }
         }
 
         private sealed class Entry(object owner, uint id, byte[] body, byte[] space, LocalSessionMetadata metadata, LocalLoginRpcEngine.RegisteredPeer host) : IDisposable

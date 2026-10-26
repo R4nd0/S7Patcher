@@ -168,7 +168,9 @@ namespace S7Patcher.Source
                 reason = "unsupported-session-operation";
                 return false;
             }
-            // Until MatchmakingSession serialization is implemented, never claim
+            if (sessions.DisplayProbe)
+                return LocalSessionDisplayCodec.TryReply(message, sessions, this, out response, out reason);
+            // Until a live catalogue is implemented, never claim
             // an empty catalogue after any local peer has actually created one.
             if (sessions.Count != 0)
             {

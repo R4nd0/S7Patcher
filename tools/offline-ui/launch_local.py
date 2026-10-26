@@ -126,6 +126,9 @@ def service_ready(process, log):
 
 
 def run(args):
+    display_probe = getattr(args, "local_session_display_probe", False)
+    if display_probe and not args.local_connect_probe:
+        raise ValueError("Der Anzeigetest benoetigt die lokale Anmeldung.")
     root = Path(args.bundle).absolute()
     if root.resolve(strict=True) != root:
         raise ValueError("Der Testordner darf keine Verknuepfung sein.")
@@ -151,7 +154,8 @@ def run(args):
             errors = data / (run_id + "-server-errors.txt")
             with log.open("xb") as output, errors.open("xb") as error_output:
                 service = subprocess.Popen([str(Path(args.dotnet).resolve(strict=True)), str(Path(args.server).resolve(strict=True)),
-                    "--local-config-server", "--local-keepalive-probe" if args.local_connect_probe else "--local-login-probe",
+                    "--local-config-server", "--local-session-display-probe" if display_probe else (
+                        "--local-keepalive-probe" if args.local_connect_probe else "--local-login-probe"),
                     "--http-port", "0", "--udp-port", "0", "--seconds", "3600"],
                     stdout=output, stderr=error_output, creationflags=subprocess.CREATE_NO_WINDOW)
                 configuration, udp_port = service_ready(service, log)
@@ -159,6 +163,8 @@ def run(args):
                 if service.poll() is not None:
                     raise RuntimeError("Der lokale Dienst wurde vor dem Spielstart beendet.")
                 print("Lokale Testversion und Dienst sind bereit.", flush=True)
+                if display_probe:
+                    print("Anzeigetest: Lobby erstellen, verlassen, Sitzungsliste ansehen. Dem Testeintrag nicht beitreten.", flush=True)
                 if not args.launch_game:
                     print("Startpruefung bestanden. Kein Spiel gestartet.", flush=True)
                     return 0
@@ -188,6 +194,7 @@ def main():
     parser.add_argument("--server", required=True)
     parser.add_argument("--launch-game", action="store_true")
     parser.add_argument("--local-connect-probe", action="store_true", help="Experimental native local login trigger; off by default")
+    parser.add_argument("--local-session-display-probe", action="store_true", help="Show a labelled copy of your last left lobby; no joining")
     args = parser.parse_args()
     try:
         return run(args)
