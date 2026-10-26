@@ -21,7 +21,7 @@ RPC codec previously passed 20,288 isolated assertions. Its UI archive verifies
 all 284 entries and parses.
 These are separate results, not evidence of a playable LAN match.
 
-## Current step: verify leave/recreate and AI selection on a four-slot map
+## Current step: nonempty catalogue and second-client join
 
 The created lobby is confirmed. The user's screenshot shows LocalPlayer in the
 host slot and one free slot on a two-slot map. Original `hostLobby.lua` disables
@@ -34,13 +34,19 @@ catalogue search rejections and an already-hosting create rejection. The new
 host-only leave handler removes the exact owned record and returns the native
 void reply. See `LOCAL-SESSION-LEAVE.md` for layout, limits and test evidence.
 Build `work/server-session-leave` is staged/hash-verified as `Server-Session-Leave`
-and selected for the next test launch. Bundle fingerprints pass; archive and
-adapter are unchanged. The user must restart to use the new service.
+and selected for the successful test launch. Bundle fingerprints pass; archive
+and adapter are unchanged.
 
-Next live check: create a four-slot lobby, select AI in another slot, leave the
-lobby and create again without restarting. Inspect the fixed leave event and
-reply acknowledgement. Leave is not yet live-verified; full match startup,
-`GetSession`, nonempty search serialization and joining remain outstanding.
+With `48f7b2a`, the user confirmed AI selection on a four-slot map and a second
+lobby without restarting. The fresh run recorded 14 replies/ACKs: Login/Register,
+three searches, two creates, six updates and one leave, with zero rejections.
+Leave/recreate and AI selection are now live-verified. A second Windows PC with
+HE is available for a later LAN test; no changes were requested there yet.
+
+Full match startup, `GetSession`, nonempty search serialization and joining remain
+outstanding. The next step is mapping the session-record fields to real registry
+and transport state; see `LOCAL-SESSION-CATALOGUE.md`. Do not fabricate unknown
+scalar values or request another game restart merely to repeat the verified test.
 The diagnostic retains at most eight distinct fixed operation labels.
 
 The SpaceId transfer and real `SearchSessions_V1` exchange are live-verified

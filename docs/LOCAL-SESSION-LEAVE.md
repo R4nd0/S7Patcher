@@ -43,7 +43,7 @@ Leave shares registration acknowledgement, opt-in, pending-window, retry,
 lifetime and 32-response limits with create/update/search. Budget checks precede
 state mutation. Logs contain fixed operation/event/reason labels only.
 
-## Validation and next live check
+## Validation and live result
 
 All 3,069 service checks pass; the service build has zero warnings/errors.
 New cases cover exact void response layout, malformed input, foreign owners,
@@ -56,9 +56,11 @@ contents remain in `LocalData/Test-Lokale-Anmeldung-before-session-leave.cmd`.
 Bundle fingerprints pass. No native adapter or game archive changed. The active
 game, if any, continues on its old service until the user restarts.
 
-Live leave/return/search/recreate is still unverified. Request a fresh test run,
-creation on a four-slot map, leaving the lobby and creating again without
-restarting. Inspect the leave reply/ACK and resulting subsequent operations.
+Live result with `48f7b2a`: the user confirmed selectable AI and successful
+creation of a second lobby without restarting. The fresh run produced 14
+acknowledged replies (two login/register, three searches, two creates, six
+updates, one leave), with zero rejected requests. This verifies the leave and
+recreate path. It does not verify joining, match startup or two-computer traffic.
 
 ## Separate original UI restrictions
 
@@ -66,7 +68,7 @@ The decoded original `hostLobby.lua` explicitly enables its third slot-choice
 button (Against computer) only when `Network.GetNbPlayerSlots() ~= 2`.
 The user's screenshot shows a local named host and one free slot on a two-slot
 map, matching that disabled-button rule. This is not evidence of a missing local
-human identity or a server-side AI failure. Test AI selection on a four-slot map.
+human identity or a server-side AI failure. AI selection on a four-slot map has now been confirmed by the user.
 
 Separately, the Start callback requires `otherHumanInSession`; the slot refresh
 sets it only for a named human outside slot 1. AI does not satisfy it. The
