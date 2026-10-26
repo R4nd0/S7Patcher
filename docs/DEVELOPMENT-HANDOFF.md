@@ -25,6 +25,16 @@ These are separate results, not evidence of a playable LAN match.
 
 ### Current: embedded Storm endpoint identified; candidate projection ready
 
+Subsequent PC 1 launcher failure was a local port collision, not a join result.
+19:09:39 log records local-bind-key-or-io-failure. Updated service PID 25752
+(started 19:07:17) still owned TCP 9110 and UDP 9111; no Settlers7R or parent
+PID 15364 remained. Exact executable/command line and absent parent/game were
+rechecked before stopping only that orphan. Host --check-only then passed again.
+No game launched, no files/service payload changed. User asked to retry public
+four-slot host and one PC 2 join, keeping the launcher window open throughout.
+Underlying launcher lacks protection against child service surviving abrupt
+launcher termination; this cleanup does not constitute a lifecycle code fix.
+
 Deployment completed: user confirms successful Spieladresse update on PC 2
 and both games closed. Host inspection found no Settlers7R; the remaining old
 test service PID 55396 was identified by exact executable/command line and
