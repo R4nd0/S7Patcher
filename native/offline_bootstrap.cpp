@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <vector>
+#include <intrin.h>
 #include "offline_bootstrap.h"
 #include "runtime_config.h"
 #include "local_connect_policy.h"
@@ -441,6 +442,33 @@ void* __fastcall ObserveLabTicketReferenceMissing(void* output, void*, const cha
     ReportLocalStatus("lab-native-ticket-session-reference-missing");
     SetLastError(error); return returned;
 }
+const char* LabTicketRejectionLabel(uintptr_t caller) {
+    switch (caller) {
+    case 0xC24C0E: return "lab-native-ticket-session-state-rejected";
+    case 0xC24CA2: return "lab-native-ticket-session-flag-rejected";
+    case 0xC24D41: return "lab-native-ticket-empty-peer-rejected";
+    case 0xC24DD6: return "lab-native-ticket-transport-pool-exhausted";
+    case 0xC24E27: return "lab-native-ticket-add-host-failed";
+    case 0xC24E8B: return "lab-native-ticket-existing-request";
+    case 0xC24F11: return "lab-native-ticket-pool-exhausted";
+    case 0xC25143: return "lab-native-ticket-no-ready-peer";
+    case 0xC252C3: return "lab-native-ticket-host-reference-rejected";
+    default: return "lab-native-ticket-rejection-unclassified";
+    }
+}
+void* __fastcall ObserveLabTicketRejection(void* output, void*, const char* text) {
+    const uintptr_t caller = reinterpret_cast<uintptr_t>(_ReturnAddress()) - image_base + PreferredBase;
+    using Original = void* (__thiscall*)(void*, const char*);
+    auto* returned = Native<Original>(0x6576D0)(output, text);
+    const DWORD error = GetLastError();
+    ReportLocalStatus(LabTicketRejectionLabel(caller)); SetLastError(error); return returned;
+}
+void* __fastcall ObserveLabTicketStateRejection(void* output, void*, const char* text, unsigned int length) {
+    using Original = void* (__thiscall*)(void*, const char*, unsigned int);
+    auto* returned = Native<Original>(0x657E70)(output, text, length);
+    const DWORD error = GetLastError();
+    ReportLocalStatus("lab-native-ticket-session-state-rejected"); SetLastError(error); return returned;
+}
 void* __fastcall ObserveLabPlayerReason(void* output, void*, const char* text, unsigned int length) {
     using Original = void* (__thiscall*)(void*, const char*, unsigned int);
     auto* returned = Native<Original>(0x657E70)(output, text, length);
@@ -602,6 +630,15 @@ const Patch ConnectPatches[] = {
 #ifdef S7_LOCAL_PAIR_LAB
     {0xC0E809, {0xe8,0x02,0x6e,0x01,0x00}, reinterpret_cast<const void*>(&ObserveLabTicketRequest)},
     {0xC256DA, {0xe8,0x91,0x27,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketReferenceMissing)},
+    {0xC24C09, {0xe8,0x62,0x32,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketStateRejection)},
+    {0xC24C9D, {0xe8,0x2e,0x2a,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketRejection)},
+    {0xC24D3C, {0xe8,0x8f,0x29,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketRejection)},
+    {0xC24DD1, {0xe8,0xfa,0x28,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketRejection)},
+    {0xC24E22, {0xe8,0xa9,0x28,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketRejection)},
+    {0xC24E86, {0xe8,0x45,0x28,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketRejection)},
+    {0xC24F0C, {0xe8,0xbf,0x27,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketRejection)},
+    {0xC2513E, {0xe8,0x8d,0x25,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketRejection)},
+    {0xC252BE, {0xe8,0x0d,0x24,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketRejection)},
     {0xB7D92F, {0xe8,0xac,0x5a,0x00,0x00}, reinterpret_cast<const void*>(&ObserveLabPlayerRequest)},
     {0xB834AB, {0xe8,0xc0,0x49,0xad,0xff}, reinterpret_cast<const void*>(&ObserveLabPlayerReason)},
     {0xB8359E, {0xe8,0xcd,0x48,0xad,0xff}, reinterpret_cast<const void*>(&ObserveLabPlayerReason)},

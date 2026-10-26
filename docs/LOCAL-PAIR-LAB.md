@@ -111,7 +111,16 @@ The real games created separate Profiles.xml and replay files there.
     session; the failed lookup branch C256DA constructs an empty diagnostic
     before producing an asynchronous failure. The current candidate observes
     entry and this exact branch without reading the key, GUID or ticket.
-    Its live test is pending.
+    Its live test failed: guest entry and pending were observed, while the
+    missing-reference branch was absent. The user's initial success selection
+    was accidental and explicitly corrected; there is no successful join.
+13. Followed the found-reference path into C24BC0. Nine lab-only diagnostic
+    callsites now classify state/flag rejection, empty peer, transport pool,
+    host insertion, existing request, ticket pool, no ready peer and host
+    reference rejection. Original constructors, arguments, results and error
+    slots are preserved. Callsite addresses classify empty diagnostic strings;
+    no lookup keys, peer identities or ticket contents are read. Live result
+    of this next candidate is pending.
 
 Bounded external type/state inspection also found the main Echo implementation
 as the scheduler's only child, initialized state 3 on both slots. Its dispatcher
@@ -129,7 +138,7 @@ A short attempt using the physical LAN address triggered a Windows firewall
 prompt. It was not acted upon; those owned processes were stopped and the
 laboratory remained loopback-only.
 
-The next real test is the ticket-reference diagnostic with distinct addresses,
+The next real test is the ticket-rejection diagnostic with distinct addresses,
 then the reverse direction after a successful join. Read fixed classifications and
 subsequent RPCs. Do not guess a
 success state or suppress the native failure. Membership completion, host
@@ -137,7 +146,7 @@ notification, match start and synchronization remain unverified.
 
 ## Verification
 
-Laboratory build: 633 bootstrap checks (including both exact hashes, per-byte
+Laboratory build: 709 bootstrap checks (including both exact hashes, per-byte
 digest mutation rejection, native ABI/result preservation, pump order,
 duplicate suppression, reentrancy and teardown); 69 network checks, including
 same-port distinct-address binding, UDP transfer and automatic source binding;

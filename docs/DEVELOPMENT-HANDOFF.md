@@ -38,13 +38,19 @@ does not establish an idle command queue. The actual player handler B833E0
 instrumented conflict/invalid-data branches. It normally constructs B643C0,
 which static RTTI identifies as RequestTicketSessionId, not RequestJoin.
 
-Current adapter: work/native-pair-ticket. Both private manifests select it;
-both games are started and authenticated. Added C0E809 -> C25610 ticket entry
+Previous adapter: work/native-pair-ticket. Added C0E809 -> C25610 ticket entry
 and the C256DA failed native-session-lookup branch as fixed observations.
-No lookup key, local identity or ticket is inspected. The user has been asked
-to host/join once with this candidate and leave both games open; result pending.
+No lookup key, local identity or ticket is inspected. The user corrected an
+accidental success selection: joining still fails. Guest logs show ticket
+entry and pending; the failed-reference branch is absent. The service later
+expired a peer at its idle limit; do not reuse that expired run.
+Current candidate: work/native-pair-ticket-reasons, with nine fixed rejection
+branches in C24BC0 instrumented. These retain original constructors/results
+and classify only guarded callsites, without inspecting session keys or IDs.
+709 lab bootstrap checks, 69 network checks and nine real original-callsite
+comparisons pass; the default build retains 359 bootstrap checks.
 Service remains work/server-pair-catalogue-route, unchanged in this milestone.
-633 lab bootstrap checks and 69 network checks pass. Normal native behavior
+Normal native behavior
 is isolated by S7_LOCAL_PAIR_LAB. No successful join or match is established.
 Details and exact observations: LOCAL-PAIR-LAB.md.
 

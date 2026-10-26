@@ -189,7 +189,25 @@ int main() {
         check(lab_rejection_literal == text && lab_reason_length == 13 && GetLastError() == 6789 && output[0] == 0);
         check(ObserveLabTicketReferenceMissing(output, nullptr, text, 0) == output);
         check(lab_rejection_literal == text && lab_reason_length == 0 && GetLastError() == 6789 && output[0] == 0);
+        check(ObserveLabTicketStateRejection(output, nullptr, text, 0) == output);
+        check(lab_rejection_literal == text && lab_reason_length == 0 && GetLastError() == 6789 && output[0] == 0);
+        check(ObserveLabTicketRejection(output, nullptr, text) == output);
+        check(lab_rejection_literal == text && GetLastError() == 6789 && output[0] == 0);
     }
+    const struct { uintptr_t caller; const char* label; } ticket_reasons[] = {
+        {0xC24C0E, "lab-native-ticket-session-state-rejected"},
+        {0xC24CA2, "lab-native-ticket-session-flag-rejected"},
+        {0xC24D41, "lab-native-ticket-empty-peer-rejected"},
+        {0xC24DD6, "lab-native-ticket-transport-pool-exhausted"},
+        {0xC24E27, "lab-native-ticket-add-host-failed"},
+        {0xC24E8B, "lab-native-ticket-existing-request"},
+        {0xC24F11, "lab-native-ticket-pool-exhausted"},
+        {0xC25143, "lab-native-ticket-no-ready-peer"},
+        {0xC252C3, "lab-native-ticket-host-reference-rejected"},
+        {0, "lab-native-ticket-rejection-unclassified"}
+    };
+    for (const auto& reason : ticket_reasons)
+        check(strcmp(LabTicketRejectionLabel(reason.caller), reason.label) == 0);
     for (uintptr_t literal : {0x108DAD0u, 0x108DB10u, 0x108DC4Cu, 0x108DC78u, 0x108DCA4u, 0x108DCDCu, 0x108DD04u, 0x10888F8u}) {
         unsigned char owned_output[32]{};
         auto* text = Native<const char*>(literal);
