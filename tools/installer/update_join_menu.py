@@ -6,6 +6,7 @@ allow recovery after interruption; unexpected external changes fail closed.
 """
 import argparse
 from contextlib import contextmanager
+from dataclasses import dataclass
 import json
 import msvcrt
 import os
@@ -25,6 +26,26 @@ OLD = 'ebee0ff593cdb9c38442d03875041f8c1825c0fc3e2414291098e08f3517ced5'
 NEW = '2b1ad77ab1afda98e9d9aab8bbc91279607e1bbbac506d2b52de675550de08ad'
 ADAPTER = '441dcb75fe925a44de302859dcaef3bedff5ad49f8831a73b6fb0d1c49d5ae9f'
 BACKUP = 'Before-join-menu-v1'
+
+
+@dataclass(frozen=True)
+class UpdatePlan:
+    target: str
+    old_hash: str
+    new_hash: str
+    backup: str
+    fixed_hashes: dict
+    build: object
+
+    @property
+    def files(self):
+        return (self.target, 'local-bundle.json', 'compatibility.json')
+
+
+def menu_plan():
+    return UpdatePlan(ARCHIVE, OLD, NEW, BACKUP,
+                      {'Base/Bin/Settlers7R.exe': KNOWN_EXE,
+                       'Base/Bin/uplay_r1_loader.dll': ADAPTER}, build_archive)
 
 
 def ensure_closed():
@@ -73,15 +94,16 @@ def atomic_write(path, value, staging):
         temporary.unlink(missing_ok=True)
 
 
-def recover(root, backup):
+def recover(root, backup, plan=None):
+    plan = plan or menu_plan()
     journal_path = content.plain(backup / 'transaction.json')
     if not journal_path.exists():
         raise ValueError('Unvollstaendige Update-Vorbereitung. Sicherung bitte zur Diagnose aufbewahren.')
     journal = json.loads(journal_path.read_text(encoding='utf-8'))
-    if journal.get('files') is None or set(journal['files']) != set(FILES):
+    if journal.get('files') is None or set(journal['files']) != set(plan.files):
         raise ValueError('Ungueltige Update-Sicherung.')
     originals = {}
-    for name in FILES:
+    for name in plan.files:
         record = journal['files'][name]
         original = content.plain(backup / name).read_bytes()
         if sha256(original) != record['old']:
@@ -90,9 +112,9 @@ def recover(root, backup):
             raise ValueError('Dateien nach dem Update extern veraendert; keine automatische Wiederherstellung.')
         originals[name] = original
     # Validate all inputs before restoring any. Completed updates are not undone.
-    if all(content.digest(root / name) == journal['files'][name]['new'] for name in FILES):
+    if all(content.digest(root / name) == journal['files'][name]['new'] for name in plan.files):
         return
-    for name in FILES:
+    for name in plan.files:
         if content.digest(root / name) != journal['files'][name]['old']:
             atomic_write(root / name, originals[name], backup)
 
@@ -118,29 +140,38 @@ def build_archive(original, spec):
     return patched
 
 
-def apply_locked(root, spec):
+def apply_locked(root, spec, plan=None):
+    plan = plan or menu_plan()
+    if plan.target not in ('Base/BBA/Interface.bba', 'Base/Bin/uplay_r1_loader.dll'):
+        raise ValueError('Unbekanntes Updateziel.')
+    if Path(plan.backup).name != plan.backup or plan.backup in ('', '.', '..'):
+        raise ValueError('Ungueltiger Sicherungsordner.')
     if (root / 'INSTALLATION-INCOMPLETE.txt').exists():
         raise ValueError('Die Testinstallation ist unvollstaendig.')
-    backup = content.plain(root / 'LocalData' / BACKUP)
+    backup = content.plain(root / 'LocalData' / plan.backup)
     if backup.exists():
-        recover(root, backup)
+        recover(root, backup, plan)
     expected = content.verify(root)
-    old_bytes = {name: content.plain(root / name).read_bytes() for name in FILES}
+    old_bytes = {name: content.plain(root / name).read_bytes() for name in plan.files}
     manifest = json.loads(old_bytes['local-bundle.json'])
     hashes = manifest.get('files', {})
-    allowed = {'Base/Bin/Settlers7R.exe': KNOWN_EXE, 'Base/Bin/uplay_r1_loader.dll': ADAPTER,
-               ARCHIVE: sha256(old_bytes[ARCHIVE])}
+    allowed = dict(plan.fixed_hashes)
+    allowed[plan.target] = sha256(old_bytes[plan.target])
     if manifest.get('format') != 's7-local-experimental-v1' or hashes != allowed:
         raise ValueError('Dieses Update braucht die bekannte LAN-Testkopie.')
     if any(expected['files'].get(name.lower()) != value for name, value in allowed.items()):
         raise ValueError('Startmanifest und Dateivergleich widersprechen sich.')
-    if allowed[ARCHIVE] == NEW:
-        return 'Das Menue-Update ist bereits installiert.'
-    patched = build_archive(old_bytes[ARCHIVE], spec)
-    manifest['files'][ARCHIVE] = NEW
-    expected['files'][ARCHIVE.lower()] = NEW
+    if allowed[plan.target] == plan.new_hash:
+        return 'Das Update ist bereits installiert.'
+    if allowed[plan.target] != plan.old_hash:
+        raise ValueError('Dieses Update passt nicht zum vorhandenen Dateistand.')
+    patched = plan.build(old_bytes[plan.target], spec)
+    if sha256(patched) != plan.new_hash:
+        raise ValueError('Die neue Datei hat eine falsche Pruefsumme.')
+    manifest['files'][plan.target] = plan.new_hash
+    expected['files'][plan.target.lower()] = plan.new_hash
     expected['content_id'] = content.fingerprint(expected['files'])
-    new_bytes = {ARCHIVE: patched, 'local-bundle.json': encoded(manifest), 'compatibility.json': encoded(expected)}
+    new_bytes = {plan.target: patched, 'local-bundle.json': encoded(manifest), 'compatibility.json': encoded(expected)}
     # Preserve every other hash; never regenerate an inventory to bless changes.
     if not backup.exists():
         backup.mkdir()
@@ -150,27 +181,27 @@ def apply_locked(root, spec):
             with target.open('xb') as stream:
                 stream.write(value); stream.flush(); os.fsync(stream.fileno())
         with (backup / 'transaction.json').open('xb') as stream:
-            stream.write(encoded({'files': {n: {'old': sha256(old_bytes[n]), 'new': sha256(new_bytes[n])} for n in FILES}}))
+            stream.write(encoded({'files': {n: {'old': sha256(old_bytes[n]), 'new': sha256(new_bytes[n])} for n in plan.files}}))
             stream.flush(); os.fsync(stream.fileno())
     # Recheck immediately before mutation; a user may have started a game meanwhile.
     ensure_closed()
-    if any(content.digest(root / name) != sha256(old_bytes[name]) for name in FILES):
+    if any(content.digest(root / name) != sha256(old_bytes[name]) for name in plan.files):
         raise ValueError('Dateien wurden waehrend des Updates veraendert.')
     try:
-        for name in FILES:
+        for name in plan.files:
             atomic_write(root / name, new_bytes[name], backup)
         content.verify(root)
     except Exception:
-        recover(root, backup)
+        recover(root, backup, plan)
         raise
-    return 'Menue-Update installiert. Bitte auch auf dem anderen PC anwenden.'
+    return 'Update installiert. Bitte auch auf dem anderen PC anwenden.'
 
 
-def run(root, spec):
+def run(root, spec, plan=None):
     root = content.plain(root)
     ensure_closed()
     with session_lock(root):
-        return apply_locked(root, spec)
+        return apply_locked(root, spec, plan)
 
 
 def main():

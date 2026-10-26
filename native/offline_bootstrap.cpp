@@ -277,8 +277,8 @@ bool LocalSessionSearchReady(void* self) {
     auto* owner = LocalUpdateOwner(network);
     if (!owner || !LocalUpdateCore(network) ||
         !*reinterpret_cast<void**>(owner + 0x108)) return false;
-    // Scope this to dispatching search/create requests to the already-connected
-    // loopback service. This does not assert global NAT or match readiness.
+    // Scope this to dispatching search/create/join requests to the connected
+    // local service. This does not assert global NAT or match readiness.
     return network[0x5c + 0x4c4] == 1 && owner[0x18] == 1 && owner[0x38] == 1 &&
         *reinterpret_cast<int32_t*>(owner + 0x28) == 1 && owner[0x249] == 0;
 }
@@ -296,6 +296,13 @@ bool __fastcall QueryLocalSessionCreate(void* self, void*) {
     // job still owns success/failure; no lobby or transport state is fabricated.
     const bool ready = LocalSessionSearchReady(self) && EnsureLocalSearchSpace(self);
     ReportLocalStatus(ready ? "local-session-create-ready" : "local-session-create-not-ready");
+    return ready;
+}
+bool __fastcall QueryLocalSessionJoin(void* self, void*) {
+    // Only ED673B, before construction of the original Join Session job.
+    // Preserve its RPC, native state transitions and eventual result.
+    const bool ready = LocalSessionSearchReady(self) && EnsureLocalSearchSpace(self);
+    ReportLocalStatus(ready ? "local-session-join-ready" : "local-session-join-not-ready");
     return ready;
 }
 
@@ -409,6 +416,7 @@ const Patch ConnectPatches[] = {
     {0xED480A, {0x8b,0x42,0x28,0xff,0xd0}, reinterpret_cast<const void*>(&SkipLocalNetworkStartup)},
     {0xED6C3A, {0xe8,0x31,0x06,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalSessionSearch)},
     {0xED630B, {0xe8,0x60,0x0f,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalSessionCreate)},
+    {0xED673B, {0xe8,0x30,0x0b,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalSessionJoin)},
     {0xC8DCC5, {0xe8,0x86,0x62,0x0b,0x00}, reinterpret_cast<const void*>(&GetLocalSearchSandbox)},
     {0x1091B08, {0xc0,0x56,0xc9,0x00,0x00}, reinterpret_cast<const void*>(&UpdateLocalGame), true}
 };

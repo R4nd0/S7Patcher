@@ -23,6 +23,25 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
+### Current: menu gate confirmed, native join dispatch update ready
+
+Both PCs applied the menu update. The user confirms the join button is active,
+but the attempt errors/waits. Host PID 20236/run 17:39:46 shows both real peers
+registered, 10 catalogue replies plus host create/update, and no Join/Get RPC.
+The newly located native gate ED673B precedes the named Join Session job and
+still checks global NAT. The guarded replacement preserves native job/results;
+see LOCAL-SESSION-JOIN.md for static evidence and validation.
+
+outputs/S7-LAN-Beitritt-Update.zip is prepared (nine entries, no original game
+files), SHA256 13d3315699159142758bfd2c4f9c5ac3e40a7a1743dd0c98f8b3f0edaa8cd94e.
+Source package work/join-adapter-update-package; built DLL work/native-join-build.
+User has been asked to close both games and apply Beitritt-Update.cmd on PC 2,
+then report success before restarting. PC 1 deployment is pending confirmed
+closure. Do not overwrite the running DLL. The full installer fixture was
+updated and verified; active PC 1 still has the older adapter. Existing menu
+ZIP is unchanged. Service remains unchanged and still has no successful join
+handler; next test is first native join dispatch, not a playable LAN claim.
+
 ### Two real PCs: catalogue confirmed; join menu update
 
 The user confirmed PC 2 sees PC 1's public lobby. The host log records two

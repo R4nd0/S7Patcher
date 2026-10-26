@@ -116,5 +116,45 @@ class MenuUpdateTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.run_update()
         self.assert_original()
 
+    def adapter_plan(self, payload=b'new adapter'):
+        return update.UpdatePlan('Base/Bin/uplay_r1_loader.dll', update.ADAPTER,
+            update.sha256(b'new adapter'), 'Before-adapter-fixture',
+            {'Base/Bin/Settlers7R.exe': update.KNOWN_EXE, update.ARCHIVE: update.OLD},
+            lambda original, spec: payload)
+
+    def test_adapter_update_preserves_menu_and_recognizes_second_run(self):
+        plan = self.adapter_plan()
+        update.run(self.root, {}, plan)
+        content.verify(self.root)
+        self.assertEqual((self.root / plan.target).read_bytes(), b'new adapter')
+        self.assertEqual((self.root / update.ARCHIVE).read_bytes(), self.before[update.ARCHIVE])
+        self.assertIn('bereits', update.run(self.root, {}, plan))
+
+    def test_bad_adapter_payload_leaves_files_unchanged(self):
+        plan = self.adapter_plan(b'corrupt adapter')
+        with self.assertRaises(ValueError): update.run(self.root, {}, plan)
+        self.assertEqual((self.root / plan.target).read_bytes(), b'fixture adapter')
+        self.assertFalse((self.root / 'LocalData' / plan.backup).exists())
+        self.assert_original()
+
+    def test_adapter_requires_known_menu(self):
+        plan = self.adapter_plan()
+        plan.fixed_hashes[update.ARCHIVE] = '0'*64
+        with self.assertRaises(ValueError): update.run(self.root, {}, plan)
+        self.assert_original()
+
+    def test_adapter_interruption_recovers_using_its_own_target(self):
+        plan = self.adapter_plan()
+        original = update.atomic_write
+        def write(path, value, staging):
+            if path.name == 'local-bundle.json': raise KeyboardInterrupt()
+            original(path, value, staging)
+        with patch.object(update, 'atomic_write', side_effect=write):
+            with self.assertRaises(KeyboardInterrupt): update.run(self.root, {}, plan)
+        update.run(self.root, {}, plan)
+        content.verify(self.root)
+        self.assertEqual((self.root / plan.target).read_bytes(), b'new adapter')
+        self.assertEqual((self.root / update.ARCHIVE).read_bytes(), self.before[update.ARCHIVE])
+
 
 if __name__ == '__main__': unittest.main()
