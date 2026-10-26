@@ -4,7 +4,7 @@
 #include <cstdio>
 void ReportLocalStatus(const char*) { SetLastError(12345); }
 namespace {
-#ifdef S7_LOCAL_PAIR_LAB
+#ifdef S7_LOCAL_NETWORK_PUMP
 uintptr_t lab_join_arguments[6]{};
 int lab_join_code = 1;
 const char* lab_rejection_literal = nullptr;
@@ -77,7 +77,7 @@ std::vector<char> pump_trace;
 unsigned char* pump_network = nullptr;
 unsigned char* pump_owner = nullptr;
 int pump_mode = 0;
-#ifdef S7_LOCAL_PAIR_LAB
+#ifdef S7_LOCAL_NETWORK_PUMP
 NativeResult* __fastcall FakeCoreBoundary(void*, void*, NativeResult* result, unsigned int phase) {
     pump_trace.push_back(phase == 1 ? 'P' : phase == 2 ? 'Q' : '!');
     PumpOfflineBootstrap();
@@ -130,14 +130,14 @@ void __fastcall FakeMasterUpdate(void*, void*) {
     if (pump_mode == 2) *Native<unsigned char**>(0x1379E14) = nullptr;
     if (pump_mode == 3) *reinterpret_cast<void**>(pump_network + 0xa18) = nullptr;
     if (pump_mode == 4) *reinterpret_cast<void**>(pump_network + 0x2c) = nullptr;
-#ifdef S7_LOCAL_PAIR_LAB
+#ifdef S7_LOCAL_NETWORK_PUMP
     if (pump_mode == 9) TickFakeManager();
     if (pump_mode == 15) { NativeResult result{}; UpdateLabEcho(&result, 3, -1); }
 #endif
 }
 NativeResult* __fastcall FakeCoreUpdate(void*, void*, NativeResult* result, unsigned int phase) {
     pump_trace.push_back(phase == 3 ? 'C' : '!');
-#ifdef S7_LOCAL_PAIR_LAB
+#ifdef S7_LOCAL_NETWORK_PUMP
     if (pump_scheduler) ++*reinterpret_cast<unsigned int*>(pump_scheduler + 0x78);
     pending_core_tasks = 0;
 #endif
@@ -145,7 +145,7 @@ NativeResult* __fastcall FakeCoreUpdate(void*, void*, NativeResult* result, unsi
     if (pump_mode == 5) *Native<unsigned char**>(0x1379E14) = nullptr;
     if (pump_mode == 6) *reinterpret_cast<void**>(pump_network + 0xa18) = nullptr;
     if (pump_mode == 7) *reinterpret_cast<void**>(pump_network + 0x2c) = nullptr;
-#ifdef S7_LOCAL_PAIR_LAB
+#ifdef S7_LOCAL_NETWORK_PUMP
     if (pump_mode == 10) TickFakeManager();
 #endif
     result->code = 1; result->detail = 0;
@@ -193,7 +193,7 @@ int main() {
     auto* memory = static_cast<unsigned char*>(VirtualAlloc(nullptr, ExpectedImageSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
     if (!memory) return 2;
     image_base = reinterpret_cast<uintptr_t>(memory);
-#ifdef S7_LOCAL_PAIR_LAB
+#ifdef S7_LOCAL_NETWORK_PUMP
     check(FakeJump(0xD49B10, reinterpret_cast<const void*>(&FakeLabJoinRequest)));
     check(FakeJump(0xC33020, reinterpret_cast<const void*>(&FakeEchoDispatcher)));
     {
@@ -472,7 +472,7 @@ int main() {
     check(!LocalUpdateCore(network)); // Unknown implementation type.
     *reinterpret_cast<uintptr_t*>(implementation) = image_base + 0x1099548 - PreferredBase;
     check(!LocalUpdateCore(network)); // Missing scheduler.
-#ifdef S7_LOCAL_PAIR_LAB
+#ifdef S7_LOCAL_NETWORK_PUMP
     alignas(4) unsigned char scheduler[0xc0]{};
     *reinterpret_cast<void**>(implementation + 4) = scheduler;
     check(!LocalUpdateCore(network)); // Reject unknown scheduler before reading its frame.
@@ -609,7 +609,7 @@ int main() {
     *reinterpret_cast<void**>(network + 0xa18) = owner;
     *reinterpret_cast<void**>(network + 0x2c) = core;
     pump_mode = 0;
-#ifdef S7_LOCAL_PAIR_LAB
+#ifdef S7_LOCAL_NETWORK_PUMP
     alignas(4) unsigned char manager[4]{};
     *reinterpret_cast<uintptr_t*>(manager) = image_base + 0x10934EC - PreferredBase;
     check(FakeJump(0xCA6380, reinterpret_cast<const void*>(&FakeManagerUpdate)));
@@ -699,7 +699,7 @@ int main() {
 #endif
     pump_trace.clear(); natural_updates_seen = true;
     PumpOfflineBootstrap();
-#ifdef S7_LOCAL_PAIR_LAB
+#ifdef S7_LOCAL_NETWORK_PUMP
     check(trace_is("MCO")); pump_trace.clear();
 #else
     check(trace_is(""));

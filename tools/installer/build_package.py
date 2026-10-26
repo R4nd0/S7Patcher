@@ -13,8 +13,8 @@ import compatibility as content
 from install import write_json, FORMAT
 
 PYTHON_SHA256 = '90905e64a840557d8c1bc4f5b74db3d7ee85e3ffb217611cac1c7813acea4159'
-ADAPTER_SHA256 = '441dcb75fe925a44de302859dcaef3bedff5ad49f8831a73b6fb0d1c49d5ae9f'
-ARCHIVE_SHA256 = 'ebee0ff593cdb9c38442d03875041f8c1825c0fc3e2414291098e08f3517ced5'
+ADAPTER_SHA256 = 'c3de5276657c61df27ac8be9f0597ce91749469bffb9ef59bc6e55847d2ca4ec'
+ARCHIVE_SHA256 = '2b1ad77ab1afda98e9d9aab8bbc91279607e1bbbac506d2b52de675550de08ad'
 
 
 def build(adapter, service, dotnet, python_zip, output):
@@ -48,13 +48,15 @@ def build(adapter, service, dotnet, python_zip, output):
         shutil.copyfile(service / name, server / name)
     shutil.copyfile(adapter, output / 'Payload/uplay_r1_loader.dll')
     names = ['installer/install.py', 'installer/start.py', 'installer/launch_lan.py', 'installer/compatibility.py',
-             'offline-ui/launch_local.py', 'offline-ui/patch-spec.json', 'lan/bba.py', 'lan/prepare.py']
+             'offline-ui/launch_local.py', 'offline-ui/patch-spec.json', 'lan/bba.py', 'lan/prepare.py',
+             'installer/update_join_menu.py', 'offline-ui/join-menu-update.json']
     for name in names:
         target = output / 'Tools' / name; target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(repo / 'tools' / name, target)
     shutil.copyfile(repo / 'LICENSE', output / 'Tools/LICENSE.txt')
     write_json(output / 'package.json', {'format': FORMAT,
         'capabilities': {'local_test': True, 'lan_host': False, 'lan_join': False},
+        'join_menu_update': True,
         'patched_archive_sha256': ARCHIVE_SHA256,
         'files': content.inventory(output, ('Payload', 'Runtime', 'Tools'))})
     (output / 'Installieren.cmd').write_text('@echo off\n"%~dp0Runtime\\python\\python.exe" -B "%~dp0Tools\\installer\\install.py" --package "%~dp0."\npause\n', encoding='ascii')
@@ -73,7 +75,10 @@ def build(adapter, service, dotnet, python_zip, output):
         'Test-LAN-Verbindung.cmd verbindet zwei explizit angegebene PCs fuer den Sitzungstest.\n'
         'Zuerst Host starten, danach den Mitspieler. Auf beiden PCs dieselbe Paketversion verwenden.\n'
         'TCP 9110 und UDP 9111 muessen am Host fuer den anderen PC erreichbar sein.\n'
-        'Sitzungsbeitritt und laufende Mehrspielerpartien sind noch nicht implementiert bzw. verifiziert.\n'
+        'Beitritt und gemeinsamer Partiestart sind mit zwei Instanzen auf einem PC bestaetigt.\n'
+        'Dieses Paket uebertraegt die Netzwerkkorrektur auf die originale History-EXE.\n'
+        'Beitritt, Hosting in beiden Richtungen und laengere Partien zwischen getrennten PCs muessen noch geprueft werden.\n'
+        'Dieser LAN-Testlauf ist derzeit auf 20 Minuten je Anmeldung begrenzt.\n'
         'Gleiche Dateien verhindern nicht alle Synchronisationsfehler der Spielsimulation.\n', encoding='utf-8')
     (output / 'RUNTIME-SOURCES.txt').write_text(
         'CPython 3.14.10 Windows embeddable x64\n'

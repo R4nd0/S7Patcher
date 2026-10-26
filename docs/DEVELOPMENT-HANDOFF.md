@@ -11,12 +11,14 @@ the service acknowledges keepalives beyond three minutes. The real connected
 state now enables the multiplayer menu. The user opened an empty session list.
 With `95603b5`, the user also reached the created lobby with player slots.
 Login, Register, search, create and update each received an acknowledged reply;
-there were no rejected requests in that observed run. Match startup is not yet
-verified. A second PC discovers the lobby and sends a join request; that
+there were no rejected requests in that observed run. A second PC discovers
+the lobby and sends a join request; that
 two-PC join is still unverified. The one-PC two-client laboratory now completes
 native admission and the service success report, and the user confirmed both
-players visibly occupy the same lobby. Match start and sustained synchronized
-gameplay remain unverified. Current deployed service: work/server-pair-activity;
+players visibly occupy the same lobby. The user subsequently confirmed both
+instances load the map and the match runs, then confirmed five minutes of play
+with inputs on both sides and no reported desync/disconnection. Longer synchronization remains
+unverified. Current deployed service: work/server-pair-activity;
 adapter: work/native-pair-core-resume. Host was slot B, joining guest slot A.
 
 The current native candidate passed 354 adapter checks, 38 network-guard checks
@@ -27,6 +29,47 @@ all 284 entries and parses.
 These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
+
+### Current: real one-PC match started; original-EXE LAN candidate
+
+Both owned games were responsive at their recorded paths. The service had
+accepted further host updates and continues answering PINGs without observed
+request rejection or expiry in this run. User confirmation establishes visible
+match startup, not checksum equality or long-run desync freedom. The user also
+confirmed five minutes with actions on both sides, without an error. The user
+then closed both windows before the requested role reversal. The first match's
+host was B, guest A. Restarting with A first, so its lobby can be established
+unambiguously before B is launched. Reverse direction and same-process
+leave/recreate behavior remain pending. Prior match log archived as
+work/pair-before-after-first-running-match.jsonl.
+
+The independent native -LocalNetworkPump build selects the same proven
+bootstrap dispatch/observer hooks with S7_LOCAL_NETWORK_PUMP. It accepts only
+the original HE executable: it does not enable S7_LOCAL_PAIR_LAB hashes,
+profile suffixes or slot-address networking. Lab builds imply the pump macro;
+baseline builds remain unchanged. Verification: 874 candidate bootstrap,
+359 baseline bootstrap, 876 lab bootstrap, 61 candidate network, 88 platform,
+18 connection and 14 CPU checks pass. All 63 guarded sites match the untouched
+original on disk. Builds retain warnings as errors and all ABI/ownership guards.
+
+Installer builder pins candidate SHA256
+c3de5276657c61df27ac8be9f0597ce91749469bffb9ef59bc6e55847d2ca4ec.
+work/installer-network-pump-candidate contains that original-only adapter and
+the verified non-lab work/server-activity-default service. Installer/launcher
+regressions pass (12 installer + 16 menu-update + 7 launcher tests). The package
+now reproducibly applies the existing join-menu delta after the base UI patch,
+producing the same 2b1ad77... archive as both running lab games. The first
+full-copy verification exposed the missing delta; the corrected package is
+work/installer-network-pump-v2. Its complete fresh installation of all 54 game
+files passed. The installed archive exactly matches both live lab archives;
+the bundled Python/.NET launcher passed its service/configuration preflight
+without launching another game. ZIP integrity passed for all 249 files; it
+contains no original game binaries/archives, identities or LocalData. Artifact:
+outputs/S7-LAN-Multiplayer-Testpaket-2026-10-27.zip (49,858,126 bytes).
+No candidate has replaced normal PC1 or PC2 files. The LAN
+capability flags stay false pending real two-PC qualification. Normal service
+limits are still 2 minutes idle/20 minutes total/32 post-login responses; that
+bounded candidate is not qualified for long LAN games.
 
 ### Current: two-client laboratory; player join precedes ticket/session join
 

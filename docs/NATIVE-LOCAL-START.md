@@ -6,6 +6,22 @@ videos or the intro click gate, using the local platform adapter. Do not replace
 installed game's loader with it or describe it as a finished offline/LAN patch.
 The original installation used for development remains unchanged.
 
+## Original-executable network-pump candidate
+
+`native/build.ps1 -LocalNetworkPump -OutputDirectory <new-folder>` enables the
+same native dispatch bridge and fixed diagnostic hooks that reached a shared
+lobby and running match in the two-client laboratory. It defines only
+S7_LOCAL_NETWORK_PUMP. Original executable fingerprint, exact callsite bytes,
+ABI, original results, thread/ownership/reentrancy checks and rollback remain.
+This mode rejects both lab EXEs and enables no lab address/profile behavior.
+The original network guard still requires the explicit configured LAN peer.
+Lab builds imply this pump feature; baseline builds retain their old behavior.
+
+This transfers observed behavior to an original-EXE candidate, not proof of
+two-computer multiplayer. The laboratory match is still running while that
+candidate and its installer are independently checked. Longer games, reverse
+hosting, simulation synchronization and two-PC joining remain unqualified.
+
 ## Components and boundaries
 
 `native/local_platform.cpp` implements the verified x86 startup, offline

@@ -14,6 +14,12 @@
 #include "cpu_affinity.h"
 #include "local_pair_lab.h"
 
+// The proven native dispatch bridge can be tested against the original HE
+// executable without enabling lab hashes, profiles or loopback slot addresses.
+#if defined(S7_LOCAL_PAIR_LAB) && !defined(S7_LOCAL_NETWORK_PUMP)
+#define S7_LOCAL_NETWORK_PUMP
+#endif
+
 #pragma comment(lib, "bcrypt.lib")
 #pragma comment(lib, "crypt32.lib")
 
@@ -42,7 +48,7 @@ DWORD bootstrap_thread = 0;
 bool pump_active = false;
 bool natural_updates_seen = false;
 unsigned int owner_update_count = 0;
-#ifdef S7_LOCAL_PAIR_LAB
+#ifdef S7_LOCAL_NETWORK_PUMP
 unsigned int manager_update_count = 0;
 unsigned int echo_update_count = 0;
 void* lab_last_scheduler = nullptr;
@@ -254,13 +260,13 @@ unsigned char* LocalUpdateCore(unsigned char* network) {
     if (!implementation ||
         *reinterpret_cast<uintptr_t*>(implementation) != image_base + 0x1099548 - PreferredBase ||
         !*reinterpret_cast<void**>(implementation + 4)) return nullptr;
-#ifdef S7_LOCAL_PAIR_LAB
+#ifdef S7_LOCAL_NETWORK_PUMP
     auto* scheduler = *reinterpret_cast<unsigned char**>(implementation + 4);
     if (*reinterpret_cast<uintptr_t*>(scheduler) != image_base + 0x109959C - PreferredBase) return nullptr;
 #endif
     return core;
 }
-#ifdef S7_LOCAL_PAIR_LAB
+#ifdef S7_LOCAL_NETWORK_PUMP
 unsigned char* LabCoreScheduler(unsigned char* core) {
     auto* implementation = *reinterpret_cast<unsigned char**>(core + 0x20);
     return *reinterpret_cast<unsigned char**>(implementation + 4);
@@ -420,7 +426,7 @@ NativeSmallString* __fastcall GetLocalSearchSandbox(void* self, void*, NativeSma
     if (!reported) { reported = true; ReportLocalStatus("local-session-search-sandbox-ready"); }
     return output;
 }
-#ifdef S7_LOCAL_PAIR_LAB
+#ifdef S7_LOCAL_NETWORK_PUMP
 NativeResult* __fastcall ObserveLabEchoDispatcher(void* self, void*, NativeResult* result, unsigned int phase, int timeout) {
     static bool entered = false;
     const DWORD incoming_error = GetLastError();
@@ -751,7 +757,7 @@ const Patch ConnectPatches[] = {
     {0xED630B, {0xe8,0x60,0x0f,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalSessionCreate)},
     {0xED673B, {0xe8,0x30,0x0b,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalSessionJoin)},
     {0xC8DCC5, {0xe8,0x86,0x62,0x0b,0x00}, reinterpret_cast<const void*>(&GetLocalSearchSandbox)},
-#ifdef S7_LOCAL_PAIR_LAB
+#ifdef S7_LOCAL_NETWORK_PUMP
     {0xC0E809, {0xe8,0x02,0x6e,0x01,0x00}, reinterpret_cast<const void*>(&ObserveLabTicketRequest)},
     {0xC256DA, {0xe8,0x91,0x27,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketReferenceMissing)},
     {0xC24C09, {0xe8,0x62,0x32,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketStateRejection)},
@@ -976,7 +982,7 @@ void PumpOfflineBootstrap() {
     // access native objects from other threads or during recursive callbacks.
     if (initialization != 2 || !local_connect_probe ||
         GetCurrentThreadId() != bootstrap_thread || pump_active) return;
-#ifndef S7_LOCAL_PAIR_LAB
+#ifndef S7_LOCAL_NETWORK_PUMP
     if (natural_updates_seen) return;
 #endif
     struct ActiveScope {
@@ -992,7 +998,7 @@ void PumpOfflineBootstrap() {
     if (!reported) { reported = true; ReportLocalStatus("local-connect-platform-pump-active"); }
     const unsigned int before = owner_update_count;
     auto* core = LocalUpdateCore(network);
-#ifdef S7_LOCAL_PAIR_LAB
+#ifdef S7_LOCAL_NETWORK_PUMP
     // Skip only when the real core progressed since our previous pump. Never
     // latch off forever after one unrelated owner callback: the host can then
     // retain queued JoinRequest events indefinitely while the guest keeps ticking.
@@ -1006,7 +1012,7 @@ void PumpOfflineBootstrap() {
     }
 #endif
     if (core) {
-#ifdef S7_LOCAL_PAIR_LAB
+#ifdef S7_LOCAL_NETWORK_PUMP
         auto* manager = LocalLabManager(network);
         const unsigned int manager_before = manager_update_count;
         const unsigned int echo_before = echo_update_count;
@@ -1027,7 +1033,7 @@ void PumpOfflineBootstrap() {
         Native<GameLogin>(0xED3BA0)(network);
         // The master update may destroy or replace native objects in callbacks.
         if (LocalUpdateOwner(network) != owner || LocalUpdateCore(network) != core) return;
-#ifdef S7_LOCAL_PAIR_LAB
+#ifdef S7_LOCAL_NETWORK_PUMP
         if (supply_boundaries && network[0x30] && network[0x5c + 0x4c7]) {
             LabCoreBoundary(core, 2);
             if (LocalUpdateOwner(network) != owner || LocalUpdateCore(network) != core) return;
@@ -1037,7 +1043,7 @@ void PumpOfflineBootstrap() {
         NativeResult result{};
         Native<CoreUpdate>(0xCBC710)(core, &result, 3);
         if (LocalUpdateCore(network) != core) return;
-#ifdef S7_LOCAL_PAIR_LAB
+#ifdef S7_LOCAL_NETWORK_PUMP
         // The master/core may already have dispatched this virtual update.
         // Supply only the omitted post-core tick, with ownership revalidated.
         if (LocalUpdateOwner(network) != owner) return;
@@ -1070,7 +1076,7 @@ void PumpOfflineBootstrap() {
     // Only supply the old fallback tick when the core did not deliver one.
     if (LocalUpdateOwner(network) == owner && owner_update_count == before)
         UpdateLocalGame(owner, nullptr);
-#ifdef S7_LOCAL_PAIR_LAB
+#ifdef S7_LOCAL_NETWORK_PUMP
     if (core && LocalUpdateOwner(network) == owner && LocalUpdateCore(network) == core)
         RememberLabCoreFrame(core);
 #endif

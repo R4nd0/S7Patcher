@@ -33,6 +33,8 @@ def package_manifest(root):
     if (manifest.get('format') != FORMAT or manifest.get('capabilities') != {'local_test': True, 'lan_host': False, 'lan_join': False}
             or not isinstance(manifest.get('files'), dict) or not manifest['files']):
         raise ValueError('Unbekanntes Installationspaket.')
+    if type(manifest.get('join_menu_update', False)) is not bool:
+        raise ValueError('Unbekannte Menuepatch-Version.')
     actual = content.inventory(root, ('Payload', 'Runtime', 'Tools'))
     expected = manifest['files']
     if actual != expected:
@@ -98,7 +100,21 @@ def prepare(package, source, destination, emit=print):
     # source, with a new staging directory inside this separate destination.
     module.prepare(source, stage, tools / 'offline-ui/patch-spec.json', profile='offline-ui')
     staged = stage / base.relative_to(source) / 'BBA/Interface.bba'
-    shutil.copyfile(staged, destination / 'Base/BBA/Interface.bba')
+    if manifest.get('join_menu_update', False):
+        # Reuse the already verified pure archive transformation, without running
+        # the installed-copy updater, process checks or its old adapter policy.
+        menu_spec = importlib.util.spec_from_file_location('s7_installer_join_menu', tools / 'installer/update_join_menu.py')
+        menu = importlib.util.module_from_spec(menu_spec)
+        sys.modules[menu_spec.name] = menu  # Required by the module's dataclasses.
+        try:
+            menu_spec.loader.exec_module(menu)
+            recipe = json.loads((tools / 'offline-ui/join-menu-update.json').read_text(encoding='utf-8'))
+            patched = menu.build_archive(staged.read_bytes(), recipe)
+        finally:
+            sys.modules.pop(menu_spec.name, None)
+        (destination / 'Base/BBA/Interface.bba').write_bytes(patched)
+    else:
+        shutil.copyfile(staged, destination / 'Base/BBA/Interface.bba')
     if content.digest(destination / 'Base/BBA/Interface.bba') != manifest['patched_archive_sha256']:
         raise ValueError('Der vorbereitete Menuepatch stimmt nicht mit dem Paket ueberein.')
     shutil.copyfile(package / 'Payload/uplay_r1_loader.dll', destination / 'Base/Bin/uplay_r1_loader.dll')

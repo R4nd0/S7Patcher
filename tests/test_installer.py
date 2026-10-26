@@ -74,6 +74,30 @@ def prepare(source, output, specification, profile):
         self.assertTrue((self.destination / 'Base/Bin/Settlers7R.exe').is_file())
         content.verify(self.destination)
 
+    def test_install_applies_packaged_join_menu_delta_before_fingerprinting(self):
+        self.write(self.package, 'Tools/installer/update_join_menu.py', b'''def build_archive(original, recipe):
+    assert original == b'invented patched archive'
+    assert recipe == {'fixture': True}
+    return b'invented join menu'
+''')
+        self.write(self.package, 'Tools/offline-ui/join-menu-update.json', b'{"fixture":true}')
+        self.manifest()
+        self.data['join_menu_update'] = True
+        self.data['patched_archive_sha256'] = hashlib.sha256(b'invented join menu').hexdigest()
+        (self.package / 'package.json').write_text(json.dumps(self.data))
+        self.prepare()
+        self.assertEqual((self.destination / 'Base/BBA/Interface.bba').read_bytes(), b'invented join menu')
+        content.verify(self.destination)
+        manifest = json.loads((self.destination / 'local-bundle.json').read_text())
+        self.assertEqual(manifest['files']['Base/BBA/Interface.bba'], self.data['patched_archive_sha256'])
+
+    def test_unknown_join_menu_version_rejected_before_copy(self):
+        self.data['join_menu_update'] = 'yes'
+        (self.package / 'package.json').write_text(json.dumps(self.data))
+        with self.assertRaisesRegex(ValueError, 'Menuepatch'):
+            self.prepare()
+        self.assertFalse(self.destination.exists())
+
     def test_overlaps_existing_and_dotdot_are_rejected_before_copy(self):
         for destination in (self.source / 'new', self.package / 'new', self.root,
                             self.source / '..' / 'game' / 'nested'):
