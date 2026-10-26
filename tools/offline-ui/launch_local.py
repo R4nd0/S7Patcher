@@ -65,7 +65,7 @@ def local_identity(data):
     return value
 
 
-def write_configuration(data, configuration, udp_port):
+def write_configuration(data, configuration, udp_port, connect_probe=False):
     public = configuration.get("public_key")
     if not isinstance(public, str) or len(public) != 96:
         raise ValueError("Der lokale Dienst liefert keinen gueltigen oeffentlichen Schluessel.")
@@ -78,6 +78,8 @@ def write_configuration(data, configuration, udp_port):
     content = ("format=s7-local-runtime-v1\naddress=127.0.0.1\n"
                f"udp_port={udp_port}\npublic_key={public}\nprofile_id={profile}\n"
                f"display_name=LocalPlayer\nticket=local-s7:{profile}\n")
+    if connect_probe:
+        content += "connect_probe=1\n"
     destination = data / "s7-local-runtime.ini"
     plain_path(destination, data)
     if destination.exists() and not destination.read_bytes().startswith(b"format=s7-local-runtime-v1\n"):
@@ -152,7 +154,7 @@ def run(args):
                     "--local-config-server", "--local-login-probe", "--http-port", "0", "--udp-port", "0", "--seconds", "3600"],
                     stdout=output, stderr=error_output, creationflags=subprocess.CREATE_NO_WINDOW)
                 configuration, udp_port = service_ready(service, log)
-                runtime = write_configuration(data, configuration, udp_port)
+                runtime = write_configuration(data, configuration, udp_port, args.local_connect_probe)
                 if service.poll() is not None:
                     raise RuntimeError("Der lokale Dienst wurde vor dem Spielstart beendet.")
                 print("Lokale Testversion und Dienst sind bereit.", flush=True)
@@ -184,6 +186,7 @@ def main():
     parser.add_argument("--dotnet", required=True)
     parser.add_argument("--server", required=True)
     parser.add_argument("--launch-game", action="store_true")
+    parser.add_argument("--local-connect-probe", action="store_true", help="Experimental native local login trigger; off by default")
     args = parser.parse_args()
     try:
         return run(args)

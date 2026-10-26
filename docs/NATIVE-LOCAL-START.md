@@ -65,13 +65,70 @@ SHA-256 and all original callsite bytes. Native operations execute only when
 the original game thread invokes the hooks, never from DllMain. Bootstrap
 integrity/reentrancy failures use `0xE0537002`.
 
-**Remaining trigger blocker:** `C90230` gates login on the platform wrapper's
+**Baseline trigger blocker:** `C90230` gates login on the platform wrapper's
 SDK session readiness (`EF3EC0` via vtable `1140D90+54`). Its caller `C8EBE0`
 has another readiness gate. The reconnect call at `C958CF` also reaches
-`C90230`. These gates have not been forced true or replaced: the three hooks
-alone do not establish that offline startup reaches RendezVous login. A local
-connect operation must preserve pending/connected state and real asynchronous
-callbacks. Merely fabricating SDK-ready status would not establish that.
+`C90230`. The three baseline hooks alone do not make offline startup reach
+RendezVous login.
+
+### Opt-in local connection experiment
+
+The launcher flag `--local-connect-probe` adds `connect_probe=1` to the bounded
+runtime configuration. The normal launcher leaves this experiment disabled.
+Four guarded calls to the outer request operation (`C92127`, `C93A31`,
+`C9511A`, `C956F5`) and the reconnect call (`C958CF`) then use local connection
+operations. A guarded, ASLR-aware update vtable slot at `1091B08` retains the
+original `C956C0` update first and requests the initial local connection when
+the real native objects exist.
+
+These operations set requested/pending state before dispatching the original
+`D49B80` login action, which owns the real CallContext and callbacks. They do
+not set the connected flag or report a successful Ubisoft SDK session.
+Requested/pending state prevents duplicate jobs. All nine original call/table
+guards are checked before any writes. Pointer-slot writes preserve adjacent
+bytes and restore page protection; rollback uses the rebased original pointer.
+
+Synthetic validation passes 18 state-policy checks and 73 checks of the actual
+patch writer, including guard rejection before mutation, pointer relocation,
+protection restoration and rollback. All nine guards also match the original
+on-disk executable. Configuration/public-key validation and bundle preflight
+pass with the flag enabled. In the first opt-in game run, the user reached the
+main menu and the launcher recorded exit code 0. The adapter logged opt-in
+bootstrap installation and facade construction, but no local login entry or
+client UDP reached the service. Connection remains unverified. A subsequent
+diagnostic build adds once-only fixed labels for update entry/return and each
+readiness blocker, plus the fixed bootstrap error before a fatal exit.
+
+The diagnostic game run reached the main menu with the correct separate-copy
+EXE and adapter loaded. In each of two ten-second observation windows,
+`UPLAY_Update` ran 160 times (caller `4C81C7`), while the hooked update, original
+`C956C0`, and RendezVous `C95840` updates ran zero times. The replacement
+vtable slot pointed into our adapter. The real owner and embedded RendezVous
+objects had their expected vtables; requested, connected and pending were all
+false, and the facade existed. Thus the opt-in update hook itself was never
+reached. Fixed call counts, module-relative callsite metadata and type/state
+booleans established this without reading account strings or network payloads.
+
+The next experimental build adds a bridge from the local `UPLAY_Update` to
+the existing native owner update. Static constructor code at `ED5B6F/ED5BA5`
+establishes ownership through the network singleton at `1379E14`, field
+`+A18`. The bridge re-reads that ownership each tick, validates both vtables,
+waits for the facade and update dependencies, and only executes on the bootstrap
+thread. It rejects reentrancy and stops bridging once the normal update path
+is observed. The platform lock is released before calling game code, permitting
+callbacks to re-enter the platform safely. Ten added synthetic checks exercise
+disabled/foreign-thread/recursive/natural-update paths and partial construction;
+two added platform checks cover startup gating and callback lock release.
+The subsequent separate-copy game run verified the bridge: native diagnostics
+recorded update entry/return, dispatch and login entry. The local server received
+SYN, CONNECT, Login and Register, sent both encrypted RPC responses, and received
+both DATA ACKs. A bounded inspection then confirmed requested=true,
+connected=true and pending=false on the expected native object. Over ten seconds,
+platform, bridge, original owner and RendezVous updates each ran 160 times.
+The user confirmed that the game remained in the main menu. This establishes
+the initial local Login/Register exchange and native connected state; it does
+not establish persistence beyond the current probe lifetime or playable modes.
+These checks do not establish login, sustained service or LAN functionality.
 
 ## Fast menu startup
 
@@ -118,7 +175,7 @@ and fast startup; source/build checks alone would not establish that outcome.
 ## Validation so far
 
 - x86 builds with `/W4 /WX`, no warnings or errors.
-- 86 synthetic platform/save checks; 38 host network-guard checks, including
+- 88 synthetic platform/save checks; 38 host network-guard checks, including
   local TCP/UDP roundtrips and external-call rejection.
 - Loader export set exactly equals the 84 HE imports.
 - Real local service/configuration/public-key validation using a synthetic
@@ -138,7 +195,8 @@ confirmed both the running EXE and loaded replacement loader came from the
 separate copy. The new run logged successful local startup and construction,
 with no unsupported-export exit. No game-owned TCP/UDP endpoints appeared in
 that snapshot, but no Login entered event or client UDP request reached our
-server either. Thus the SDK readiness trigger remains a blocker. An earlier
+server either. That baseline observation preceded the successful opt-in bridge
+test described above. An earlier
 reported main menu belonged to the original installation and is not counted
 as evidence for this prototype.
 

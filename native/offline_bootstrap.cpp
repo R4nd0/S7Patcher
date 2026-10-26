@@ -5,8 +5,10 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <vector>
 #include "offline_bootstrap.h"
 #include "runtime_config.h"
+#include "local_connect_policy.h"
 
 #pragma comment(lib, "bcrypt.lib")
 #pragma comment(lib, "crypt32.lib")
@@ -23,19 +25,24 @@ const unsigned char ExpectedHash[32] = {
 enum Error : LONG {
     None, RepeatedInitialization, InvalidConfiguration, InvalidPublicKey,
     WrongExecutable, ChangedCallsite, PatchFailure, NativeNetworkUnavailable,
-    NativeFacadeMismatch, NativeReentrancy, RollbackFailure
+    NativeFacadeMismatch, NativeReentrancy, RollbackFailure, NativeGameObjectMismatch
 };
 volatile LONG initialization = 0;
 volatile LONG error_code = None;
 volatile LONG login_active = 0;
 uintptr_t image_base = 0;
 unsigned short udp_port = 0;
+bool local_connect_probe = false;
+DWORD bootstrap_thread = 0;
+bool pump_active = false;
+bool natural_updates_seen = false;
 char public_key[97] = {};
 char local_ticket[257] = {};
 
 void SetError(Error error) { InterlockedExchange(&error_code, error); }
 __declspec(noreturn) void Stop(Error error) {
     SetError(error);
+    ReportLocalStatus(GetOfflineBootstrapError());
     TerminateProcess(GetCurrentProcess(), FatalExitCode);
     __fastfail(7);
 }
@@ -114,11 +121,95 @@ struct Patch {
     uintptr_t va;
     unsigned char original[5];
     const void* replacement;
+    bool pointer_slot = false;
 };
+
+struct NativeResult { int32_t code; uint32_t detail; };
+using GameLogin = void (__thiscall*)(void*);
+unsigned char* CheckedGame(void* game) {
+    auto* bytes = static_cast<unsigned char*>(game);
+    if (!bytes || *reinterpret_cast<uintptr_t*>(bytes) != image_base + 0x109C9D8 - PreferredBase)
+        Stop(NativeGameObjectMismatch);
+    void* facade = *reinterpret_cast<void**>(bytes + 0x54);
+    if (!facade || *reinterpret_cast<void**>(static_cast<unsigned char*>(facade) + 0x0c))
+        Stop(NativeFacadeMismatch);
+    return bytes;
+}
+NativeResult* __fastcall ConnectLocalGame(void* self, void*, NativeResult* output) {
+    auto* game = CheckedGame(self);
+    if (!output) Stop(NativeGameObjectMismatch);
+    const bool ready = initialization == 2 && local_connect_probe && udp_port != 0;
+    output->code = BeginLocalConnect(ready, game[0x38], game[0x48], [&]() {
+        ReportLocalStatus("local-connect-job-dispatched");
+        // The original login action allocates the genuine CallContext, retains
+        // callbacks, and reaches our existing LoginLocalFacade hook. Never set
+        // the native connected flag or fabricate a completed SDK session.
+        Native<GameLogin>(0xD49B80)(self);
+    });
+    output->detail = 0;
+    return output;
+}
+NativeResult* __fastcall RequestLocalGame(void* self, void*, NativeResult* output) {
+    if (!self || !output) Stop(NativeGameObjectMismatch);
+    auto* owner = static_cast<unsigned char*>(self);
+    auto* game = CheckedGame(owner + 0x50);
+    NativeResult local{};
+    // C8EBE0 uses owner+78 (=game+28) for requested, owner+278 for its result.
+    const int32_t code = RequestLocalConnect(initialization == 2 && local_connect_probe, game[0x28], [&]() {
+        return ConnectLocalGame(game, nullptr, &local)->code;
+    });
+    auto* stored = reinterpret_cast<NativeResult*>(owner + 0x278);
+    stored->code = code; stored->detail = 0;
+    *output = *stored;
+    return output;
+}
+void __fastcall UpdateLocalGame(void* self, void*) {
+    // Preserve the original update/callback delivery before requesting a local
+    // connection. Readiness comes from real native objects and our config,
+    // not UbiServices. The requested/pending fields prevent duplicate jobs.
+    if (!pump_active) natural_updates_seen = true;
+    static bool entered = false;
+    static bool returned = false;
+    static bool wrong_object = false;
+    static bool no_facade = false;
+    static bool no_network = false;
+    static bool already_requested = false;
+    if (!entered) { entered = true; ReportLocalStatus("local-connect-update-entered"); }
+    Native<GameLogin>(0xC956C0)(self);
+    if (!returned) { returned = true; ReportLocalStatus("local-connect-update-returned"); }
+    if (initialization != 2 || !local_connect_probe || !self) return;
+    auto* game = static_cast<unsigned char*>(self) + 0x50;
+    if (*reinterpret_cast<uintptr_t*>(game) != image_base + 0x109C9D8 - PreferredBase) {
+        if (!wrong_object) { wrong_object = true; ReportLocalStatus("local-connect-update-object-mismatch"); }
+        return;
+    }
+    if (!*reinterpret_cast<void**>(game + 0x54)) {
+        if (!no_facade) { no_facade = true; ReportLocalStatus("local-connect-update-awaiting-facade"); }
+        return;
+    }
+    if (!Native<NetworkGetter>(0xE82240)()) {
+        if (!no_network) { no_network = true; ReportLocalStatus("local-connect-update-awaiting-network"); }
+        return;
+    }
+    if (game[0x28] && !already_requested) {
+        already_requested = true; ReportLocalStatus("local-connect-update-already-requested");
+    }
+    if (!game[0x28]) { NativeResult result{}; RequestLocalGame(self, nullptr, &result); }
+}
 const Patch Patches[] = {
     {0xD3C62D, {0xe8,0x1e,0x6f,0x10,0x00}, reinterpret_cast<const void*>(&ConstructLocalFacade)},
     {0xD4A083, {0xe8,0xc8,0x94,0x0f,0x00}, reinterpret_cast<const void*>(&ConstructLocalFacade)},
     {0xD49CFD, {0xe8,0x8e,0x9f,0x0f,0x00}, reinterpret_cast<const void*>(&LoginLocalFacade)}
+};
+// Explicit opt-in substitutes complete connect operations at known callers,
+// instead of making a UbiServices session-readiness predicate return true.
+const Patch ConnectPatches[] = {
+    {0xC92127, {0xe8,0xb4,0xca,0xff,0xff}, reinterpret_cast<const void*>(&RequestLocalGame)},
+    {0xC93A31, {0xe8,0xaa,0xb1,0xff,0xff}, reinterpret_cast<const void*>(&RequestLocalGame)},
+    {0xC9511A, {0xe8,0xc1,0x9a,0xff,0xff}, reinterpret_cast<const void*>(&RequestLocalGame)},
+    {0xC956F5, {0xe8,0xe6,0x94,0xff,0xff}, reinterpret_cast<const void*>(&RequestLocalGame)},
+    {0xC958CF, {0xe8,0x5c,0xa9,0xff,0xff}, reinterpret_cast<const void*>(&ConnectLocalGame)},
+    {0x1091B08, {0xc0,0x56,0xc9,0x00,0x00}, reinterpret_cast<const void*>(&UpdateLocalGame), true}
 };
 
 bool ValidateKey(const char* encoded) {
@@ -187,33 +278,49 @@ unsigned char* PatchAddress(const Patch& patch) {
     return reinterpret_cast<unsigned char*>(image_base + patch.va - PreferredBase);
 }
 
+uint32_t OriginalPointer(const Patch& patch) {
+    uint32_t preferred = 0;
+    memcpy(&preferred, patch.original, sizeof(preferred));
+    return static_cast<uint32_t>(image_base + preferred - PreferredBase);
+}
+
 bool WritePatch(const Patch& patch, bool restore) {
     unsigned char* at = PatchAddress(patch);
     DWORD old_protection = 0;
-    if (!VirtualProtect(at, 5, PAGE_EXECUTE_READWRITE, &old_protection)) return false;
+    const size_t length = patch.pointer_slot ? 4 : 5;
+    if (!VirtualProtect(at, length, patch.pointer_slot ? PAGE_READWRITE : PAGE_EXECUTE_READWRITE, &old_protection)) return false;
     unsigned char bytes[5] = {0xe8,0,0,0,0};
     uint32_t relative = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(patch.replacement)) -
                         static_cast<uint32_t>(reinterpret_cast<uintptr_t>(at) + 5);
     memcpy(bytes + 1, &relative, sizeof(relative));
-    memcpy(at, restore ? patch.original : bytes, sizeof(bytes));
-    bool flushed = FlushInstructionCache(GetCurrentProcess(), at, sizeof(bytes)) != FALSE;
+    if (patch.pointer_slot) {
+        uint32_t value = restore ? OriginalPointer(patch) : static_cast<uint32_t>(reinterpret_cast<uintptr_t>(patch.replacement));
+        memcpy(at, &value, sizeof(value));
+    } else memcpy(at, restore ? patch.original : bytes, sizeof(bytes));
+    bool flushed = FlushInstructionCache(GetCurrentProcess(), at, length) != FALSE;
     DWORD ignored = 0;
-    if (!VirtualProtect(at, 5, old_protection, &ignored)) Stop(RollbackFailure);
+    if (!VirtualProtect(at, length, old_protection, &ignored)) Stop(RollbackFailure);
     return flushed;
 }
 
 bool Install() {
-    for (const auto& patch : Patches) {
-        if (memcmp(PatchAddress(patch), patch.original, 5) != 0) {
+    std::vector<const Patch*> selected;
+    for (const auto& patch : Patches) selected.push_back(&patch);
+    if (local_connect_probe) for (const auto& patch : ConnectPatches) selected.push_back(&patch);
+    for (const auto* patch : selected) {
+        const bool matches = patch->pointer_slot
+            ? *reinterpret_cast<uint32_t*>(PatchAddress(*patch)) == OriginalPointer(*patch)
+            : memcmp(PatchAddress(*patch), patch->original, 5) == 0;
+        if (!matches) {
             SetError(ChangedCallsite); return false;
         }
     }
     size_t modified = 0;
-    for (; modified < _countof(Patches); ++modified) {
-        if (!WritePatch(Patches[modified], false)) {
+    for (; modified < selected.size(); ++modified) {
+        if (!WritePatch(*selected[modified], false)) {
             // The failing write may have changed bytes before cache flush failed.
             for (size_t i = 0; i <= modified; ++i)
-                if (!WritePatch(Patches[i], true)) Stop(RollbackFailure);
+                if (!WritePatch(*selected[i], true)) Stop(RollbackFailure);
             SetError(PatchFailure); return false;
         }
     }
@@ -238,6 +345,8 @@ bool InitializeOfflineBootstrap(const OfflineBootstrapConfig& config) {
     memcpy(public_key, config.public_key_base64, key_length + 1);
     memcpy(local_ticket, config.local_ticket, ticket_length + 1);
     udp_port = config.udp_port;
+    local_connect_probe = config.local_connect_probe;
+    bootstrap_thread = GetCurrentThreadId();
     if (!Install()) {
         SecureZeroMemory(local_ticket, sizeof(local_ticket));
         return false;
@@ -245,6 +354,35 @@ bool InitializeOfflineBootstrap(const OfflineBootstrapConfig& config) {
     InterlockedExchange(&initialization, 2);
     SetError(None);
     return true;
+}
+
+void PumpOfflineBootstrap() {
+    // Startup and platform updates belong to the same game thread. Do not
+    // access native objects from other threads or during recursive callbacks.
+    if (initialization != 2 || !local_connect_probe ||
+        GetCurrentThreadId() != bootstrap_thread || pump_active || natural_updates_seen) return;
+    struct ActiveScope {
+        ActiveScope() { pump_active = true; }
+        ~ActiveScope() { pump_active = false; }
+    } active_scope;
+    // ED5B6F constructs C8ABF0; ED5BA5 stores it at Network+0xA18.
+    // Re-read ownership each tick instead of caching an object past destruction.
+    auto* network = *Native<unsigned char**>(0x1379E14);
+    if (!network) return;
+    auto* owner = *reinterpret_cast<unsigned char**>(network + 0xa18);
+    if (!owner || *reinterpret_cast<uintptr_t*>(owner) != image_base + 0x10919BC - PreferredBase) return;
+    auto* game = owner + 0x50;
+    if (*reinterpret_cast<uintptr_t*>(game) != image_base + 0x109C9D8 - PreferredBase ||
+        !*reinterpret_cast<void**>(game + 0x54)) return;
+    // Original C956C0 dereferences these after construction. A published but
+    // partially initialized owner must wait for the next platform update.
+    if (!*reinterpret_cast<void**>(owner + 0x100) ||
+        !*reinterpret_cast<void**>(owner + 0x104) ||
+        !*reinterpret_cast<void**>(owner + 0x110) ||
+        !Native<NetworkGetter>(0xE82240)()) return;
+    static bool reported = false;
+    if (!reported) { reported = true; ReportLocalStatus("local-connect-platform-pump-active"); }
+    UpdateLocalGame(owner, nullptr);
 }
 
 const char* GetOfflineBootstrapError() {
@@ -260,6 +398,7 @@ const char* GetOfflineBootstrapError() {
     case NativeFacadeMismatch: return "Offline bootstrap native facade does not match.";
     case NativeReentrancy: return "Offline bootstrap native login is already active.";
     case RollbackFailure: return "Offline bootstrap rollback failed.";
+    case NativeGameObjectMismatch: return "Offline bootstrap game object does not match.";
     default: return "Offline bootstrap failed.";
     }
 }

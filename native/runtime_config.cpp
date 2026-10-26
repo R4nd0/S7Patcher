@@ -51,7 +51,8 @@ bool ReadConfiguration(std::wstring& root, std::map<std::string, std::string>& f
         if (equals == std::string::npos || equals == 0 || equals + 1 == line.size()) return false;
         if (!fields.emplace(line.substr(0, equals), line.substr(equals + 1)).second) return false;
     }
-    return fields.size() == 7 && fields["format"] == "s7-local-runtime-v1" && fields["address"] == "127.0.0.1"
+    bool valid_probe = fields.count("connect_probe") == 0 || fields.at("connect_probe") == "0" || fields.at("connect_probe") == "1";
+    return valid_probe && fields.size() == 7 + fields.count("connect_probe") && fields["format"] == "s7-local-runtime-v1" && fields["address"] == "127.0.0.1"
         && fields.count("udp_port") && fields.count("public_key") && fields.count("profile_id")
         && fields.count("display_name") && fields.count("ticket");
 }
@@ -92,9 +93,10 @@ bool InitializeOfflineBootstrap() {
         if (!InitializeLocalPlatform((root + L"\\saves").c_str(), fields.at("profile_id").c_str(),
             fields.at("display_name").c_str(), fields.at("ticket").c_str())) return false;
         OfflineBootstrapConfig config{static_cast<unsigned short>(value), fields.at("public_key").c_str(), fields.at("ticket").c_str()};
+        config.local_connect_probe = fields.count("connect_probe") && fields.at("connect_probe") == "1";
         if (!InitializeOfflineBootstrap(config)) { ReportLocalStatus(GetOfflineBootstrapError()); return false; }
         initialized = true;
-        ReportLocalStatus("native-bootstrap-installed-login-trigger-unverified");
+        ReportLocalStatus(config.local_connect_probe ? "native-bootstrap-installed-local-connect-probe" : "native-bootstrap-installed-login-trigger-unverified");
         return true;
     } catch (...) { return false; }
 }

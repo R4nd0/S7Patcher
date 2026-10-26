@@ -12,6 +12,7 @@
 
 bool InstallOfflineNetworkGuard();
 bool InitializeOfflineBootstrap();
+void PumpOfflineBootstrap();
 
 namespace {
 constexpr uint32_t ExpectedApplication = 11788;
@@ -78,8 +79,11 @@ extern "C" void __cdecl UPLAY_Quit() {
 }
 
 extern "C" int __cdecl UPLAY_Update() {
-    StateLock lock;
-    return started ? 1 : 0;
+    { StateLock lock; if (!started) return 0; }
+    // Native callbacks may query this adapter again; never hold state_lock
+    // across the game-owned update. The bootstrap bounds thread/reentrancy.
+    PumpOfflineBootstrap();
+    return 1;
 }
 
 extern "C" int __cdecl UPLAY_GetNextEvent(void*) {

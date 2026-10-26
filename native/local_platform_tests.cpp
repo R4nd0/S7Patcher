@@ -12,8 +12,14 @@ static bool allow_guard = true;
 static bool allow_bootstrap = true;
 static int guard_calls = 0;
 static int bootstrap_calls = 0;
+static int pump_calls = 0;
 bool InstallOfflineNetworkGuard() { ++guard_calls; return allow_guard; }
 bool InitializeOfflineBootstrap() { ++bootstrap_calls; return allow_bootstrap; }
+void PumpOfflineBootstrap() {
+    ++pump_calls;
+    // This acquires the platform lock and would deadlock if Update retained it.
+    UPLAY_FRIENDS_Init(0);
+}
 void ReportLocalStatus(const char*) {}
 
 static int checks = 0;
@@ -38,6 +44,7 @@ int wmain(int argc, wchar_t** argv) {
     constexpr char Ticket[] = "local-s7:5b093c02-3bbc-4669-91b0-1f5303e40773";
     unsigned char operation[16]{};
     Check(UPLAY_Update() == 0, "update before start");
+    Check(pump_calls == 0, "no native pump before startup");
     Check(UPLAY_Start(1, 0) == 1, "wrong app rejected");
     Check(UPLAY_Start(11788, 1) == 1, "wrong flags rejected");
     Check(guard_calls == 0 && bootstrap_calls == 0, "invalid start has no bootstrap");
@@ -55,6 +62,7 @@ int wmain(int argc, wchar_t** argv) {
     Check(InitializeLocalPlatform(root, Id, "LocalPlayer", Ticket), "configuration idempotent");
     Check(!InitializeLocalPlatform(root, Id, "ChangedName", Ticket), "configuration change rejected");
     Check(UPLAY_Start(11788, 0) == 0 && UPLAY_Update() == 1, "valid startup is zero");
+    Check(pump_calls == 1, "native pump runs outside platform lock");
     int old_calls = bootstrap_calls;
     Check(UPLAY_Start(11788, 0) == 0 && bootstrap_calls == old_calls, "start idempotent");
     Check(UPLAY_USER_IsInOfflineMode() == 1, "local offline capability");
