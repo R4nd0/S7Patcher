@@ -92,6 +92,12 @@ namespace S7Patcher.Source
             reason = "local-join-storm-no-owned-endpoint";
             if (owned.Count == 0) return false;
             projected = text[..addressesStart] + string.Join(',', owned) + text[(addressesStart + addressesLength)..];
+#if S7_LOCAL_PAIR_LAB
+            // Fixed categories only: no endpoint, profile, descriptor or payload is logged.
+            string slot = registered.Address.Equals(IPAddress.Parse("127.0.0.2")) ? "a"
+                : registered.Address.Equals(IPAddress.Parse("127.0.0.3")) ? "b" : "other";
+            Console.Error.WriteLine("{\"event\":\"local-pair-host-route-projected\",\"slot\":\"" + slot + "\"}");
+#endif
             reason = "local-join-storm-route-owned";
             return true;
         }

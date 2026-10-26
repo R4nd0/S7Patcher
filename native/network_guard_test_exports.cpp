@@ -3,6 +3,8 @@
 #include "network_guard.h"
 #include "local_pair_lab.h"
 #ifdef S7_LOCAL_PAIR_LAB
+// Deliberately disturb Winsock's error slot: diagnostics must restore it.
+void ReportLocalStatus(const char*) { WSASetLastError(12345); }
 extern "C" __declspec(dllexport) void __cdecl S7TestLabAddress(unsigned long address) {
     local_pair_bind.store(address);
 }

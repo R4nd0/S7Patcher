@@ -2,12 +2,50 @@
 // No game file is loaded and no native game function is ever called.
 #include "offline_bootstrap.cpp"
 #include <cstdio>
-void ReportLocalStatus(const char*) {}
+void ReportLocalStatus(const char*) { SetLastError(12345); }
 namespace {
+#ifdef S7_LOCAL_PAIR_LAB
+uintptr_t lab_join_arguments[6]{};
+int lab_join_code = 1;
+const char* lab_rejection_literal = nullptr;
+void* __fastcall FakeLabDiagnosticCtor(void* output, void*, const char* text) {
+    lab_rejection_literal = text; SetLastError(6789); return output;
+}
+NativeResult* __stdcall FakeLabJoinRequest(NativeResult* result, void* peer, void* session,
+    void* metadata, void* job, void* callback, unsigned int flags) {
+    lab_join_arguments[0] = reinterpret_cast<uintptr_t>(peer);
+    lab_join_arguments[1] = reinterpret_cast<uintptr_t>(session);
+    lab_join_arguments[2] = reinterpret_cast<uintptr_t>(metadata);
+    lab_join_arguments[3] = reinterpret_cast<uintptr_t>(job);
+    lab_join_arguments[4] = reinterpret_cast<uintptr_t>(callback);
+    lab_join_arguments[5] = flags;
+    result->code = lab_join_code; result->detail = 123;
+    SetLastError(6789);
+    return result;
+}
+#endif
 std::vector<char> pump_trace;
 unsigned char* pump_network = nullptr;
 unsigned char* pump_owner = nullptr;
 int pump_mode = 0;
+#ifdef S7_LOCAL_PAIR_LAB
+NativeResult* __cdecl FakeEchoUpdate(NativeResult* result, unsigned int phase, int timeout) {
+    pump_trace.push_back(phase == 3 && timeout == -1 ? 'E' : '!');
+    if (pump_active) PumpOfflineBootstrap();
+    if (pump_mode == 13) *Native<unsigned char**>(0x1379E14) = nullptr;
+    if (pump_mode == 14) *reinterpret_cast<void**>(pump_network + 0x2c) = nullptr;
+    result->code = 2; result->detail = 78; return result;
+}
+void __fastcall FakeManagerUpdate(void*, void*) {
+    pump_trace.push_back('J');
+    PumpOfflineBootstrap();
+    if (pump_mode == 11) *Native<unsigned char**>(0x1379E14) = nullptr;
+    if (pump_mode == 12) *reinterpret_cast<void**>(pump_owner + 0x100) = pump_owner;
+}
+void TickFakeManager() {
+    UpdateLabManager(*reinterpret_cast<void**>(pump_owner + 0x100), nullptr);
+}
+#endif
 int network_getter_calls = 0;
 int search_space_calls = 0;
 int search_space_mode = 0;
@@ -35,6 +73,10 @@ void __fastcall FakeMasterUpdate(void*, void*) {
     if (pump_mode == 2) *Native<unsigned char**>(0x1379E14) = nullptr;
     if (pump_mode == 3) *reinterpret_cast<void**>(pump_network + 0xa18) = nullptr;
     if (pump_mode == 4) *reinterpret_cast<void**>(pump_network + 0x2c) = nullptr;
+#ifdef S7_LOCAL_PAIR_LAB
+    if (pump_mode == 9) TickFakeManager();
+    if (pump_mode == 15) { NativeResult result{}; UpdateLabEcho(&result, 3, -1); }
+#endif
 }
 NativeResult* __fastcall FakeCoreUpdate(void*, void*, NativeResult* result, unsigned int phase) {
     pump_trace.push_back(phase == 3 ? 'C' : '!');
@@ -42,6 +84,9 @@ NativeResult* __fastcall FakeCoreUpdate(void*, void*, NativeResult* result, unsi
     if (pump_mode == 5) *Native<unsigned char**>(0x1379E14) = nullptr;
     if (pump_mode == 6) *reinterpret_cast<void**>(pump_network + 0xa18) = nullptr;
     if (pump_mode == 7) *reinterpret_cast<void**>(pump_network + 0x2c) = nullptr;
+#ifdef S7_LOCAL_PAIR_LAB
+    if (pump_mode == 10) TickFakeManager();
+#endif
     result->code = 1; result->detail = 0;
     return result;
 }
@@ -58,7 +103,7 @@ bool FakeJump(uintptr_t address, const void* target) {
 }
 int main() {
     int failures = 0, checks = 0;
-    auto check = [&](bool result) { ++checks; if (!result) ++failures; };
+    auto check = [&](bool result) { ++checks; if (!result) { ++failures; std::printf("Failed check %d\n", checks); } };
     const char* lab_digests[] = {
         "722cb6e616851f20fae90b29c8af65df8aa94f353b0739e44c24721cfb574e13",
         "78c7a4b87e2f8dceb95eaaac9ab8cdd559ce482fc800129345e952b711974a8a"};
@@ -87,6 +132,27 @@ int main() {
     auto* memory = static_cast<unsigned char*>(VirtualAlloc(nullptr, ExpectedImageSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
     if (!memory) return 2;
     image_base = reinterpret_cast<uintptr_t>(memory);
+#ifdef S7_LOCAL_PAIR_LAB
+    check(FakeJump(0xD49B10, reinterpret_cast<const void*>(&FakeLabJoinRequest)));
+    check(FakeJump(0x6576D0, reinterpret_cast<const void*>(&FakeLabDiagnosticCtor)));
+    for (uintptr_t literal : {0x108DAD0u, 0x108DB10u, 0x108DC4Cu, 0x108DC78u, 0x108DCA4u, 0x108DCDCu, 0x108DD04u}) {
+        unsigned char owned_output[32]{};
+        auto* text = Native<const char*>(literal);
+        check(ObserveLabSessionRejection(owned_output, nullptr, text) == owned_output
+            && lab_rejection_literal == text && owned_output[0] == 0 && GetLastError() == 6789);
+    }
+    for (int result_code : {1, 0, -1000000, -999985, -999977, -999920, -123}) {
+        lab_join_code = result_code; NativeResult result{};
+        check(ObserveLabJoinRequest(&result, reinterpret_cast<void*>(11), reinterpret_cast<void*>(22),
+            reinterpret_cast<void*>(33), reinterpret_cast<void*>(44), reinterpret_cast<void*>(55), 66) == &result);
+        check(result.code == result_code && result.detail == 123 && GetLastError() == 6789);
+        SetLastError(9012);
+        check(ObserveLabJoinCompletion(&result, nullptr) == result_code
+            && result.code == result_code && result.detail == 123 && GetLastError() == 9012);
+        check(lab_join_arguments[0] == 11 && lab_join_arguments[1] == 22 && lab_join_arguments[2] == 33
+            && lab_join_arguments[3] == 44 && lab_join_arguments[4] == 55 && lab_join_arguments[5] == 66);
+    }
+#endif
     local_connect_probe = true;
     std::vector<const Patch*> selected;
     for (const auto& patch : Patches) selected.push_back(&patch);
@@ -365,6 +431,65 @@ int main() {
     *reinterpret_cast<void**>(network + 0xa18) = owner;
     *reinterpret_cast<void**>(network + 0x2c) = core;
     pump_mode = 0;
+#ifdef S7_LOCAL_PAIR_LAB
+    alignas(4) unsigned char manager[4]{};
+    *reinterpret_cast<uintptr_t*>(manager) = image_base + 0x10934EC - PreferredBase;
+    check(FakeJump(0xCA6380, reinterpret_cast<const void*>(&FakeManagerUpdate)));
+    for (int mode : {0, 9, 10, 11, 12}) {
+        *Native<unsigned char**>(0x1379E14) = network;
+        *reinterpret_cast<void**>(owner + 0x100) = manager;
+        pump_mode = mode; pump_trace.clear();
+        auto before = manager_update_count;
+        PumpOfflineBootstrap();
+        check(trace_is(mode == 9 ? "MJCO" : mode == 10 || mode == 0 ? "MCJO" : "MCJ"));
+        check(manager_update_count == before + 1 && !pump_active && !natural_updates_seen);
+    }
+    *Native<unsigned char**>(0x1379E14) = network;
+    *reinterpret_cast<void**>(owner + 0x100) = manager;
+    check(FakeJump(0xBAF5D0, reinterpret_cast<const void*>(&FakeEchoUpdate)));
+    NativeResult echo_result{};
+    auto echo_before = echo_update_count;
+    check(UpdateLabEcho(&echo_result, 3, -1) == &echo_result && echo_result.code == 2 && echo_result.detail == 78);
+    check(echo_update_count == echo_before + 1);
+    network[0x5c + 0x4c7] = 1;
+    *reinterpret_cast<unsigned int*>(network + 0x5c + 0x400) = 1;
+    for (int mode : {0, 13, 14, 15}) {
+        *Native<unsigned char**>(0x1379E14) = network;
+        *reinterpret_cast<void**>(network + 0x2c) = core;
+        pump_mode = mode; pump_trace.clear(); echo_before = echo_update_count;
+        PumpOfflineBootstrap();
+        check(trace_is(mode == 0 ? "MCEJO" : mode == 15 ? "MECJO" : "MCE"));
+        check(echo_update_count == echo_before + 1 && !pump_active);
+    }
+    *Native<unsigned char**>(0x1379E14) = network;
+    *reinterpret_cast<void**>(network + 0x2c) = core;
+    pump_mode = 0; pump_trace.clear();
+    *reinterpret_cast<unsigned int*>(network + 0x5c + 0x400) = 2;
+    PumpOfflineBootstrap(); check(trace_is("MCJO"));
+    network[0x5c + 0x4c7] = 0;
+    *reinterpret_cast<unsigned int*>(network + 0x5c + 0x400) = 1;
+    pump_mode = 0; pump_trace.clear();
+    UpdateLocalJoinWait(network, nullptr); check(trace_is("MCJO") && !pump_active);
+    pump_mode = 11; pump_trace.clear();
+    UpdateLocalJoinWait(network, nullptr); check(trace_is("MCJ") && !pump_active);
+    *Native<unsigned char**>(0x1379E14) = network;
+    pump_mode = 0; local_connect_probe = false; pump_trace.clear();
+    UpdateLocalJoinWait(network, nullptr); check(trace_is("M"));
+    local_connect_probe = true; natural_updates_seen = true; pump_trace.clear();
+    UpdateLocalJoinWait(network, nullptr); check(trace_is("M"));
+    natural_updates_seen = false;
+    bootstrap_thread = 0; pump_trace.clear();
+    UpdateLocalJoinWait(network, nullptr); check(trace_is("M"));
+    pump_trace.clear();
+    auto manager_before = manager_update_count;
+    PumpOfflineBootstrap(); check(trace_is("") && manager_update_count == manager_before);
+    TickFakeManager(); check(trace_is("J") && manager_update_count == manager_before);
+    bootstrap_thread = GetCurrentThreadId();
+    *reinterpret_cast<void**>(owner + 0x100) = owner;
+    pump_mode = 0; pump_trace.clear();
+    PumpOfflineBootstrap(); check(trace_is("MCO"));
+    pump_trace.clear();
+#endif
     pump_trace.clear(); natural_updates_seen = true;
     PumpOfflineBootstrap(); check(trace_is(""));
     natural_updates_seen = false; bootstrap_thread = 0;

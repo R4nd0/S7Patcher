@@ -41,6 +41,10 @@ DWORD bootstrap_thread = 0;
 bool pump_active = false;
 bool natural_updates_seen = false;
 unsigned int owner_update_count = 0;
+#ifdef S7_LOCAL_PAIR_LAB
+unsigned int manager_update_count = 0;
+unsigned int echo_update_count = 0;
+#endif
 char public_key[97] = {};
 char local_ticket[257] = {};
 
@@ -386,6 +390,107 @@ NativeSmallString* __fastcall GetLocalSearchSandbox(void* self, void*, NativeSma
     if (!reported) { reported = true; ReportLocalStatus("local-session-search-sandbox-ready"); }
     return output;
 }
+#ifdef S7_LOCAL_PAIR_LAB
+NativeResult* __cdecl UpdateLabEcho(NativeResult* result, unsigned int phase, int timeout) {
+    if (GetCurrentThreadId() == bootstrap_thread) ++echo_update_count;
+    using Original = NativeResult* (__cdecl*)(NativeResult*, unsigned int, int);
+    return Native<Original>(0xBAF5D0)(result, phase, timeout);
+}
+void __fastcall UpdateLocalJoinWait(void* self, void*) {
+    // ED68C4 runs inside the blocking Join Session loop. That loop does not
+    // return to UPLAY_Update, so the ordinary platform bridge cannot deliver
+    // the missing core/manager work while the join is waiting.
+    if (initialization == 2 && local_connect_probe && !pump_active && !natural_updates_seen &&
+        GetCurrentThreadId() == bootstrap_thread && self == *Native<void**>(0x1379E14) &&
+        LocalUpdateOwner(static_cast<unsigned char*>(self)) &&
+        LocalUpdateCore(static_cast<unsigned char*>(self)) && Native<NetworkGetter>(0xE82240)()) {
+        static bool reported = false;
+        if (!reported) { reported = true; ReportLocalStatus("lab-native-join-wait-pump-active"); }
+        PumpOfflineBootstrap();
+    } else {
+        Native<GameLogin>(0xED3BA0)(self);
+    }
+}
+unsigned char* LocalLabManager(unsigned char* network) {
+    auto* owner = LocalUpdateOwner(network);
+    if (!owner) return nullptr;
+    auto* manager = *reinterpret_cast<unsigned char**>(owner + 0x100);
+    return manager && *reinterpret_cast<uintptr_t*>(manager) == image_base + 0x10934EC - PreferredBase
+        ? manager : nullptr;
+}
+void __fastcall UpdateLabManager(void* self, void*) {
+    // Observe the real virtual update, preserving its original thiscall.
+    // ED7A40/ED7A47 explicitly dispatch this manager after CBC710 phase 3.
+    if (GetCurrentThreadId() == bootstrap_thread) ++manager_update_count;
+    Native<GameLogin>(0xCA6380)(self);
+}
+void* __fastcall ObserveLabSessionRejection(void* output, void*, const char* text) {
+    // Only fixed, hash-guarded native diagnostic branches reach this wrapper.
+    // Compare literal addresses, never inspect a peer/profile identifier or text.
+    const char* label = "lab-native-session-rejection-unclassified";
+    if (text == Native<const char*>(0x108DAD0)) label = "lab-native-session-reference-pool-exhausted";
+    if (text == Native<const char*>(0x108DB10)) label = "lab-native-session-create-failed";
+    if (text == Native<const char*>(0x108DC4C)) label = "lab-native-session-host-migration";
+    if (text == Native<const char*>(0x108DC78)) label = "lab-native-session-already-joined";
+    if (text == Native<const char*>(0x108DCA4)) label = "lab-native-session-self-join-rejected";
+    if (text == Native<const char*>(0x108DCDC)) label = "lab-native-session-empty-peer-rejected";
+    if (text == Native<const char*>(0x108DD04)) label = "lab-native-session-host-descriptor-rejected";
+    using Original = void* (__thiscall*)(void*, const char*);
+    auto* returned = Native<Original>(0x6576D0)(output, text);
+    DWORD error = GetLastError(); ReportLocalStatus(label); SetLastError(error);
+    return returned;
+}
+int __fastcall ObserveLabJoinCompletion(const NativeResult* result, void*) {
+    // The guarded original call at D3F928 targets 4DA460: MOV EAX,[ECX]; RET.
+    // Observe only that same result code; no object identities are inspected.
+    const int code = result->code;
+    const DWORD error = GetLastError();
+    const char* label = "lab-native-join-completion-other-failure";
+    if (code > 0) label = "lab-native-join-completion-succeeded";
+    else switch (code) {
+    case 0: label = "lab-native-join-completion-zero"; break;
+    case -1000000: label = "lab-native-join-completion-failed"; break;
+    case -999985: label = "lab-native-join-completion-invalid-guid"; break;
+    case -999977: label = "lab-native-join-completion-inappropriate-state"; break;
+    case -999930: label = "lab-native-join-completion-session-request-refused"; break;
+    case -999925: label = "lab-native-join-completion-invalid-session"; break;
+    case -999920: label = "lab-native-join-completion-session-exists"; break;
+    case -999912: label = "lab-native-join-completion-link-reach-failed"; break;
+    }
+    ReportLocalStatus(label); SetLastError(error); return code;
+}
+// D49B10 does not consume ECX and returns RET 1C: seven stack arguments.
+// D47803 leaves the trailing zero on the stack across BA4750; the six following
+// pushes form the rest. Observe only the real caller's result, preserving all
+// arguments, return pointer and native failure/success behavior.
+NativeResult* __stdcall ObserveLabJoinRequest(NativeResult* result, void* peer, void* session,
+    void* metadata, void* job, void* callback, unsigned int flags) {
+    using Original = NativeResult* (__stdcall*)(NativeResult*, void*, void*, void*, void*, void*, unsigned int);
+    auto* returned = Native<Original>(0xD49B10)(result, peer, session, metadata, job, callback, flags);
+    const DWORD error = GetLastError();
+    const char* label = "lab-native-join-result-unavailable";
+    if (result && returned == result) {
+        if (result->code > 0) label = "lab-native-join-request-accepted";
+        else switch (result->code) {
+        case 0: label = "lab-native-join-result-zero"; break;
+        case -1000000: label = "lab-native-join-request-failed"; break;
+        case -999985: label = "lab-native-join-invalid-guid"; break;
+        case -999982: label = "lab-native-join-invalid-parameter"; break;
+        case -999979: label = "lab-native-join-module-not-initialized"; break;
+        case -999978: label = "lab-native-join-module-not-started"; break;
+        case -999977: label = "lab-native-join-inappropriate-state"; break;
+        case -999937: label = "lab-native-join-invalid-session-reference"; break;
+        case -999930: label = "lab-native-join-session-request-refused"; break;
+        case -999925: label = "lab-native-join-invalid-session"; break;
+        case -999920: label = "lab-native-join-session-exists"; break;
+        default: label = "lab-native-join-other-failure"; break;
+        }
+    }
+    ReportLocalStatus(label);
+    SetLastError(error);
+    return returned;
+}
+#endif
 // ED0300 returns a *locked* boolean for a known privilege descriptor. Both
 // callers retain their original lookup/existence checks and cdecl cleanup.
 bool __cdecl LocalContentLocked(const void*) { return false; }
@@ -419,6 +524,20 @@ const Patch ConnectPatches[] = {
     {0xED630B, {0xe8,0x60,0x0f,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalSessionCreate)},
     {0xED673B, {0xe8,0x30,0x0b,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalSessionJoin)},
     {0xC8DCC5, {0xe8,0x86,0x62,0x0b,0x00}, reinterpret_cast<const void*>(&GetLocalSearchSandbox)},
+#ifdef S7_LOCAL_PAIR_LAB
+    {0xC98023, {0xe8,0xa8,0x75,0xf1,0xff}, reinterpret_cast<const void*>(&UpdateLabEcho)},
+    {0xED68C4, {0xe8,0xd7,0xd2,0xff,0xff}, reinterpret_cast<const void*>(&UpdateLocalJoinWait)},
+    {0x1093638, {0x80,0x63,0xca,0x00,0x00}, reinterpret_cast<const void*>(&UpdateLabManager), true},
+    {0xD4781C, {0xe8,0xef,0x22,0x00,0x00}, reinterpret_cast<const void*>(&ObserveLabJoinRequest)},
+    {0xD3F928, {0xe8,0x33,0xab,0x79,0xff}, reinterpret_cast<const void*>(&ObserveLabJoinCompletion)},
+    {0xC241AB, {0xe8,0x20,0x35,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabSessionRejection)},
+    {0xC2426E, {0xe8,0x5d,0x34,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabSessionRejection)},
+    {0xC23C7B, {0xe8,0x50,0x3a,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabSessionRejection)},
+    {0xC23D05, {0xe8,0xc6,0x39,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabSessionRejection)},
+    {0xC23DD5, {0xe8,0xf6,0x38,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabSessionRejection)},
+    {0xC23E6F, {0xe8,0x5c,0x38,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabSessionRejection)},
+    {0xC23F37, {0xe8,0x94,0x37,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabSessionRejection)},
+#endif
     {0x1091B08, {0xc0,0x56,0xc9,0x00,0x00}, reinterpret_cast<const void*>(&UpdateLocalGame), true}
 };
 
@@ -615,6 +734,11 @@ void PumpOfflineBootstrap() {
     const unsigned int before = owner_update_count;
     auto* core = LocalUpdateCore(network);
     if (core) {
+#ifdef S7_LOCAL_PAIR_LAB
+        auto* manager = LocalLabManager(network);
+        const unsigned int manager_before = manager_update_count;
+        const unsigned int echo_before = echo_update_count;
+#endif
         static bool core_reported = false;
         if (!core_reported) { core_reported = true; ReportLocalStatus("local-network-core-pump-active"); }
         // Preserve ED7950's master-update then core-update ordering. These
@@ -627,6 +751,34 @@ void PumpOfflineBootstrap() {
         NativeResult result{};
         Native<CoreUpdate>(0xCBC710)(core, &result, 3);
         if (LocalUpdateCore(network) != core) return;
+#ifdef S7_LOCAL_PAIR_LAB
+        // The master/core may already have dispatched this virtual update.
+        // Supply only the omitted post-core tick, with ownership revalidated.
+        if (LocalUpdateOwner(network) != owner) return;
+        // C97FE0 omits the Echo dispatcher while master state is <= 1, even
+        // when its core is started. Local NAT readiness does not advance that
+        // state. BAF5D0 independently checks the real Echo SDK initialization;
+        // deliver its queued native operations without changing readiness flags.
+        auto* master = network + 0x5c;
+        if (master[0x4c4] && master[0x4c7] &&
+            *reinterpret_cast<unsigned int*>(master + 0x400) <= 1 && echo_update_count == echo_before) {
+            static bool echo_reported = false;
+            if (!echo_reported) { echo_reported = true; ReportLocalStatus("lab-native-echo-pump-active"); }
+            NativeResult echo_result{};
+            UpdateLabEcho(&echo_result, 3, -1);
+            if (LocalUpdateOwner(network) != owner || LocalUpdateCore(network) != core) return;
+        }
+        if (manager && LocalLabManager(network) == manager && manager_update_count == manager_before) {
+            static bool manager_reported = false;
+            if (!manager_reported) {
+                manager_reported = true;
+                ReportLocalStatus("lab-native-manager-pump-active");
+            }
+            UpdateLabManager(manager, nullptr);
+            if (LocalUpdateOwner(network) != owner || LocalUpdateCore(network) != core ||
+                LocalLabManager(network) != manager) return;
+        }
+#endif
     }
     // A core callback may already have reached the patched owner update slot.
     // Only supply the old fallback tick when the core did not deliver one.

@@ -67,28 +67,59 @@ The real games created separate Profiles.xml and replay files there.
 4. Screen capture then failed repeatedly with `FrameArrived timed out`, including
    after reselecting windows and resetting the Computer Use session. No further
    UI input was attempted without a valid observation. Both owned games and
-   their service were stopped. The distinct-address join remains untested.
+   their service were stopped. The user subsequently authorized launching both
+   copies while they perform the lobby/join clicks; this is the current workflow.
+5. Distinct-address joining initially still sent game traffic to the physical
+   NIC. The lab catalogue now projects a copied snapshot through the same
+   registered-host route validation as JoinSession; the stored record remains
+   unchanged. Both real games subsequently logged sent/received UDP 3074
+   datagrams to/from the other slot. This is not proof of a completed handshake.
+6. D4781C/D49B10 returns a positive native request result, but the user still
+   sees Sitzungsfehler (0). The D3F928 completion and seven selected Session
+   rejection branches have not been observed; neither join report RPC arrives.
+7. A guarded post-core manager tick matching ED7A40/ED7A47 runs in both games,
+   but did not fix joining. Vtable 10934EC+14C targets CA6380, which drains
+   completed jobs and invokes callbacks. Count actual virtual updates to avoid
+   duplicates and revalidate owner/core/manager after callbacks.
+8. The blocking Join Session wait at ED68B9..ED68D3 calls only ED3BA0 and sleeps;
+   it does not return to UPLAY_Update. A lab-only replacement at ED68C4 supplies
+   the existing local pump, retaining startup/thread/ownership/reentrancy guards
+   and the original master fallback. The real wait bridge ran; joining still
+   failed with no completion observed.
+9. Bounded external status reads found master started=1, core tick enabled=1,
+   master state=1, four children and network phase policy=1 on both games.
+   C97FE0 calls BAF5D0 only when the master state exceeds 1. The new lab-only
+   fallback dispatches the same Echo phase 3 operation when that gate skips it;
+   BAF5D0 retains its own real SDK initialization check. It changes no readiness
+   flags or result. A guarded observer at C98023 prevents duplicate dispatch,
+   with owner/core revalidation after callbacks. The live result is pending.
+
+Diagnostic wrappers emit only fixed port/direction/result/branch categories,
+preserving original return values, arguments and error slots. They inspect no
+peer/profile identifier or packet body. D49B10 is stdcall with seven stack
+arguments (RET 1C); D3F928 calls the simple result getter 4DA460.
 
 A short attempt using the physical LAN address triggered a Windows firewall
 prompt. It was not acted upon; those owned processes were stopped and the
 laboratory remained loopback-only.
 
-The next real test is A hosting / B joining with distinct slot addresses, then
-the reverse direction. Read the bounded failure classification and subsequent
-RPCs, and inspect only guarded known structures if necessary. Do not guess a
+The next real test is the Echo fallback with distinct slot addresses, then the
+reverse direction after a successful join. Read fixed classifications and
+subsequent RPCs. Do not guess a
 success state or suppress the native failure. Membership completion, host
 notification, match start and synchronization remain unverified.
 
 ## Verification
 
-Laboratory build: 361 bootstrap checks (including both exact hashes, per-byte
-digest mutation rejection and slot selection); 69 network checks, including
+Laboratory build: 500 bootstrap checks (including both exact hashes, per-byte
+digest mutation rejection, native ABI/result preservation, pump order,
+duplicate suppression, reentrancy and teardown); 69 network checks, including
 same-port distinct-address binding, UDP transfer and automatic source binding;
-88 platform checks; 18 connection-state and 14 CPU checks. Service: 5,763 checks,
+88 platform checks; 18 connection-state and 14 CPU checks. Service: 5,776 checks,
 including actual-NIC projection, port preservation, both slot addresses,
 idempotence, invalid/nonlocal inputs and encrypted synthetic peers.
 
-Default build: 359 bootstrap, 61 network and 5,753 service checks independently
+Default build: 359 bootstrap, 61 network and 5,755 service checks independently
 verify that laboratory hashes and environment flags cannot enable the laboratory
 behavior. The real original also passes 13 read-only derivation/immutability
 checks. These tests and the two-process

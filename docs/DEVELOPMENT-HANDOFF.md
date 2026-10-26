@@ -24,7 +24,31 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
-### Current: autonomous two-client laboratory; native link failure reproduced
+### Current: two-client laboratory; Echo dispatch candidate under test
+
+The user now asks the agent to launch both instances while they click host/join.
+The lab catalogue route projection was missing: after applying the same
+registered-host projection to copied search snapshots, both real games send and
+receive UDP 3074 packets between their separate loopback addresses. Native
+D49B10 accepts the queued request, but joining still shows Sitzungsfehler (0).
+No D3F928 completion, selected Session rejection or join report RPC follows.
+
+Post-core CA6380 manager draining and an ED68C4 bridge inside the blocking Join
+Session wait were added and live-observed; neither resolved the failure. A
+bounded status read then confirmed master state=1, started/core-enabled=1 and
+four children on both clients. C97FE0 skips BAF5D0 Echo dispatch in that state.
+The current lab-only candidate supplies that phase 3 dispatch when skipped,
+retaining its native SDK initialization checks and readiness values. A guarded
+observer prevents duplicate calls; ownership is revalidated after callbacks.
+Its live result is pending. See LOCAL-PAIR-LAB.md for ABI, tests and details.
+
+Current lab build: work/native-pair-echo; service remains
+work/server-pair-catalogue-route. Both private lab manifests select this adapter.
+500 bootstrap checks, 69 network, 88 platform; lab service 5,776 checks.
+Default build: 359 bootstrap, 61 network, 5,755 service checks. No successful
+native membership, match start, reverse hosting or sync is established.
+
+### Previous: autonomous two-client laboratory; native link failure reproduced
 
 The user explicitly authorized operating this local computer. Two independent
 real game copies now exist under `rec/work/pair-A` and `pair-B`, with separate

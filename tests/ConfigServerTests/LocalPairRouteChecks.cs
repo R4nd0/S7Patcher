@@ -42,6 +42,24 @@ internal static class LocalPairRouteChecks
             Check(!LocalStormRoute.IsLabLoopbackProjection(null, address));
             Check(!LocalStormRoute.IsLabLoopbackProjection(IPAddress.Loopback, null));
             Check(!LocalStormRoute.IsLabLoopbackProjection(IPAddress.Loopback, IPAddress.Parse("192.0.2.1")));
+            foreach (string slot in new[] { "127.0.0.2", "127.0.0.3" })
+            {
+                using var host = RegisteredHostChecks.CreateRegistered(IPAddress.Parse(slot));
+                Check(host.TryCopyRegisteredPeer(out var hostPeer));
+                using (hostPeer)
+                using (var registry = new LocalSessionRegistry(catalogueProbe:true))
+                {
+                    object owner = new(), viewer = new();
+                    string original = LocalStormRouteChecks.Route(hostPeer.ConnectionId, address + ":3074");
+                    string expected = LocalStormRouteChecks.Route(hostPeer.ConnectionId, slot + ":3074");
+                    Check(registry.TryCreate(owner, host, LocalSessionCatalogueChecks.PublicBody(route:original), out _, out _));
+                    Check(LocalSessionCatalogueCodec.TrySearch(LocalSessionDisplayChecks.Search(), registry, viewer, out var response, out _));
+                    string returned = System.Text.Encoding.ASCII.GetString(response);
+                    Check(returned.Contains(expected, StringComparison.Ordinal) && !returned.Contains(original, StringComparison.Ordinal));
+                    Check(registry.TryCopyLiveSession(viewer, "invented-space"u8, 1, out var unchanged));
+                    using (unchanged) Check(System.Text.Encoding.ASCII.GetString(unchanged.Metadata.Creation.StationUrls) == original);
+                }
+            }
             Environment.SetEnvironmentVariable("S7_LOCAL_PAIR_ADDRESS", null);
             Check(!LocalStormRoute.TryProject(source, peer, out _, out _));
 #else

@@ -19,9 +19,9 @@ internal static class RegisteredHostChecks
         BinaryPrimitives.WriteUInt32LittleEndian(message, (uint)(message.Length - 4));
         return message;
     }
-    internal static LocalLoginRpcEngine CreateRegistered()
+    internal static LocalLoginRpcEngine CreateRegistered(IPAddress address = null)
     {
-        LocalLoginRpcEngine engine = new(0x3a, new(IPAddress.Loopback, 45678), Auth);
+        LocalLoginRpcEngine engine = new(0x3a, new(address ?? IPAddress.Loopback, 45678), Auth);
         try
         {
             foreach (bool register in new[] { false, true })

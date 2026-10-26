@@ -1,6 +1,9 @@
 #include "network_guard.h"
 #include "lan_address.h"
 #include "local_pair_lab.h"
+#ifdef S7_LOCAL_PAIR_LAB
+#include "runtime_config.h"
+#endif
 #include <atomic>
 #include <ws2tcpip.h>
 #include <windows.h>
@@ -59,6 +62,57 @@ bool IsOfflineEndpointAllowed(const sockaddr* address, int length) {
 }
 
 namespace {
+#ifdef S7_LOCAL_PAIR_LAB
+void LabOnce(unsigned int bit, const char* label) {
+    static std::atomic<unsigned int> observed{0};
+    if (!(observed.fetch_or(bit) & bit)) ReportLocalStatus(label);
+}
+void LabSendResult(const sockaddr* address, int size, bool allowed, bool bound, int result, int error) {
+    if (!allowed) LabOnce(1, "lab-datagram-destination-denied");
+    else if (!bound) LabOnce(2, "lab-datagram-source-bind-failed");
+    if (address && size >= sizeof(sockaddr_in) && address->sa_family == AF_INET) {
+        const auto* target = reinterpret_cast<const sockaddr_in*>(address);
+        const auto ip = ntohl(target->sin_addr.s_addr);
+        auto port = ntohs(target->sin_port);
+        if (port == 3074 || port == 6200 || port == 9103) {
+            if (port == 3074) LabOnce(64, "lab-game-send-target-port-3074");
+            if (port == 6200) LabOnce(128, "lab-game-send-target-port-6200");
+            if (port == 9103) LabOnce(256, "lab-game-send-target-port-9103");
+            if (ip == local_pair_bind.load()) LabOnce(512, "lab-game-send-target-self");
+            else if (ip == 0x7f000002u || ip == 0x7f000003u) LabOnce(1024, "lab-game-send-target-other-slot");
+            else if ((ip >> 24) == 127) LabOnce(2048, "lab-game-send-target-other-loopback");
+            else LabOnce(4096, "lab-game-send-target-nonloopback");
+            if (result >= 0) LabOnce(8192, "lab-game-datagram-sent");
+            else if (error == WSAEACCES) LabOnce(16384, "lab-game-datagram-access-denied");
+            else if (error == WSA_IO_PENDING) LabOnce(32768, "lab-game-datagram-pending");
+            else LabOnce(65536, "lab-game-datagram-send-other-error");
+            if (port == 3074 && !allowed) {
+                if ((ip & 255u) == 127u) LabOnce(131072, "lab-join-target-reversed-loopback");
+                else if ((ip >> 24) == 10u || (ip >> 20) == 0xac1u || (ip >> 16) == 0xc0a8u)
+                    LabOnce(262144, "lab-join-target-private-interface");
+                else LabOnce(524288, "lab-join-target-other-nonloopback");
+            }
+        }
+        if ((ip == 0x7f000002u || ip == 0x7f000003u) && ntohs(target->sin_port) == 3074) {
+            if (result >= 0) LabOnce(4, "lab-game-peer-datagram-sent");
+            else if (error == WSA_IO_PENDING) LabOnce(8, "lab-game-peer-datagram-pending");
+            else LabOnce(16, "lab-game-peer-datagram-send-failed");
+        }
+    }
+    WSASetLastError(error);
+}
+int WSAAPI LabRecvFrom(SOCKET socket, char* buffer, int length, int flags, sockaddr* address, int* size) {
+    int result = ::recvfrom(socket, buffer, length, flags, address, size);
+    int error = WSAGetLastError();
+    if (result >= 0 && address && size && *size >= sizeof(sockaddr_in) && address->sa_family == AF_INET) {
+        const auto* source = reinterpret_cast<const sockaddr_in*>(address);
+        auto ip = ntohl(source->sin_addr.s_addr);
+        if ((ip == 0x7f000002u || ip == 0x7f000003u) && ntohs(source->sin_port) == 3074)
+            LabOnce(32, "lab-game-peer-datagram-received");
+    }
+    WSASetLastError(error); return result;
+}
+#endif
 int DenySocket() { WSASetLastError(WSAEACCES); return SOCKET_ERROR; }
 bool BindLocalSender(SOCKET socket, const sockaddr* destination) {
     sockaddr_storage local{}; int length = sizeof(local);
@@ -99,13 +153,27 @@ int WSAAPI GuardSend(SOCKET socket, const char* buffer, int length, int flags) {
     return PeerAllowed(socket) ? ::send(socket, buffer, length, flags) : DenySocket();
 }
 int WSAAPI GuardSendTo(SOCKET socket, const char* buffer, int length, int flags, const sockaddr* address, int size) {
+#ifdef S7_LOCAL_PAIR_LAB
+    bool allowed = address ? IsOfflineEndpointAllowed(address, size) : PeerAllowed(socket);
+    bool bound = allowed && (!address || BindLocalSender(socket, address));
+    int result = allowed && bound ? ::sendto(socket, buffer, length, flags, address, size) : DenySocket();
+    int error = WSAGetLastError(); LabSendResult(address, size, allowed, bound, result, error); return result;
+#else
     return (address ? IsOfflineEndpointAllowed(address, size) && BindLocalSender(socket, address) : PeerAllowed(socket))
         ? ::sendto(socket, buffer, length, flags, address, size) : DenySocket();
+#endif
 }
 int WSAAPI GuardWSASendTo(SOCKET socket, LPWSABUF buffers, DWORD count, LPDWORD sent, DWORD flags,
     const sockaddr* address, int size, LPWSAOVERLAPPED overlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINE completion) {
+#ifdef S7_LOCAL_PAIR_LAB
+    bool allowed = address ? IsOfflineEndpointAllowed(address, size) : PeerAllowed(socket);
+    bool bound = allowed && (!address || BindLocalSender(socket, address));
+    int result = allowed && bound ? ::WSASendTo(socket, buffers, count, sent, flags, address, size, overlapped, completion) : DenySocket();
+    int error = WSAGetLastError(); LabSendResult(address, size, allowed, bound, result, error); return result;
+#else
     return (address ? IsOfflineEndpointAllowed(address, size) && BindLocalSender(socket, address) : PeerAllowed(socket))
         ? ::WSASendTo(socket, buffers, count, sent, flags, address, size, overlapped, completion) : DenySocket();
+#endif
 }
 int WSAAPI GuardBind(SOCKET socket, const sockaddr* address, int length) {
     if (!address) return DenySocket();
@@ -232,6 +300,9 @@ HINSTANCE WINAPI GuardShellW(HWND, LPCWSTR, LPCWSTR, LPCWSTR, LPCWSTR, INT) { Se
 struct Binding { const char* dll; const char* name; void* replacement; };
 #define BIND(dll, name, replacement) {dll, name, reinterpret_cast<void*>(replacement)}
 const Binding bindings[] = {
+#ifdef S7_LOCAL_PAIR_LAB
+    BIND("WS2_32.dll", "recvfrom", LabRecvFrom),
+#endif
     BIND("WS2_32.dll", "connect", GuardConnect), BIND("WS2_32.dll", "send", GuardSend),
     BIND("WS2_32.dll", "sendto", GuardSendTo), BIND("WS2_32.dll", "WSASendTo", GuardWSASendTo),
     BIND("WS2_32.dll", "bind", GuardBind), BIND("WS2_32.dll", "accept", GuardAccept),
