@@ -269,7 +269,7 @@ crash (`0xC0000409`). Subsequent game restart without it succeeded. Use only
 the external read-only Windows snapshot for the next test; do not inject the
 retired observer again.
 
-## Prepared local create-request policy
+## Local create-request policy: deployed
 
 After the empty search response was delivered and acknowledged repeatedly,
 the user's create attempt failed before any new RPC. `ED630B` still invokes
@@ -282,8 +282,10 @@ network readiness flags and supplies no fabricated creation result.
 
 The candidate passes 354 adapter checks (248 bootstrap, 88 platform, 18
 connection-state), 38 network checks, 18 original-byte comparisons and the
-real configuration/executable-rejection test. Deployment and live verification
-are pending; the service still needs an actual create handler.
+real configuration/executable-rejection test. After confirmed game shutdown,
+the adapter was deployed with a retained backup, verified bundle hashes and
+passing no-game-launch preflight. Live request verification is pending; the
+service still needs an actual create handler.
 
 ## Fast menu startup
 

@@ -220,7 +220,7 @@ rejections or expirations. The game stayed connected and open. ACKs establish
 delivery; there is still no direct observation of its internal completion
 callback. The user then opened game settings and tried creating a session.
 
-### Create Session gate: prepared, awaiting adapter replacement
+### Create Session gate: deployed, awaiting live request
 
 The user supplied a screenshot of `SERVER-FEHLER / KANN KEINE NEUE SITZUNG
 ANLEGEN!` on map selection. No create RPC reached the endpoint. In the exact
@@ -244,12 +244,14 @@ The service classifier now recognizes fixed `CreateSession_V1` and
 the search handler rejects both. Codec checks pass (20,215 assertions), and
 the full server suite passes 1,926 checks. The separate launcher selects the
 hash-verified `Server-Create-Diagnostic` service; the previous service and
-launcher are retained. The loaded adapter is unchanged until the user closes
-S7. Deployment script: `work/deploy_create_adapter.py`, expected previous
-adapter `8d3bc91`, backup `LocalData/adapter-8d3bc91.dll`. Next: confirm process
-exit, deploy, run no-game-launch preflight, then request a manual launch and
-one create attempt. A create error remains possible because the handler is
-not yet implemented. Do not inject diagnostic libraries.
+launcher are retained. After the user closed S7, a host process check confirmed
+no remaining game process. `work/deploy_create_adapter.py` deployed the tested
+adapter from commit `7b5bbd9`, retaining the previous adapter in
+`LocalData/adapter-8d3bc91.dll`. All bundle hashes and the no-game-launch
+preflight passed with `Server-Create-Diagnostic`. The user has been asked to
+launch the test copy and try creating one session. A create error remains
+possible because the handler is not yet implemented. Do not inject diagnostic
+libraries or rerun the successful deployment transaction.
 
 ## Local workspace (not portable paths)
 
