@@ -13,6 +13,13 @@ void* lab_echo_self = nullptr;
 unsigned int lab_echo_phase = 0;
 int lab_echo_timeout = 0;
 unsigned int lab_reason_length = 0;
+uintptr_t lab_ticket_words[8]{};
+uintptr_t lab_ticket_return = 0;
+uintptr_t __fastcall FakeTicketWords(void* self, void*, uintptr_t a, uintptr_t b, uintptr_t c,
+    uintptr_t d, uintptr_t e, uintptr_t f, uintptr_t g) {
+    const uintptr_t words[] = {reinterpret_cast<uintptr_t>(self), a, b, c, d, e, f, g};
+    memcpy(lab_ticket_words, words, sizeof(words)); SetLastError(6789); return lab_ticket_return;
+}
 void* __fastcall FakePlayerReason(void* output, void*, const char* text, unsigned int length) {
     lab_rejection_literal = text; lab_reason_length = length; SetLastError(6789); return output;
 }
@@ -181,6 +188,21 @@ int main() {
         check(lab_dispatch_arguments[0] == manager && lab_dispatch_arguments[1] == &result && lab_dispatch_arguments[2] == event);
     }
     lab_join_code = 1;
+    check(FakeJump(0xC2BEB0, reinterpret_cast<const void*>(&FakeTicketWords)));
+    check(FakeJump(0xC0BAE0, reinterpret_cast<const void*>(&FakeTicketWords)));
+    for (uintptr_t returned : {0u, 123u}) {
+        lab_ticket_return = returned;
+        check(ObserveLabTicketTransport(reinterpret_cast<void*>(11), nullptr, 22, 33, 44, 55, 66, 77, 88) == returned);
+        check(GetLastError() == 6789);
+        const uintptr_t expected[] = {11,22,33,44,55,66,77,88};
+        check(memcmp(lab_ticket_words, expected, sizeof(expected)) == 0);
+        ObserveLabTicketEvent(reinterpret_cast<void*>(11), nullptr, 22, 33, 44, 55, 66, 77, 88);
+        check(GetLastError() == 6789 && memcmp(lab_ticket_words, expected, sizeof(expected)) == 0);
+    }
+    for (int code : {2,1,0,-999912}) {
+        NativeResult result{code, 123}; SetLastError(9012);
+        check(ObserveLabTicketLinkResult(&result, nullptr) == code && result.detail == 123 && GetLastError() == 9012);
+    }
     check(FakeJump(0x6576D0, reinterpret_cast<const void*>(&FakeLabDiagnosticCtor)));
     check(FakeJump(0x657E70, reinterpret_cast<const void*>(&FakePlayerReason)));
     for (uintptr_t literal : {0x10888D8u, 0x10888E8u, 0x10888C8u}) {

@@ -456,6 +456,29 @@ const char* LabTicketRejectionLabel(uintptr_t caller) {
     default: return "lab-native-ticket-rejection-unclassified";
     }
 }
+uintptr_t __fastcall ObserveLabTicketTransport(void* self, void*, uintptr_t a, uintptr_t b,
+    uintptr_t c, uintptr_t d, uintptr_t e, uintptr_t f, uintptr_t g) {
+    using Original = uintptr_t (__thiscall*)(void*, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
+    const DWORD incoming = GetLastError(); ReportLocalStatus("lab-native-ticket-transport-entered"); SetLastError(incoming);
+    const uintptr_t returned = Native<Original>(0xC2BEB0)(self, a, b, c, d, e, f, g);
+    const DWORD error = GetLastError();
+    ReportLocalStatus(returned ? "lab-native-ticket-transport-created" : "lab-native-ticket-transport-unavailable");
+    SetLastError(error); return returned;
+}
+void __fastcall ObserveLabTicketEvent(void* self, void*, uintptr_t a, uintptr_t b,
+    uintptr_t c, uintptr_t d, uintptr_t e, uintptr_t f, uintptr_t g) {
+    using Original = void (__thiscall*)(void*, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
+    Native<Original>(0xC0BAE0)(self, a, b, c, d, e, f, g);
+    const DWORD error = GetLastError();
+    ReportLocalStatus("lab-native-ticket-event-constructed"); SetLastError(error);
+}
+int __fastcall ObserveLabTicketLinkResult(const NativeResult* result, void*) {
+    // Original getter 4DA460 reads only the result code. Preserve it exactly.
+    const int code = result->code; const DWORD error = GetLastError();
+    ReportLocalStatus(code == 2 ? "lab-native-ticket-link-pending"
+        : code > 0 ? "lab-native-ticket-link-accepted" : "lab-native-ticket-link-failed");
+    SetLastError(error); return code;
+}
 void* __fastcall ObserveLabTicketRejection(void* output, void*, const char* text) {
     const uintptr_t caller = reinterpret_cast<uintptr_t>(_ReturnAddress()) - image_base + PreferredBase;
     using Original = void* (__thiscall*)(void*, const char*);
@@ -639,6 +662,9 @@ const Patch ConnectPatches[] = {
     {0xC24F0C, {0xe8,0xbf,0x27,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketRejection)},
     {0xC2513E, {0xe8,0x8d,0x25,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketRejection)},
     {0xC252BE, {0xe8,0x0d,0x24,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketRejection)},
+    {0xC252AC, {0xe8,0xff,0x6b,0x00,0x00}, reinterpret_cast<const void*>(&ObserveLabTicketTransport)},
+    {0xC25277, {0xe8,0x64,0x68,0xfe,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketEvent)},
+    {0xC2C269, {0xe8,0xf2,0xe1,0x8a,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketLinkResult)},
     {0xB7D92F, {0xe8,0xac,0x5a,0x00,0x00}, reinterpret_cast<const void*>(&ObserveLabPlayerRequest)},
     {0xB834AB, {0xe8,0xc0,0x49,0xad,0xff}, reinterpret_cast<const void*>(&ObserveLabPlayerReason)},
     {0xB8359E, {0xe8,0xcd,0x48,0xad,0xff}, reinterpret_cast<const void*>(&ObserveLabPlayerReason)},

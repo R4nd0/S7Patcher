@@ -44,11 +44,16 @@ No lookup key, local identity or ticket is inspected. The user corrected an
 accidental success selection: joining still fails. Guest logs show ticket
 entry and pending; the failed-reference branch is absent. The service later
 expired a peer at its idle limit; do not reuse that expired run.
-Current candidate: work/native-pair-ticket-reasons, with nine fixed rejection
+Previous candidate: work/native-pair-ticket-reasons, with nine fixed rejection
 branches in C24BC0 instrumented. These retain original constructors/results
 and classify only guarded callsites, without inspecting session keys or IDs.
 709 lab bootstrap checks, 69 network checks and nine real original-callsite
 comparisons pass; the default build retains 359 bootstrap checks.
+Live result: join still fails; no instrumented ticket rejection branch ran.
+Current candidate work/native-pair-ticket-transport observes C252AC transport
+creation, C25277 internal event construction and C2C269 link result. These
+forward opaque arguments unchanged; only fixed path/result categories are
+logged. 741 bootstrap checks and 12 original-callsite comparisons pass.
 Service remains work/server-pair-catalogue-route, unchanged in this milestone.
 Normal native behavior
 is isolated by S7_LOCAL_PAIR_LAB. No successful join or match is established.

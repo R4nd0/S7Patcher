@@ -119,8 +119,13 @@ The real games created separate Profiles.xml and replay files there.
     host insertion, existing request, ticket pool, no ready peer and host
     reference rejection. Original constructors, arguments, results and error
     slots are preserved. Callsite addresses classify empty diagnostic strings;
-    no lookup keys, peer identities or ticket contents are read. Live result
-    of this next candidate is pending.
+    no lookup keys, peer identities or ticket contents are read. Live result:
+    joining still fails, with none of these rejection branches observed.
+14. The next candidate observes the two onward paths at C252AC (C2BEB0,
+    thiscall RET 1C) and C25277 (C0BAE0, thiscall RET 1C), plus the original
+    result getter at C2C269. Opaque arguments are only forwarded. Tests verify
+    stack arguments, original return values and last-error preservation. Live
+    result pending; no network completion or successful join is established.
 
 Bounded external type/state inspection also found the main Echo implementation
 as the scheduler's only child, initialized state 3 on both slots. Its dispatcher
@@ -146,7 +151,7 @@ notification, match start and synchronization remain unverified.
 
 ## Verification
 
-Laboratory build: 709 bootstrap checks (including both exact hashes, per-byte
+Laboratory build: 741 bootstrap checks (including both exact hashes, per-byte
 digest mutation rejection, native ABI/result preservation, pump order,
 duplicate suppression, reentrancy and teardown); 69 network checks, including
 same-port distinct-address binding, UDP transfer and automatic source binding;
