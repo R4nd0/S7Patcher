@@ -108,6 +108,17 @@ namespace S7Patcher.Source
         internal byte[] CreateDataAck(ReadOnlySpan<byte> request) =>
             PrudpDataAckProbeCodec.CreateReply(request, reply[3], clientCookie);
 
+        internal byte[] CreatePingAck(ushort pingSequence)
+        {
+            byte[] ping = new byte[14];
+            ping[0] = reply[0]; ping[1] = reply[1]; ping[2] = 0x0c; ping[3] = reply[3];
+            BinaryPrimitives.WriteUInt32LittleEndian(ping.AsSpan(4), clientCookie);
+            BinaryPrimitives.WriteUInt16LittleEndian(ping.AsSpan(8), pingSequence);
+            BinaryPrimitives.WriteUInt32LittleEndian(ping.AsSpan(10),
+                PrudpHandshakePacketDecoder.ComputeChecksum(ping.AsSpan(0, 10), 0));
+            return ping;
+        }
+
         internal byte[] DeriveDataKey()
         {
             using ECDiffieHellman peer = ECDiffieHellman.Create(new ECParameters

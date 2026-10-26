@@ -163,7 +163,9 @@ local service child. It reads the public configuration through a direct
 loopback HTTP connection, writes a fresh bounded configuration, and cleans it
 up with its service child on exit. The native configuration reader rejects
 files older than five minutes. The service uses a one-hour overall cap, while
-the current two-response Login probe retains its two-minute per-peer limit.
+the baseline two-response Login probe retains its two-minute per-peer limit.
+The opt-in local-connect launcher selects the bounded keepalive experiment:
+two minutes idle or twenty minutes total. See [local keepalive details](LOCAL-LOGIN-PROBE.md).
 `--launch-game` is required to start the game. Without that flag it runs a
 preflight and exits, which is how the prepared bundle was checked.
 

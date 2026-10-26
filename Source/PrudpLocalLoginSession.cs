@@ -13,17 +13,21 @@ namespace S7Patcher.Source
         internal const int RetryMilliseconds = 1000;
         internal const int MaximumTransmissions = 4;
         internal const int LifetimeMilliseconds = 120000;
+        internal const int KeepAliveMaximumMilliseconds = 1200000;
+        internal const int PingReplyIntervalMilliseconds = 100;
         private readonly PrudpProbePeer peer;
         private readonly ReliableMessageAssembler assembler;
         private readonly LocalLoginRpcEngine rpc;
         private readonly byte[] key;
         private readonly long createdAt;
+        private readonly bool keepAlive;
+        private long lastPingAt, nextPingReplyAt;
         private readonly Dictionary<ushort, Pending> pending = new();
         private ushort nextOutgoing = 1;
         private int responseCount;
         private bool closed;
 
-        internal PrudpLocalLoginSession(PrudpProbePeer peer, IPEndPoint endpoint, string authUrl, long now)
+        internal PrudpLocalLoginSession(PrudpProbePeer peer, IPEndPoint endpoint, string authUrl, long now, bool keepAlive = false)
         {
             if (peer?.ConnectReplySent != true || peer.Connect == null)
                 throw new ArgumentException("Established CONNECT context required");
@@ -33,10 +37,35 @@ namespace S7Patcher.Source
             catch { rpc.Dispose(); throw; }
             assembler = new(peer.Connect.InitialClientDataSequence);
             createdAt = now;
+            lastPingAt = now;
+            this.keepAlive = keepAlive;
         }
 
         internal int PendingCount => pending.Count;
         internal bool Closed => closed;
+
+        internal bool TryReplyToPing(ReadOnlySpan<byte> packet, long now, Action<ConfigServerEvent> emit, out byte[] reply)
+        {
+            reply = null;
+            if (closed || !keepAlive || ExpireIfDue(now, emit) || responseCount != 2 || pending.Count != 0
+                || now < nextPingReplyAt || !PrudpPingAckCodec.TryCreateReply(packet, peer, out reply)) return false;
+            // Refresh only a fully registered, acknowledged local session after
+            // context/checksum validation. An ACK/no-request packet cannot refresh.
+            lastPingAt = now;
+            nextPingReplyAt = now + PingReplyIntervalMilliseconds;
+            return true;
+        }
+
+        private bool ExpireIfDue(long now, Action<ConfigServerEvent> emit)
+        {
+            bool expired = keepAlive
+                ? now - createdAt >= KeepAliveMaximumMilliseconds || now - lastPingAt >= LifetimeMilliseconds
+                : now - createdAt >= LifetimeMilliseconds;
+            if (!expired) return false;
+            emit(new() { Event = "local-login-session-expired", Reason = !keepAlive ? "probe-lifetime-ended"
+                : now - createdAt >= KeepAliveMaximumMilliseconds ? "keepalive-maximum-ended" : "keepalive-idle-timeout" });
+            Dispose(); return true;
+        }
 
         internal PrudpDataCryptoResult ProcessData(ReadOnlySpan<byte> packet, Action<ConfigServerEvent> emit)
         {
@@ -121,11 +150,7 @@ namespace S7Patcher.Source
         {
             List<byte[]> due = new();
             if (closed) return due;
-            if (now - createdAt >= LifetimeMilliseconds)
-            {
-                emit(new() { Event = "local-login-session-expired", Reason = "probe-lifetime-ended" });
-                Dispose(); return due;
-            }
+            if (ExpireIfDue(now, emit)) return due;
             // Expiry precedes collecting references, so disposal cannot invalidate
             // already collected packets when another outstanding entry expires.
             foreach (Pending sent in pending.Values)

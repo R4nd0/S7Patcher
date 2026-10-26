@@ -2,7 +2,7 @@
 
 `--local-config-server --local-login-probe --seconds 960` explicitly enables this experiment. It includes the existing configuration, SYN, CONNECT, DATA ACK and crypto probes. Both listeners remain bound exclusively to IPv4 loopback, with at most eight peers. It does not modify or start the installed game. A connection to this service must already be directed locally by a separate authorized setup.
 
-This implements two candidate application responses, not Ubisoft account authentication, a complete replacement server or playable LAN. Local identities are generated for the service run and are not derived from a token or real profile. Client acceptance remains a live verification requirement. The [UbiServices bootstrap](UBISERVICES-BOOTSTRAP.md), lobby, matchmaking, game exchange, connection maintenance and persistent local profiles remain unresolved.
+This implements two local application responses, not Ubisoft account authentication, a complete replacement server or playable LAN. Local identities are generated for the service run and are not derived from a token or real profile. The original client and the separate native-adapter copy have both acknowledged Login/Register; the separate copy also reported native connected state. Lobby, matchmaking, game exchange and persistent local profiles remain unresolved. See the [native local bootstrap](NATIVE-LOCAL-START.md).
 
 ## Input and memory boundaries
 
@@ -27,6 +27,43 @@ Responses are limited to one fragment of at most 947 plaintext bytes, a conserva
 Retries reuse identical encoded bytes. Probe policy is one-second spacing, at most four transmissions and a two-minute peer lifetime. These are deliberately finite local limits, not recovered native adaptive timeout settings. A complete empty DATA ACK with matching peer context, sequence and part removes its pending response and zeroes the owned packet. Native acknowledgement lookup `EBADE0 → EC0EF0` uses sequence; part matching is an additional conservative restriction for this single-fragment probe. Unsent, malformed and mismatched ACKs cannot clear a pending response. Exhaustion closes and clears the experimental session.
 
 PING and DISCONNECT are classified passively and are not answered or consumed by the incoming reliable DATA assembler. A reliable control interleaved with DATA would therefore leave a sequence gap in this experiment. The decoder follows jump table `E84A98`: 3 DISCONNECT, 4 PING, 5 USER. Cookie comparison exceptions are SYN/USER, not PING (`EB4C98..EB4CA5`). These omissions may prevent a sustained connection even if Login/Register responses are accepted; that is a separate implementation step requiring observed evidence.
+
+## Optional bounded keepalive experiment
+
+`--local-keepalive-probe` includes the local Login probe and additionally answers
+empty non-reliable PING requests after both RPC responses have been sent and
+acknowledged. The normal `--local-login-probe` retains its two-minute absolute
+lifetime and passive controls. The separate-copy launcher's
+`--local-connect-probe` selects the keepalive service mode.
+
+The accepted PING subset is type 4, flags `0x20` or `0x60`, complete empty
+payload, seed-zero checksum and matching established peer routing, client
+session and server cookie. ACKs, non-request packets, reliable controls,
+payloads and mismatched contexts receive no response and do not refresh the
+session. The native ACK branch `EBBC75..EBBD1D` preserves type and sequence and
+sets bit `0x08`. The resulting 14-byte reply has type/flags `0x0c`, the unchanged
+server session and the client's cookie. Repeated requests produce identical
+bytes; no DATA sequence is consumed. Replies are limited to ten per second.
+
+The optional session expires after two minutes without an accepted PING or
+after twenty minutes total, whichever comes first. Expiry clears session keys
+and pending ciphertext; traffic cannot revive a closed session. The existing
+four-transmission response timeout and two-RPC response budget remain. These
+are bounded test policies, not a complete reconnect or server lifecycle.
+
+Synthetic Windows checks cover reply encoding with an independent checksum,
+peer/flag/payload rejection, rate limiting, activity beyond the old absolute
+deadline, invalid-traffic expiry, the hard cap and actual loopback UDP replies.
+Control metadata now includes only public flag bits alongside existing fixed
+categories and lengths. No cookie, sequence, identity, key or payload is logged.
+The separate-copy game test on 2026-10-26 confirmed this subset: PING flags
+were `0x20`, and 17 replies were sent over 176 seconds without session expiry.
+At approximately three minutes, the expected native object still reported
+requested=true, connected=true and pending=false. Its network updates continued
+normally. This exceeds the old two-minute absolute cap; it does not establish
+stability beyond the twenty-minute test cap or successful lobby/gameplay.
+The full configuration-server regression suite passes 612 checks, including
+88 isolated session checks and 21 actual loopback login/keepalive checks.
 
 ## Live result, 2026-10-25
 

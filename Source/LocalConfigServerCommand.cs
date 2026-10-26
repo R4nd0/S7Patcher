@@ -31,7 +31,7 @@ namespace S7Patcher.Source
             if (!TryParse(args, out LocalConfigServerOptions options))
             {
                 Emit(new() { Event = "configuration-server-error", Reason = "invalid-arguments",
-                    Message = "Usage: S7Patcher --local-config-server [--http-port 0..65535] [--udp-port 0..65535] [--seconds 1..86400] [--handshake-metadata] [--syn-probe] [--connect-probe] [--data-ack-probe] [--data-crypto-probe] [--local-login-probe]" });
+                    Message = "Usage: S7Patcher --local-config-server [--http-port 0..65535] [--udp-port 0..65535] [--seconds 1..86400] [--handshake-metadata] [--syn-probe] [--connect-probe] [--data-ack-probe] [--data-crypto-probe] [--local-login-probe] [--local-keepalive-probe]" });
                 exitCode = 2;
                 return true;
             }
@@ -92,9 +92,10 @@ namespace S7Patcher.Source
                     options.HandshakeMetadata = true;
                     continue;
                 }
-                if (name is "--data-crypto-probe" or "--local-login-probe")
+                if (name is "--data-crypto-probe" or "--local-login-probe" or "--local-keepalive-probe")
                 {
-                    if (name == "--local-login-probe") options.LocalLoginProbe = true;
+                    if (name is "--local-login-probe" or "--local-keepalive-probe") options.LocalLoginProbe = true;
+                    if (name == "--local-keepalive-probe") options.LocalKeepAliveProbe = true;
                     options.DataCryptoProbe = true;
                     options.DataAckProbe = true;
                     options.ConnectProbe = true;
@@ -127,6 +128,7 @@ namespace S7Patcher.Source
         public bool DataAckProbe { get; set; }
         public bool DataCryptoProbe { get; set; }
         public bool LocalLoginProbe { get; set; }
+        public bool LocalKeepAliveProbe { get; set; }
     }
 
     internal static class LocalConfigurationServer
@@ -138,6 +140,7 @@ namespace S7Patcher.Source
 
         internal static async Task RunAsync(LocalConfigServerOptions options, Action<ConfigServerEvent> emit, CancellationToken cancellation)
         {
+            if (options.LocalKeepAliveProbe) options.LocalLoginProbe = true;
             bool dataAckProbe = options.DataAckProbe || options.DataCryptoProbe || options.LocalLoginProbe;
             bool connectProbe = options.ConnectProbe || dataAckProbe;
             using CancellationTokenSource stop = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
@@ -259,6 +262,7 @@ namespace S7Patcher.Source
                                 else if (PrudpControlPacketDecoder.TryDecode(packet.Buffer, out var control, out _))
                                 {
                                     observation.PacketType = control.Type == PrudpControlPacketType.Ping ? "ping" : "disconnect";
+                                    observation.PacketFlags = control.Flags;
                                     observation.BytesConsumed = control.BytesConsumed;
                                     observation.ChecksumMatchesZeroSeed = PrudpHandshakePacketDecoder.ComputeChecksum(
                                         packet.Buffer.AsSpan(0, control.BytesConsumed - 4), 0) == control.Checksum;
@@ -320,9 +324,20 @@ namespace S7Patcher.Source
                                 if (options.LocalLoginProbe && !loginSessions.ContainsKey(packet.RemoteEndPoint))
                                     loginSessions.Add(packet.RemoteEndPoint, new(peer, packet.RemoteEndPoint,
                                         "prudp:/address=127.0.0.1;port=" + udpPort.ToString(CultureInfo.InvariantCulture)
-                                        + ";sid=1;stream=3;type=2", Environment.TickCount64));
+                                        + ";sid=1;stream=3;type=2", Environment.TickCount64, options.LocalKeepAliveProbe));
                                 emit(new() { Event = "connect-probe-reply-sent", DatagramLength = reply.Length,
                                     AuthenticationImplemented = false, UdpProtocolImplemented = false });
+                            }
+                            else if (options.LocalKeepAliveProbe && IPAddress.IsLoopback(packet.RemoteEndPoint.Address)
+                                && packet.Buffer.Length >= 3 && (packet.Buffer[2] & 7) == 4)
+                            {
+                                if (loginSessions.TryGetValue(packet.RemoteEndPoint, out var session)
+                                    && session.TryReplyToPing(packet.Buffer, Environment.TickCount64, emit, out byte[] reply))
+                                {
+                                    await udp.SendAsync(reply, packet.RemoteEndPoint, stop.Token);
+                                    emit(new() { Event = "local-ping-ack-sent", DatagramLength = reply.Length,
+                                        AuthenticationImplemented = false, UdpProtocolImplemented = false });
+                                }
                             }
                             else if (dataAckProbe && IPAddress.IsLoopback(packet.RemoteEndPoint.Address)
                                 && packet.Buffer.Length >= 3 && (packet.Buffer[2] & 7) == 2)
@@ -520,6 +535,7 @@ namespace S7Patcher.Source
         public long? DatagramsReceived { get; set; }
         public long? DatagramBytes { get; set; }
         public string PacketType { get; set; }
+        public byte? PacketFlags { get; set; }
         public bool? ChecksumMatchesZeroSeed { get; set; }
         public int? BytesConsumed { get; set; }
         public bool? KnownPeer { get; set; }

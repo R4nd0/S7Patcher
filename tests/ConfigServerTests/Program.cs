@@ -294,6 +294,8 @@ await Cli(2, "--local-config-server", "--data-crypto-probe", "true");
 await Cli(2, "--local-config-server", "--data-crypto-probe", "--data-crypto-probe");
 await Cli(2, "--local-config-server", "--local-login-probe", "true");
 await Cli(2, "--local-config-server", "--local-login-probe", "--local-login-probe");
+await Cli(2, "--local-config-server", "--local-keepalive-probe", "--local-keepalive-probe");
+await Cli(2, "--local-config-server", "--local-keepalive-probe", "true");
 string cliOutput = await Cli(0, "--local-config-server", "--http-port", "0", "--udp-port", "0", "--seconds", "1");
 Check(cliOutput.Contains("configuration-server-ready") && cliOutput.Contains("configuration-server-stopped"), "CLI server dispatch did not complete");
 foreach (string[] options in new string[][] {
@@ -327,6 +329,7 @@ passed += PrudpDataPacketEncoderChecks.Run();
 string loginOutput = await Cli(0, "--local-config-server", "--http-port", "0", "--local-login-probe", "--seconds", "1");
 Check(loginOutput.Contains("Experimental local Login/Register responses enabled"), "Local login boolean switch did not enable probe mode");
 passed += LocalLoginSessionChecks.Run();
+await Cli(0, "--local-config-server", "--http-port", "0", "--local-keepalive-probe", "--seconds", "1");
 passed += await LocalLoginSessionChecks.RunNetworkAsync();
 Check(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(sentinel))) == originalHash && File.GetLastWriteTimeUtc(sentinel) == originalTime, "Server modified an existing file");
 Check(Directory.GetFileSystemEntries(scratch).SequenceEqual(new[] { sentinel }), "Server persisted a key, configuration or log file");

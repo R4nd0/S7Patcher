@@ -151,7 +151,8 @@ def run(args):
             errors = data / (run_id + "-server-errors.txt")
             with log.open("xb") as output, errors.open("xb") as error_output:
                 service = subprocess.Popen([str(Path(args.dotnet).resolve(strict=True)), str(Path(args.server).resolve(strict=True)),
-                    "--local-config-server", "--local-login-probe", "--http-port", "0", "--udp-port", "0", "--seconds", "3600"],
+                    "--local-config-server", "--local-keepalive-probe" if args.local_connect_probe else "--local-login-probe",
+                    "--http-port", "0", "--udp-port", "0", "--seconds", "3600"],
                     stdout=output, stderr=error_output, creationflags=subprocess.CREATE_NO_WINDOW)
                 configuration, udp_port = service_ready(service, log)
                 runtime = write_configuration(data, configuration, udp_port, args.local_connect_probe)

@@ -70,6 +70,13 @@ internal static class LocalLoginSessionChecks
         BinaryPrimitives.WriteUInt32LittleEndian(packet.AsSpan(4), cookie);
         BinaryPrimitives.WriteUInt16LittleEndian(packet.AsSpan(8), sequence); Sum(packet); return packet;
     }
+    private static byte[] Ping(uint cookie = ServerCookie, byte flags = 0x20, ushort sequence = 12)
+    {
+        byte[] packet = new byte[(flags & 0x40) != 0 ? 16 : 14];
+        packet[0] = 0x3a; packet[1] = 0x31; packet[2] = (byte)(4 | flags); packet[3] = ClientSession;
+        BinaryPrimitives.WriteUInt32LittleEndian(packet.AsSpan(4), cookie);
+        BinaryPrimitives.WriteUInt16LittleEndian(packet.AsSpan(8), sequence); Sum(packet); return packet;
+    }
     private static byte[] DecodeResponse(byte[] packet, byte[] key, uint callId, bool register,
         byte serverSession, int authenticationPort = 9111, int publicPort = 40000)
     {
@@ -132,7 +139,7 @@ internal static class LocalLoginSessionChecks
         internal readonly byte[] Key;
         internal readonly byte ServerSession;
         internal readonly List<ConfigServerEvent> Events = new();
-        internal Fixture(long now = 100)
+        internal Fixture(long now = 100, bool keepAlive = false)
         {
             using ECDiffieHellman client = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
             using ECDsa signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
@@ -143,10 +150,16 @@ internal static class LocalLoginSessionChecks
             Peer.Connect.TryGetReply(packet, request, out byte[] reply);
             ServerSession = reply[3];
             Key = NativeCngFixtures.Derive(client, reply.AsSpan(82, 72).ToArray());
-            Session = new(Peer, new(IPAddress.Loopback, 40000), "prudp:/address=127.0.0.1;port=9111;sid=1;stream=3;type=2", now);
+            Session = new(Peer, new(IPAddress.Loopback, 40000), "prudp:/address=127.0.0.1;port=9111;sid=1;stream=3;type=2", now, keepAlive);
         }
         internal byte[] Data(ushort sequence, byte part, ReadOnlySpan<byte> content) => LocalLoginSessionChecks.Data(ServerCookie, Key, sequence, part, content);
         internal void Login() => Session.ProcessData(Data(6, 0, Request(false)), Events.Add);
+        internal void Register()
+        {
+            Login(); Session.TakeDue(100, Events.Add); Session.TryAcknowledge(Ack(ServerCookie, 1));
+            Session.ProcessData(Data(7, 0, Request(true)), Events.Add);
+            Session.TakeDue(100, Events.Add); Session.TryAcknowledge(Ack(ServerCookie, 2));
+        }
         public void Dispose() { Session.Dispose(); Peer.Dispose(); CryptographicOperations.ZeroMemory(Key); }
     }
 
@@ -155,6 +168,59 @@ internal static class LocalLoginSessionChecks
         if (!OperatingSystem.IsWindows()) { Console.WriteLine("SKIP: native BCrypt local-login session checks require Windows."); return 0; }
         int passed = 0;
         void Check(bool value, string label) { if (!value) throw new Exception(label); passed++; }
+        using (Fixture fixture = new())
+        {
+            Check(!PrudpPingAckCodec.TryCreateReply(Ping(), null, out _), "Unknown PING peer accepted");
+            foreach (byte flags in new byte[] { 0x20, 0x60 })
+            {
+                Check(PrudpPingAckCodec.TryCreateReply(Ping(flags: flags), fixture.Peer, out byte[] reply)
+                    && reply.Length == 14 && reply[0] == 0x31 && reply[1] == 0x3a && reply[2] == 0x0c
+                    && reply[3] == fixture.ServerSession
+                    && BinaryPrimitives.ReadUInt32LittleEndian(reply.AsSpan(4)) == ClientCookie
+                    && BinaryPrimitives.ReadUInt16LittleEndian(reply.AsSpan(8)) == 12,
+                    "PING ACK context or sequence differs");
+                byte[] checksum = (byte[])reply.Clone(); Sum(checksum);
+                Check(checksum.SequenceEqual(reply), "PING ACK checksum differs from independent oracle");
+                PrudpPingAckCodec.TryCreateReply(Ping(flags: flags), fixture.Peer, out byte[] duplicate);
+                Check(reply.SequenceEqual(duplicate), "PING retransmission changed reply");
+            }
+            foreach (byte flags in new byte[] { 0, 8, 0x10, 0x30, 0x40, 0x48, 0x70, 0x80 })
+                Check(!PrudpPingAckCodec.TryCreateReply(Ping(flags: flags), fixture.Peer, out _), "Unsupported PING flags replied");
+            foreach (int index in new[] { 0, 1, 3, 4 })
+            {
+                byte[] wrong = Ping(); wrong[index] ^= 1; Sum(wrong);
+                Check(!PrudpPingAckCodec.TryCreateReply(wrong, fixture.Peer, out _), "Wrong PING peer tuple replied");
+            }
+            byte[] badSum = Ping(); badSum[^1] ^= 1;
+            byte[] payload = [.. Ping().AsSpan(0, 10), 99, 0, 0, 0, 0]; Sum(payload);
+            Check(!PrudpPingAckCodec.TryCreateReply(badSum, fixture.Peer, out _)
+                && !PrudpPingAckCodec.TryCreateReply(payload, fixture.Peer, out _)
+                && !PrudpPingAckCodec.TryCreateReply([.. Ping(flags: 0x60), 0], fixture.Peer, out _), "Malformed PING replied");
+            fixture.Register();
+            Check(!fixture.Session.TryReplyToPing(Ping(), 200, fixture.Events.Add, out _), "Baseline probe enabled keepalive");
+        }
+        using (Fixture fixture = new(keepAlive: true))
+        {
+            var session = fixture.Session; Action<ConfigServerEvent> emit = fixture.Events.Add;
+            Check(!session.TryReplyToPing(Ping(), 100, emit, out _), "Pre-login PING replied");
+            fixture.Register();
+            Check(session.TryReplyToPing(Ping(), 200, emit, out _), "Registered PING did not reply");
+            Check(!session.TryReplyToPing(Ping(), 299, emit, out _), "PING rate limit failed");
+            Check(session.TryReplyToPing(Ping(), 300, emit, out _), "PING rate window did not reopen");
+            Check(session.TryReplyToPing(Ping(), 120099, emit, out _), "Valid PING before idle expiry failed");
+            Check(session.TakeDue(120100, emit).Count == 0 && !session.Closed, "Active keepalive hit old absolute lifetime");
+            Check(!session.TryReplyToPing(Ping(cookie: 3), 200000, emit, out _), "Invalid PING refreshed activity");
+            Check(session.TakeDue(240099, emit).Count == 0 && session.Closed, "Idle deadline was extended by invalid traffic");
+            Check(!session.TryReplyToPing(Ping(), 240100, emit, out _), "Expired session was revived");
+        }
+        using (Fixture fixture = new(keepAlive: true))
+        {
+            fixture.Register();
+            for (long now = 60100; now < 1200100; now += 60000)
+                Check(fixture.Session.TryReplyToPing(Ping(), now, fixture.Events.Add, out _), "Active session expired before hard cap");
+            Check(!fixture.Session.TryReplyToPing(Ping(), 1200100, fixture.Events.Add, out _) && fixture.Session.Closed,
+                "Keepalive bypassed absolute cap");
+        }
         using (Fixture fixture = new())
         {
             var session = fixture.Session; Action<ConfigServerEvent> emit = fixture.Events.Add;
@@ -245,7 +311,7 @@ internal static class LocalLoginSessionChecks
         ConcurrentQueue<ConfigServerEvent> events = new();
         TaskCompletionSource<ConfigServerEvent> ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
         using CancellationTokenSource stop = new();
-        Task service = LocalConfigurationServer.RunAsync(new() { HttpPort = 0, UdpPort = 0, LocalLoginProbe = true, Seconds = 30 },
+        Task service = LocalConfigurationServer.RunAsync(new() { HttpPort = 0, UdpPort = 0, LocalKeepAliveProbe = true, Seconds = 30 },
             item => { events.Enqueue(item); if (item.Event == "configuration-server-ready") ready.TrySetResult(item); }, stop.Token);
         ConfigServerEvent info = await ready.Task.WaitAsync(TimeSpan.FromSeconds(5));
         using UdpClient client = new(AddressFamily.InterNetwork); client.Connect(IPAddress.Loopback, info.UdpPort!.Value);
@@ -295,6 +361,15 @@ internal static class LocalLoginSessionChecks
             BinaryPrimitives.WriteUInt32LittleEndian(ping.AsSpan(4), cookie); Sum(ping); await client.SendAsync(ping);
             await Wait(() => events.Any(item => item.Event == "udp-datagram-observed" && item.PacketType == "ping"));
             await Silence(1200);
+            await client.SendAsync(Ping(cookie));
+            byte[] pingAck = await Receive();
+            Check(PrudpControlPacketDecoder.TryDecode(pingAck, out var control, out _, 0)
+                && control.Type == PrudpControlPacketType.Ping && control.Flags == 8 && control.SequenceId == 12
+                && control.PayloadLength == 0 && control.SessionId == serverSession && control.PacketSignature == ClientCookie,
+                "Actual UDP PING ACK differs");
+            await Wait(() => events.Any(item => item.Event == "local-ping-ack-sent"));
+            await client.SendAsync(Ping(cookie, 8)); await Silence(150);
+            await client.SendAsync(Ping(cookie ^ 1)); await Silence(150);
             Check(events.Count(item => item.Event == "local-login-response-queued") == 2, "Network RPC duplication or missing registration");
             string json = string.Join("\n", events.Select(item => JsonSerializer.Serialize(item, ConfigServerJsonContext.Default.ConfigServerEvent)));
             Check(!json.Contains("test-secret") && !json.Contains(PublicUrl) && !json.Contains(Convert.ToHexString(key))

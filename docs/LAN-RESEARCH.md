@@ -9,8 +9,10 @@ function returning success is not evidence of a working multiplayer session.
 The local server has now received Register after replying to Login, and the
 client acknowledged both responses. A [native local-start prototype](NATIVE-LOCAL-START.md)
 and separate fast-start UI archive now reach the main menu with the local
-platform adapter, without startup movies or a click gate. The SDK readiness
-gate still prevents this copy's local server login. Complete isolation of
+platform adapter, without startup movies or a click gate. Its opt-in connection
+bridge now completes local Login/Register and reaches native connected state.
+The bounded keepalive extension has held the native connection for over three
+minutes, beyond the previous two-minute probe lifetime. Complete isolation of
 all game behavior and successful LAN have not been verified.
 
 ## Supported research target
