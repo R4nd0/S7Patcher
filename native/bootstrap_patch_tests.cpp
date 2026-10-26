@@ -13,6 +13,8 @@ void* lab_echo_self = nullptr;
 unsigned int lab_echo_phase = 0;
 int lab_echo_timeout = 0;
 unsigned int lab_reason_length = 0;
+unsigned char* pump_scheduler = nullptr;
+unsigned int pending_core_tasks = 0;
 uintptr_t lab_ticket_words[8]{};
 uintptr_t lab_ticket_return = 0;
 uintptr_t __fastcall FakeTicketWords(void* self, void*, uintptr_t a, uintptr_t b, uintptr_t c,
@@ -135,6 +137,10 @@ void __fastcall FakeMasterUpdate(void*, void*) {
 }
 NativeResult* __fastcall FakeCoreUpdate(void*, void*, NativeResult* result, unsigned int phase) {
     pump_trace.push_back(phase == 3 ? 'C' : '!');
+#ifdef S7_LOCAL_PAIR_LAB
+    if (pump_scheduler) ++*reinterpret_cast<unsigned int*>(pump_scheduler + 0x78);
+    pending_core_tasks = 0;
+#endif
     if (pump_mode == 1 || pump_mode == 8) UpdateLocalGame(pump_owner, nullptr);
     if (pump_mode == 5) *Native<unsigned char**>(0x1379E14) = nullptr;
     if (pump_mode == 6) *reinterpret_cast<void**>(pump_network + 0xa18) = nullptr;
@@ -466,7 +472,15 @@ int main() {
     check(!LocalUpdateCore(network)); // Unknown implementation type.
     *reinterpret_cast<uintptr_t*>(implementation) = image_base + 0x1099548 - PreferredBase;
     check(!LocalUpdateCore(network)); // Missing scheduler.
+#ifdef S7_LOCAL_PAIR_LAB
+    alignas(4) unsigned char scheduler[0xc0]{};
+    *reinterpret_cast<void**>(implementation + 4) = scheduler;
+    check(!LocalUpdateCore(network)); // Reject unknown scheduler before reading its frame.
+    *reinterpret_cast<uintptr_t*>(scheduler) = image_base + 0x109959C - PreferredBase;
+    pump_scheduler = scheduler;
+#else
     *reinterpret_cast<void**>(implementation + 4) = implementation;
+#endif
     check(LocalUpdateCore(network) == core);
     udp_port = 10001;
     check(!LocalSessionSearchReady(network)); // No successful native startup.
@@ -653,7 +667,7 @@ int main() {
     pump_mode = 0; local_connect_probe = false; pump_trace.clear();
     UpdateLocalJoinWait(network, nullptr); check(trace_is("M"));
     local_connect_probe = true; natural_updates_seen = true; pump_trace.clear();
-    UpdateLocalJoinWait(network, nullptr); check(trace_is("M"));
+    UpdateLocalJoinWait(network, nullptr); check(trace_is("MCJO"));
     natural_updates_seen = false;
     bootstrap_thread = 0; pump_trace.clear();
     UpdateLocalJoinWait(network, nullptr); check(trace_is("M"));
@@ -666,9 +680,30 @@ int main() {
     pump_mode = 0; pump_trace.clear();
     PumpOfflineBootstrap(); check(trace_is("MCO"));
     pump_trace.clear();
+    // Reproduce the live host failure: an isolated natural owner callback must
+    // not permanently starve queued core work after lobby creation.
+    UpdateLocalGame(owner, nullptr);
+    check(natural_updates_seen);
+    pending_core_tasks = 3; pump_trace.clear();
+    PumpOfflineBootstrap(); check(trace_is("MCO") && pending_core_tasks == 0);
+    // A genuine core tick suppresses the next fallback, then a stopped core
+    // resumes on the following call. No permanent natural-update latch remains.
+    NativeResult external_result{};
+    pending_core_tasks = 2;
+    FakeCoreUpdate(core, nullptr, &external_result, 3);
+    check(pending_core_tasks == 0);
+    pump_trace.clear(); PumpOfflineBootstrap(); check(trace_is(""));
+    pending_core_tasks = 2;
+    PumpOfflineBootstrap(); check(trace_is("MCO") && pending_core_tasks == 0);
+    natural_updates_seen = false; pump_trace.clear();
 #endif
     pump_trace.clear(); natural_updates_seen = true;
-    PumpOfflineBootstrap(); check(trace_is(""));
+    PumpOfflineBootstrap();
+#ifdef S7_LOCAL_PAIR_LAB
+    check(trace_is("MCO")); pump_trace.clear();
+#else
+    check(trace_is(""));
+#endif
     natural_updates_seen = false; bootstrap_thread = 0;
     PumpOfflineBootstrap(); check(trace_is(""));
     bootstrap_thread = GetCurrentThreadId(); local_connect_probe = false;

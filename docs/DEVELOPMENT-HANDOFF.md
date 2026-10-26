@@ -78,7 +78,24 @@ observes that result (including invalid destination/unavailable categories)
 and the CA285B -> C9A280 JoinRequest type match in SimpleSessionHandler.
 It reads no destination key and changes no native result. 870 bootstrap checks
 and 19 original callsite comparisons plus the gate slot comparison pass.
-Live result pending.
+Live result: routing returns queued on the host, but no JoinRequest type match
+is dispatched and joining still fails. Bounded read-only counters found ten
+pending main-queue events on the host with a stalled scheduler frame counter;
+the guest frame counter continued advancing and its queues were empty.
+
+Current candidate work/native-pair-core-resume fixes the lab's permanent
+natural_updates_seen stop condition. A single C956C0 owner callback previously
+disabled all later fallback core work, although it does not establish a core
+dispatch. The lab now compares the exact validated scheduler's native frame
+counter (CFD2D0, +78): real intervening core progress skips one fallback;
+when core progress stops the next call resumes. Supplied ticks are recorded
+only after ownership revalidation; interrupted ticks invalidate the snapshot.
+The blocking-join bridge uses the same policy. Default builds retain the old
+natural-update behavior. 876 lab bootstrap checks, 69 network checks and 359
+default bootstrap checks pass. Both candidates build with warnings as errors.
+The regression reproduces an isolated owner callback followed by queued core
+work, and tests resumption after a genuine external core tick. Live result
+pending; no successful join or match is established.
 Service remains work/server-pair-catalogue-route, unchanged in this milestone.
 Normal native behavior
 is isolated by S7_LOCAL_PAIR_LAB. No successful join or match is established.

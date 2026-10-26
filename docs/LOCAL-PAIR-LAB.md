@@ -153,7 +153,22 @@ The real games created separate Profiles.xml and replay files there.
     a true original JoinRequest type match, covering base handlers as well as
     the game override. This avoids interpreting absence of the game-specific
     gate alone as absence of all application dispatch. Current candidate
-    work/native-pair-host-route; live result pending.
+    Live: host routing returns queued, but the JoinRequest type match does not
+    reach the handler. Joining still fails.
+18. Known-field, read-only runtime counters show the host's main queue holding
+    ten events while its scheduler frame counter stays fixed; the guest frame
+    counter advances and its queues are empty. The existing global
+    natural_updates_seen latch disables PumpOfflineBootstrap forever after any
+    owner-only C956C0 update, even when no later core dispatch occurs.
+    Current lab-only candidate work/native-pair-core-resume removes that
+    permanent owner-based stop condition. It observes the exact validated
+    scheduler's +78 native frame counter instead, skips a fallback when real
+    intervening core progress is seen, and resumes when it stops. Interrupted
+    supplied ticks invalidate the snapshot. Thread, recursion, executable,
+    native object, callback teardown and default-build isolation remain guarded.
+    The blocking join uses the same policy. Regression tests cover queued work
+    after an isolated owner tick and recovery after an external core tick.
+    Live result pending; this change does not establish admission or gameplay.
 
 Bounded external type/state inspection also found the main Echo implementation
 as the scheduler's only child, initialized state 3 on both slots. Its dispatcher
@@ -179,7 +194,7 @@ notification, match start and synchronization remain unverified.
 
 ## Verification
 
-Laboratory build: 870 bootstrap checks (including both exact hashes, per-byte
+Laboratory build: 876 bootstrap checks (including both exact hashes, per-byte
 digest mutation rejection, native ABI/result preservation, pump order,
 duplicate suppression, reentrancy and teardown); 69 network checks, including
 same-port distinct-address binding, UDP transfer and automatic source binding;

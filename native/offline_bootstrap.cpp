@@ -45,6 +45,8 @@ unsigned int owner_update_count = 0;
 #ifdef S7_LOCAL_PAIR_LAB
 unsigned int manager_update_count = 0;
 unsigned int echo_update_count = 0;
+void* lab_last_scheduler = nullptr;
+unsigned int lab_last_core_frame = 0;
 #endif
 char public_key[97] = {};
 char local_ticket[257] = {};
@@ -252,8 +254,35 @@ unsigned char* LocalUpdateCore(unsigned char* network) {
     if (!implementation ||
         *reinterpret_cast<uintptr_t*>(implementation) != image_base + 0x1099548 - PreferredBase ||
         !*reinterpret_cast<void**>(implementation + 4)) return nullptr;
+#ifdef S7_LOCAL_PAIR_LAB
+    auto* scheduler = *reinterpret_cast<unsigned char**>(implementation + 4);
+    if (*reinterpret_cast<uintptr_t*>(scheduler) != image_base + 0x109959C - PreferredBase) return nullptr;
+#endif
     return core;
 }
+#ifdef S7_LOCAL_PAIR_LAB
+unsigned char* LabCoreScheduler(unsigned char* core) {
+    auto* implementation = *reinterpret_cast<unsigned char**>(core + 0x20);
+    return *reinterpret_cast<unsigned char**>(implementation + 4);
+}
+bool LabCoreAdvanced(unsigned char* core) {
+    auto* scheduler = LabCoreScheduler(core);
+    const unsigned int frame = *reinterpret_cast<unsigned int*>(scheduler + 0x78);
+    // CFD2D0 advances this counter only for a real phase 1/3 core dispatch.
+    // An owner-only C956C0 callback does not establish that dispatch occurred.
+    if (lab_last_scheduler != scheduler) return false;
+    if (frame == lab_last_core_frame) return false;
+    lab_last_core_frame = frame;
+    static bool reported = false;
+    if (!reported) { reported = true; ReportLocalStatus("lab-native-core-natural-progress-observed"); }
+    return true;
+}
+void RememberLabCoreFrame(unsigned char* core) {
+    auto* scheduler = LabCoreScheduler(core);
+    lab_last_scheduler = scheduler;
+    lab_last_core_frame = *reinterpret_cast<unsigned int*>(scheduler + 0x78);
+}
+#endif
 
 bool __fastcall QueryLocalLoginStatus(void* self, void*) {
     const bool ready = LocalConnectionReady(self);
@@ -593,7 +622,7 @@ void __fastcall UpdateLocalJoinWait(void* self, void*) {
     // ED68C4 runs inside the blocking Join Session loop. That loop does not
     // return to UPLAY_Update, so the ordinary platform bridge cannot deliver
     // the missing core/manager work while the join is waiting.
-    if (initialization == 2 && local_connect_probe && !pump_active && !natural_updates_seen &&
+    if (initialization == 2 && local_connect_probe && !pump_active &&
         GetCurrentThreadId() == bootstrap_thread && self == *Native<void**>(0x1379E14) &&
         LocalUpdateOwner(static_cast<unsigned char*>(self)) &&
         LocalUpdateCore(static_cast<unsigned char*>(self)) && Native<NetworkGetter>(0xE82240)()) {
@@ -946,7 +975,10 @@ void PumpOfflineBootstrap() {
     // Startup and platform updates belong to the same game thread. Do not
     // access native objects from other threads or during recursive callbacks.
     if (initialization != 2 || !local_connect_probe ||
-        GetCurrentThreadId() != bootstrap_thread || pump_active || natural_updates_seen) return;
+        GetCurrentThreadId() != bootstrap_thread || pump_active) return;
+#ifndef S7_LOCAL_PAIR_LAB
+    if (natural_updates_seen) return;
+#endif
     struct ActiveScope {
         ActiveScope() { pump_active = true; }
         ~ActiveScope() { pump_active = false; }
@@ -960,6 +992,19 @@ void PumpOfflineBootstrap() {
     if (!reported) { reported = true; ReportLocalStatus("local-connect-platform-pump-active"); }
     const unsigned int before = owner_update_count;
     auto* core = LocalUpdateCore(network);
+#ifdef S7_LOCAL_PAIR_LAB
+    // Skip only when the real core progressed since our previous pump. Never
+    // latch off forever after one unrelated owner callback: the host can then
+    // retain queued JoinRequest events indefinitely while the guest keeps ticking.
+    if (core && LabCoreAdvanced(core)) return;
+    // An interrupted supplied tick is ours, not evidence of external progress.
+    // Restore the snapshot only after the final ownership checks below.
+    if (core) lab_last_scheduler = nullptr;
+    if (core && natural_updates_seen) {
+        static bool resumed = false;
+        if (!resumed) { resumed = true; ReportLocalStatus("lab-native-core-resumed-after-owner-update"); }
+    }
+#endif
     if (core) {
 #ifdef S7_LOCAL_PAIR_LAB
         auto* manager = LocalLabManager(network);
@@ -1025,6 +1070,10 @@ void PumpOfflineBootstrap() {
     // Only supply the old fallback tick when the core did not deliver one.
     if (LocalUpdateOwner(network) == owner && owner_update_count == before)
         UpdateLocalGame(owner, nullptr);
+#ifdef S7_LOCAL_PAIR_LAB
+    if (core && LocalUpdateOwner(network) == owner && LocalUpdateCore(network) == core)
+        RememberLabCoreFrame(core);
+#endif
 }
 
 const char* GetOfflineBootstrapError() {
