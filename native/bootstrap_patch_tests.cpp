@@ -3,6 +3,44 @@
 #include "offline_bootstrap.cpp"
 #include <cstdio>
 void ReportLocalStatus(const char*) {}
+namespace {
+std::vector<char> pump_trace;
+unsigned char* pump_network = nullptr;
+unsigned char* pump_owner = nullptr;
+int pump_mode = 0;
+int network_getter_calls = 0;
+void* __cdecl FakeNetworkGetter() { ++network_getter_calls; return pump_network; }
+void __fastcall FakeOwnerUpdate(void*, void*) {
+    pump_trace.push_back('O');
+    if (pump_mode == 8) *Native<unsigned char**>(0x1379E14) = nullptr;
+}
+void __fastcall FakeMasterUpdate(void*, void*) {
+    pump_trace.push_back('M');
+    PumpOfflineBootstrap(); // Recursive bridge entry must be ignored.
+    if (pump_mode == 2) *Native<unsigned char**>(0x1379E14) = nullptr;
+    if (pump_mode == 3) *reinterpret_cast<void**>(pump_network + 0xa18) = nullptr;
+    if (pump_mode == 4) *reinterpret_cast<void**>(pump_network + 0x2c) = nullptr;
+}
+NativeResult* __fastcall FakeCoreUpdate(void*, void*, NativeResult* result, unsigned int phase) {
+    pump_trace.push_back(phase == 3 ? 'C' : '!');
+    if (pump_mode == 1 || pump_mode == 8) UpdateLocalGame(pump_owner, nullptr);
+    if (pump_mode == 5) *Native<unsigned char**>(0x1379E14) = nullptr;
+    if (pump_mode == 6) *reinterpret_cast<void**>(pump_network + 0xa18) = nullptr;
+    if (pump_mode == 7) *reinterpret_cast<void**>(pump_network + 0x2c) = nullptr;
+    result->code = 1; result->detail = 0;
+    return result;
+}
+bool FakeJump(uintptr_t address, const void* target) {
+    auto* bytes = Native<unsigned char*>(address);
+    DWORD old = 0;
+    if (!VirtualProtect(bytes, 5, PAGE_EXECUTE_READWRITE, &old)) return false;
+    bytes[0] = 0xe9;
+    uint32_t relative = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(target)) -
+        static_cast<uint32_t>(reinterpret_cast<uintptr_t>(bytes) + 5);
+    memcpy(bytes + 1, &relative, 4);
+    return FlushInstructionCache(GetCurrentProcess(), bytes, 5) != FALSE;
+}
+}
 int main() {
     int failures = 0, checks = 0;
     auto check = [&](bool result) { ++checks; if (!result) ++failures; };
@@ -101,6 +139,65 @@ int main() {
     *reinterpret_cast<uintptr_t*>(owner + 0x50) = image_base + 0x109C9D8 - PreferredBase;
     *reinterpret_cast<uintptr_t*>(owner) = 0;
     check(!LocalConnectionReady(network));
+
+    // Exercise the production pump against synthetic native objects and x86
+    // trampoline stubs. This verifies actual calling conventions, dispatch
+    // order, fallback suppression and callback-driven teardown, without S7.
+    *reinterpret_cast<uintptr_t*>(owner) = image_base + 0x10919BC - PreferredBase;
+    *reinterpret_cast<void**>(owner + 0x100) = owner;
+    *reinterpret_cast<void**>(owner + 0x104) = owner;
+    *reinterpret_cast<void**>(owner + 0x110) = owner;
+    owner[0x78] = 1; // A real connection is already requested in this fixture.
+    pump_network = network; pump_owner = owner;
+    check(FakeJump(0xE82240, reinterpret_cast<const void*>(&FakeNetworkGetter)));
+    check(FakeJump(0xC956C0, reinterpret_cast<const void*>(&FakeOwnerUpdate)));
+    check(FakeJump(0xED3BA0, reinterpret_cast<const void*>(&FakeMasterUpdate)));
+    check(FakeJump(0xCBC710, reinterpret_cast<const void*>(&FakeCoreUpdate)));
+    auto trace_is = [&](const char* expected) {
+        return pump_trace.size() == strlen(expected) &&
+            (pump_trace.empty() || memcmp(pump_trace.data(), expected, pump_trace.size()) == 0);
+    };
+    PumpOfflineBootstrap(); check(trace_is("O") && !pump_active);
+    alignas(4) unsigned char core[0x24]{};
+    alignas(4) unsigned char implementation[8]{};
+    *reinterpret_cast<void**>(network + 0x2c) = core;
+    check(!LocalUpdateCore(network)); // Unknown core type.
+    *reinterpret_cast<uintptr_t*>(core) = image_base + 0x10940A0 - PreferredBase;
+    check(!LocalUpdateCore(network)); // Master not constructed.
+    *reinterpret_cast<uintptr_t*>(network + 0x5c) = image_base + 0x1091E3C - PreferredBase;
+    check(!LocalUpdateCore(network)); // Master not registered with the core.
+    *reinterpret_cast<void**>(network + 0x5c + 0x4c0) = core;
+    check(!LocalUpdateCore(network)); // Missing implementation.
+    *reinterpret_cast<void**>(core + 0x20) = implementation;
+    check(!LocalUpdateCore(network)); // Unknown implementation type.
+    *reinterpret_cast<uintptr_t*>(implementation) = image_base + 0x1099548 - PreferredBase;
+    check(!LocalUpdateCore(network)); // Missing scheduler.
+    *reinterpret_cast<void**>(implementation + 4) = implementation;
+    check(LocalUpdateCore(network) == core);
+    for (int mode = 0; mode <= 8; ++mode) {
+        pump_mode = mode; pump_trace.clear(); network_getter_calls = 0;
+        *Native<unsigned char**>(0x1379E14) = network;
+        *reinterpret_cast<void**>(network + 0xa18) = owner;
+        *reinterpret_cast<void**>(network + 0x2c) = core;
+        PumpOfflineBootstrap();
+        check(trace_is(mode < 2 || mode == 8 ? "MCO" : mode < 5 ? "M" : "MC"));
+        check(!pump_active && !natural_updates_seen);
+        if (mode == 8) check(network_getter_calls == 1); // No post-destruction owner work.
+    }
+    *Native<unsigned char**>(0x1379E14) = network;
+    *reinterpret_cast<void**>(network + 0xa18) = owner;
+    *reinterpret_cast<void**>(network + 0x2c) = core;
+    pump_mode = 0;
+    pump_trace.clear(); natural_updates_seen = true;
+    PumpOfflineBootstrap(); check(trace_is(""));
+    natural_updates_seen = false; bootstrap_thread = 0;
+    PumpOfflineBootstrap(); check(trace_is(""));
+    bootstrap_thread = GetCurrentThreadId(); local_connect_probe = false;
+    PumpOfflineBootstrap(); check(trace_is(""));
+    local_connect_probe = true;
+    *reinterpret_cast<void**>(facade + 0x0c) = owner;
+    PumpOfflineBootstrap(); check(trace_is("")); // Never pump a borrowed Ubi facade.
+    *Native<unsigned char**>(0x1379E14) = nullptr;
     VirtualFree(memory, 0, MEM_RELEASE);
     std::printf("%s %d bootstrap patch checks\n", failures ? "FAIL" : "PASS", checks);
     return failures ? 1 : 0;

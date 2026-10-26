@@ -40,6 +40,36 @@ Next milestones are real discovery RPC handling, session creation/joining,
 and only then a two-client match test. Full network isolation and LAN are
 still unverified. Existing experiments allow loopback only.
 
+### Core-update bridge: live verification
+
+A subsequent live run confirmed real RV connectivity but zero calls to the
+outer network update `ED7950`, core update `CBC710`, or network-result callback
+`C92600` during 20 seconds. The owner received 319 bridge ticks and four search
+calls. Owner `+0x1C` was null; master `+0x4C4` and owner `+0x18/+0x3A` were zero.
+The master already referenced the core; the core and implementation tables
+were `10940A0` and `1099548`, respectively.
+
+The prepared adapter adds guarded master dispatch `ED3BA0` followed by core
+update `CBC710(..., 3)`, matching their relative order in `ED7950`. It retains
+the existing owner fallback only if no owner callback ran. Synthetic tests
+cover recursive entry, ordering, duplicate suppression, incomplete objects
+and teardown at master, core and owner callback boundaries. It passed 147 bootstrap checks,
+88 platform checks, 18 connection-state checks, 38 network-guard checks,
+14 original-byte comparisons and the real configuration/fingerprint rejection
+test. The candidate was deployed after the user closed S7, retaining the previous
+adapter as `LocalData/adapter-b94c978.dll`; all bundle hashes and the no-game-launch
+preflight passed. One configuration-fixture run timed out without service output;
+a repeat passed. The user then opened the session list with the new adapter.
+
+Two bounded live observations counted 636/632 core updates and 318/316 owner
+updates per 20 seconds. Local Login/Register and keepalives remained active.
+The core scheduler returned success (1). Master start `C8F9D0`, its completion
+`C917A0`, and network event `C92600` remained at zero. Master child count was
+four, master flags `+0x4C4..+0x4C8` were `[0,0,0,1,0]`; owner attachment/readiness
+remained false. Thus core dispatch works, but startup/discovery is not solved.
+Next inspect the native command queue: startup completion attaches each child
+and only then marks the master started. Do not replace that with flag writes.
+
 ## Local workspace (not portable paths)
 
 The containing output directory holds `S7-Local.code-workspace` and the separate
@@ -50,7 +80,8 @@ Do not assume an old game process still has a usable service session.
 
 The chat workspace's `work/` contains the private static analysis scripts,
 bounded observers, SDK and compiler outputs. It is outside this repository.
-Latest verified adapter build: `work/native-menu-build`.
+Latest adapter with live core-update verification: `work/native-core-build`.
+Previous menu-only bridge build: `work/native-menu-build`.
 The original installation is `C:/Spiele/thesettlers7` and must remain unchanged.
 
 ## TokenSave

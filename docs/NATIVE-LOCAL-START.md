@@ -154,6 +154,38 @@ from not-ready to locally connected, completed Login/Register with both ACKs,
 and continued answering PINGs. The user confirmed that the multiplayer entry
 became selectable. This verifies menu readiness, not a working lobby or match.
 
+### Local master/core update experiment
+
+The user subsequently opened an empty session list. Bounded observation found
+online discovery reaching `ED6C00`, but its native `ED7270` readiness check
+returned false before sending a search RPC. The owner had no core attachment
+at `+0x1C`, its `+0x3A` network-ready byte was clear, and no network-result
+callback (`C92600`) arrived. The existing bridge delivered owner updates,
+but both `ED7950` and the core update `CBC710` had zero observed calls.
+
+The expanded opt-in bridge preserves the relevant native ordering from
+`ED7950`: master dispatch `ED3BA0`, then core update `CBC710` with phase 3.
+Core, implementation and master types must match the fingerprinted executable,
+the master must reference that same core, and its scheduler must exist. The
+borrowed-Ubi facade must remain null. Ownership is rechecked after callbacks.
+If the core already invokes the patched owner update, the fallback is skipped;
+otherwise the existing owner update continues. Thread/reentrancy guards and
+cessation when natural updates resume remain in place. No readiness byte or
+completed network event is fabricated. The loopback guard remains active.
+
+Synthetic x86 trampoline tests exercise the actual bridge with owned objects:
+call order, calling conventions, recursive entry, suppression of duplicate
+owner updates, incomplete initialization, and network/owner/core removal in
+callbacks. The user-started game reached the session list. A 20-second observer
+counted 636 core updates and 318 owner updates, with local Login/Register and
+keepalives intact. The core returned success, but master startup, child
+attachment and network readiness remained absent. This establishes functioning
+core dispatch only, not discovery, hosting, joining or a working match.
+
+Validation: 147 bootstrap/bridge checks, 88 platform checks, 18 connection-state
+checks, 38 network-guard checks, 14 original-byte guards and the real local
+configuration/fingerprint rejection test pass. No game is launched by these tests.
+
 ## Fast menu startup
 
 `tools/offline-ui/prepare.py` applies seven fingerprinted raw-Lua deltas to

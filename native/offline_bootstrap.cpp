@@ -36,6 +36,7 @@ bool local_connect_probe = false;
 DWORD bootstrap_thread = 0;
 bool pump_active = false;
 bool natural_updates_seen = false;
+unsigned int owner_update_count = 0;
 char public_key[97] = {};
 char local_ticket[257] = {};
 
@@ -163,11 +164,13 @@ NativeResult* __fastcall RequestLocalGame(void* self, void*, NativeResult* outpu
     *output = *stored;
     return output;
 }
+unsigned char* LocalUpdateOwner(unsigned char* network);
 void __fastcall UpdateLocalGame(void* self, void*) {
     // Preserve the original update/callback delivery before requesting a local
     // connection. Readiness comes from real native objects and our config,
     // not UbiServices. The requested/pending fields prevent duplicate jobs.
     if (!pump_active) natural_updates_seen = true;
+    ++owner_update_count;
     static bool entered = false;
     static bool returned = false;
     static bool wrong_object = false;
@@ -178,6 +181,7 @@ void __fastcall UpdateLocalGame(void* self, void*) {
     Native<GameLogin>(0xC956C0)(self);
     if (!returned) { returned = true; ReportLocalStatus("local-connect-update-returned"); }
     if (initialization != 2 || !local_connect_probe || !self) return;
+    if (LocalUpdateOwner(*Native<unsigned char**>(0x1379E14)) != self) return;
     auto* game = static_cast<unsigned char*>(self) + 0x50;
     if (*reinterpret_cast<uintptr_t*>(game) != image_base + 0x109C9D8 - PreferredBase) {
         if (!wrong_object) { wrong_object = true; ReportLocalStatus("local-connect-update-object-mismatch"); }
@@ -208,6 +212,37 @@ bool LocalConnectionReady(void* self) {
     // Report the real locally connected transport, not a fabricated Ubisoft SDK
     // session. Pending, disconnected and differently owned objects stay false.
     return facade && !*reinterpret_cast<void**>(facade + 0x0c) && game[0x38] && !game[0x48];
+}
+
+unsigned char* LocalUpdateOwner(unsigned char* network) {
+    if (!network || network != *Native<unsigned char**>(0x1379E14)) return nullptr;
+    auto* owner = *reinterpret_cast<unsigned char**>(network + 0xa18);
+    if (!owner || *reinterpret_cast<uintptr_t*>(owner) != image_base + 0x10919BC - PreferredBase)
+        return nullptr;
+    auto* game = owner + 0x50;
+    if (*reinterpret_cast<uintptr_t*>(game) != image_base + 0x109C9D8 - PreferredBase) return nullptr;
+    auto* facade = *reinterpret_cast<unsigned char**>(game + 0x54);
+    if (!facade || *reinterpret_cast<void**>(facade + 0x0c) ||
+        !*reinterpret_cast<void**>(owner + 0x100) ||
+        !*reinterpret_cast<void**>(owner + 0x104) ||
+        !*reinterpret_cast<void**>(owner + 0x110)) return nullptr;
+    return owner;
+}
+
+unsigned char* LocalUpdateCore(unsigned char* network) {
+    if (!network || network != *Native<unsigned char**>(0x1379E14)) return nullptr;
+    auto* master = network + 0x5c;
+    auto* core = *reinterpret_cast<unsigned char**>(network + 0x2c);
+    // ED46A0 publishes the master's core only after ED60F0/ED55F0 have
+    // constructed the core and registered the game-side observers.
+    if (!core || *reinterpret_cast<uintptr_t*>(core) != image_base + 0x10940A0 - PreferredBase ||
+        *reinterpret_cast<uintptr_t*>(master) != image_base + 0x1091E3C - PreferredBase ||
+        *reinterpret_cast<void**>(master + 0x4c0) != core) return nullptr;
+    auto* implementation = *reinterpret_cast<unsigned char**>(core + 0x20);
+    if (!implementation ||
+        *reinterpret_cast<uintptr_t*>(implementation) != image_base + 0x1099548 - PreferredBase ||
+        !*reinterpret_cast<void**>(implementation + 4)) return nullptr;
+    return core;
 }
 
 bool __fastcall QueryLocalLoginStatus(void* self, void*) {
@@ -392,23 +427,32 @@ void PumpOfflineBootstrap() {
         ~ActiveScope() { pump_active = false; }
     } active_scope;
     // ED5B6F constructs C8ABF0; ED5BA5 stores it at Network+0xA18.
-    // Re-read ownership each tick instead of caching an object past destruction.
+    // Re-read ownership each tick and after callbacks, never cache game objects.
     auto* network = *Native<unsigned char**>(0x1379E14);
-    if (!network) return;
-    auto* owner = *reinterpret_cast<unsigned char**>(network + 0xa18);
-    if (!owner || *reinterpret_cast<uintptr_t*>(owner) != image_base + 0x10919BC - PreferredBase) return;
-    auto* game = owner + 0x50;
-    if (*reinterpret_cast<uintptr_t*>(game) != image_base + 0x109C9D8 - PreferredBase ||
-        !*reinterpret_cast<void**>(game + 0x54)) return;
-    // Original C956C0 dereferences these after construction. A published but
-    // partially initialized owner must wait for the next platform update.
-    if (!*reinterpret_cast<void**>(owner + 0x100) ||
-        !*reinterpret_cast<void**>(owner + 0x104) ||
-        !*reinterpret_cast<void**>(owner + 0x110) ||
-        !Native<NetworkGetter>(0xE82240)()) return;
+    auto* owner = LocalUpdateOwner(network);
+    if (!owner || !Native<NetworkGetter>(0xE82240)()) return;
     static bool reported = false;
     if (!reported) { reported = true; ReportLocalStatus("local-connect-platform-pump-active"); }
-    UpdateLocalGame(owner, nullptr);
+    const unsigned int before = owner_update_count;
+    auto* core = LocalUpdateCore(network);
+    if (core) {
+        static bool core_reported = false;
+        if (!core_reported) { core_reported = true; ReportLocalStatus("local-network-core-pump-active"); }
+        // Preserve ED7950's master-update then core-update ordering. These
+        // dispatch real queued startup/network events. The intervening Ubisoft
+        // profile/statistics/update calls are not required for this local pump.
+        Native<GameLogin>(0xED3BA0)(network);
+        // The master update may destroy or replace native objects in callbacks.
+        if (LocalUpdateOwner(network) != owner || LocalUpdateCore(network) != core) return;
+        using CoreUpdate = NativeResult* (__thiscall*)(void*, NativeResult*, unsigned int);
+        NativeResult result{};
+        Native<CoreUpdate>(0xCBC710)(core, &result, 3);
+        if (LocalUpdateCore(network) != core) return;
+    }
+    // A core callback may already have reached the patched owner update slot.
+    // Only supply the old fallback tick when the core did not deliver one.
+    if (LocalUpdateOwner(network) == owner && owner_update_count == before)
+        UpdateLocalGame(owner, nullptr);
 }
 
 const char* GetOfflineBootstrapError() {
