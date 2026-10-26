@@ -43,6 +43,17 @@ The runtime addresses remain private local configuration, never repository data.
 Windows already has user-created Allow rules for this copy and its bundled
 runtime; no firewall settings were changed by the agent.
 
+The independent installer output (work/installer-lan-real-test) fully matches
+the active copy's compatibility inventory. Portable ZIP verified: 247 entries,
+no game binaries or user identity. User has been asked to install it on PC 2,
+select client and inspect the public session list without joining. Response
+is pending. No second-PC connectivity has yet been observed.
+
+JoinSession_V1 static wire evidence and a bounded request parser are now in
+LOCAL-SESSION-JOIN.md / LocalSessionMetadata.TryReadJoinBody. 4,756 checks pass
+including 143 new join-shape checks. The parser is not wired to successful
+membership mutation/reply; the already delivered package remains unchanged.
+
 The second PC still needs installation/discovery testing. Host's current
 connection has the inherited 20-minute test lifetime. New launcher performs
 cooperative pre-start content-ID comparison, not authenticated RPC admission.

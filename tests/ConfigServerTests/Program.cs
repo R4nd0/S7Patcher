@@ -334,6 +334,7 @@ passed += LocalSessionSearchChecks.Run();
 passed += LocalSessionDisplayChecks.Run();
 passed += LocalSessionCatalogueChecks.Run();
 passed += LocalNetworkPolicyChecks.Run();
+passed += LocalSessionJoinShapeChecks.Run();
 passed += LocalSessionCreationChecks.Run();
 passed += RegisteredHostChecks.Run();
 passed += CreationFieldChecks.Run();

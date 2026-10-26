@@ -78,6 +78,44 @@ namespace S7Patcher.Source
             finally { if (result == null) value.Dispose(); }
         }
 
+        // JoinSession_V1 only: E52143 class versions, E5215E Space, E52170 ID,
+        // E5217C nested qString -> GUID -> Variant metadata. This parser does
+        // not authorize membership or acknowledge a successful join.
+        internal static bool TryReadJoinBody(ReadOnlySpan<byte> body,
+            out ReadOnlySpan<byte> space, out uint sessionId, out LocalSessionMetadata result)
+        {
+            space = default; sessionId = 0; result = null;
+            if (body.Length > MaximumBytes) return false;
+            Reader reader = new(body);
+            LocalSessionMetadata value = new();
+            try
+            {
+                if (!reader.Number(out uint classes) || classes != 2) return false;
+                int seen = 0;
+                for (int i = 0; i < 2; ++i)
+                {
+                    if (!reader.Text(out var name) || !reader.Bytes(2, out var version)
+                        || BinaryPrimitives.ReadUInt16LittleEndian(version) != 1) return false;
+                    int kind = name.SequenceEqual("MatchmakingSession"u8) ? 1
+                        : name.SequenceEqual("MatchmakingSessionMember"u8) ? 2 : 0;
+                    if (kind == 0 || (seen & kind) != 0) return false;
+                    seen |= kind;
+                }
+                if (!reader.Text(out space) || !reader.Number(out sessionId) || sessionId is 0 or uint.MaxValue
+                    || !reader.Number(out uint groups) || groups > LocalSessionCreationCodec.MaximumMapEntries) return false;
+                for (uint i = 0; i < groups; ++i)
+                {
+                    if (!reader.Text(out var name)) return false;
+                    Dictionary<string, byte[]> members = new(StringComparer.Ordinal);
+                    if (!value.Members.TryAdd(Convert.ToHexString(name), members)
+                        || !reader.Map(members, true, LocalSessionCreationCodec.MaximumMembers)) return false;
+                }
+                if (!reader.AtEnd || !value.WithinBounds()) return false;
+                result = value; return true;
+            }
+            finally { if (result == null) value.Dispose(); }
+        }
+
         // Copy-on-write: invalid aggregate growth never partially applies an update.
         internal bool TryMerge(LocalSessionMetadata patch, out LocalSessionMetadata merged)
         {
