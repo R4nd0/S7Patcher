@@ -274,6 +274,7 @@ int main() {
     check(!EnsureLocalSearchSpace(network)); // Missing private context.
     *reinterpret_cast<void**>(search_helper + 0x1d8) = search_helper;
     check(!EnsureLocalSearchSpace(network)); // Missing backend.
+    check(!QueryLocalSessionCreate(network, nullptr));
     *reinterpret_cast<void**>(facade + 0x20) = backend;
     check(!EnsureLocalSearchSpace(network)); // Missing public space string.
     *reinterpret_cast<const char**>(backend + 0xe4) = "";
@@ -292,8 +293,21 @@ int main() {
         check(EnsureLocalSearchSpace(network));
         check(SameSearchSpace(*bound_space, value, strlen(value)));
         check(EnsureLocalSearchSpace(network) && search_space_calls == before + 1);
+        check(QueryLocalSessionCreate(network, nullptr) && search_space_calls == before + 1);
+        const unsigned char original_nat = owner[0x3a];
+        local_connect_probe = false;
+        check(!QueryLocalSessionCreate(network, nullptr));
+        local_connect_probe = true;
+        bootstrap_thread = 0;
+        check(!QueryLocalSessionCreate(network, nullptr));
+        bootstrap_thread = GetCurrentThreadId();
+        owner[0x88] = 0;
+        check(!QueryLocalSessionCreate(network, nullptr));
+        owner[0x88] = 1;
+        check(QueryLocalSessionCreate(network, nullptr) && owner[0x3a] == original_nat);
         *reinterpret_cast<const char**>(backend + 0xe4) = "different-space";
         check(!EnsureLocalSearchSpace(network) && search_space_calls == before + 1);
+        check(!QueryLocalSessionCreate(network, nullptr));
     }
     *bound_space = {}; bound_space->capacity = 15;
     *reinterpret_cast<const char**>(backend + 0xe4) = "local-s7";

@@ -57,8 +57,12 @@ namespace S7Patcher.Source
             if (!ReadString(message, ref offset, out ReadOnlySpan<byte> method, out _))
                 return "invalid-rpc-envelope";
             if (protocol.SequenceEqual("MatchmakingProtocol"u8))
-                return method.SequenceEqual("MatchmakingProtocol::SearchSessions_V1"u8)
-                    ? "matchmaking-search-sessions-v1" : "matchmaking-other-method";
+            {
+                if (method.SequenceEqual("MatchmakingProtocol::SearchSessions_V1"u8)) return "matchmaking-search-sessions-v1";
+                if (method.SequenceEqual("MatchmakingProtocol::CreateSession_V1"u8)) return "matchmaking-create-session-v1";
+                if (method.SequenceEqual("MatchmakingProtocol::CreateSession2_V1"u8)) return "matchmaking-create-session2-v1";
+                return "matchmaking-other-method";
+            }
             if (protocol.SequenceEqual(ProtocolBytes))
                 return method.SequenceEqual(LoginMethodBytes) ? "login-with-token-v1"
                     : method.SequenceEqual(RegisterMethodBytes) ? "login-register-v1" : "login-other-method";

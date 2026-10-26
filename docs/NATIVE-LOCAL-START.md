@@ -269,6 +269,22 @@ crash (`0xC0000409`). Subsequent game restart without it succeeded. Use only
 the external read-only Windows snapshot for the next test; do not inject the
 retired observer again.
 
+## Prepared local create-request policy
+
+After the empty search response was delivered and acknowledged repeatedly,
+the user's create attempt failed before any new RPC. `ED630B` still invokes
+the global readiness predicate; its underlying owner `+0x3A` remains false.
+The candidate adds an exact guarded replacement of that call with
+`QueryLocalSessionCreate`, requiring the existing local connected state,
+owned objects, bootstrap thread, explicit probe and native SpaceId transfer.
+It enables only the original asynchronous create-request path. It sets no
+network readiness flags and supplies no fabricated creation result.
+
+The candidate passes 354 adapter checks (248 bootstrap, 88 platform, 18
+connection-state), 38 network checks, 18 original-byte comparisons and the
+real configuration/executable-rejection test. Deployment and live verification
+are pending; the service still needs an actual create handler.
+
 ## Fast menu startup
 
 `tools/offline-ui/prepare.py` applies seven fingerprinted raw-Lua deltas to

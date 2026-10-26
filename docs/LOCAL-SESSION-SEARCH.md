@@ -65,7 +65,15 @@ including a fixed empty-response wire vector, truncated/invalid requests,
 1,000 random bodies, all supported variants, baseline/registration gates,
 the response and pending limits, retransmission/ACK cleanup, and a real
 encrypted loopback Login/Register/Search exchange. Synthetic success is not
-evidence that the game consumed the response. That live test is next.
+evidence that the game consumed the response.
+
+The following live test recorded 16 search replies and 18 response ACKs
+including Login/Register, with zero rejections/expirations. The game stayed
+connected and open. This establishes transport delivery; its internal search
+completion callback has not been directly observed. Attempting to create a
+session then failed at the game's separate readiness gate before any new RPC.
+The subsequent classifier additions pass 1,926 server checks and explicitly
+reject create requests in the empty-search handler.
 
 Hosting, catalogue state, join semantics, match startup and transport between
 two computers are still absent. All current endpoints remain loopback-only.

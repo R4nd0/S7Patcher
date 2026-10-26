@@ -103,6 +103,8 @@ byte[] DiagnosticRequest(string protocol, string method, byte[] body)
 }
 byte[] search = DiagnosticRequest("MatchmakingProtocol", "MatchmakingProtocol::SearchSessions_V1", [0, 255, 128]);
 Check(LoginRpcCodec.ClassifyPostLoginRequest(search) == "matchmaking-search-sessions-v1", "Known search header not classified");
+Check(LoginRpcCodec.ClassifyPostLoginRequest(DiagnosticRequest("MatchmakingProtocol", "MatchmakingProtocol::CreateSession_V1", [])) == "matchmaking-create-session-v1"
+    && LoginRpcCodec.ClassifyPostLoginRequest(DiagnosticRequest("MatchmakingProtocol", "MatchmakingProtocol::CreateSession2_V1", [])) == "matchmaking-create-session2-v1", "Known create headers not classified");
 Check(LoginRpcCodec.ClassifyPostLoginRequest(login) == "login-with-token-v1"
     && LoginRpcCodec.ClassifyPostLoginRequest(register) == "login-register-v1", "Repeated login header classification differs");
 Check(LoginRpcCodec.ClassifyPostLoginRequest(DiagnosticRequest("MatchmakingProtocol", "private-invented-text", [])) == "matchmaking-other-method"

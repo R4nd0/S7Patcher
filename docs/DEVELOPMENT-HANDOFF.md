@@ -10,17 +10,19 @@ The native adapter establishes a genuine local Login/Register exchange and
 the service acknowledges keepalives beyond three minutes. The real connected
 state now enables the multiplayer menu. The user opened an empty session list.
 
-The current native change passed 335 adapter checks, 38 network-guard checks
-and 17 original-byte comparisons, plus configuration validation. The
-current search-capable service passes 1,924 checks.
+The current native candidate passed 354 adapter checks, 38 network-guard checks
+and 18 original-byte comparisons, plus configuration validation. The
+current search-capable service passes 1,926 checks.
 These are separate results, not evidence of a playable LAN match.
 
-## Current blocker: live verification of the empty search response
+## Current blocker: create-session request gate and missing server handler
 
-The SpaceId transfer and real `SearchSessions_V1` requests are live-verified.
-The service now has a tested, bounded handler returning two genuinely empty
-result collections. The game must still verify that response. Hosting,
-joining, match startup and LAN transport remain unimplemented.
+The SpaceId transfer and real `SearchSessions_V1` exchange are live-verified
+at transport level: 16 empty search replies, 18 acknowledgements including
+Login/Register, no rejection or expiry in the recorded sample. The user
+opened game settings, but creating a session showed a server error without
+sending another RPC. A scoped create-request gate is prepared; the service
+does not yet create sessions. Joining, match startup and LAN remain absent.
 
 Earlier observations established the following startup/readiness blockers,
 subsequently addressed by the scoped changes documented below.
@@ -211,6 +213,43 @@ directory. The test launcher selects it, with the prior launcher retained as
 match the build; all three game-bundle hashes are unchanged. A two-second
 loopback startup/shutdown smoke check passed. The user has been asked to
 restart through the test launcher and leave the session list open for a minute.
+
+That run succeeded at transport level: the server queued 16 empty search
+replies and received 18 response ACKs including Login/Register, with zero
+rejections or expirations. The game stayed connected and open. ACKs establish
+delivery; there is still no direct observation of its internal completion
+callback. The user then opened game settings and tried creating a session.
+
+### Create Session gate: prepared, awaiting adapter replacement
+
+The user supplied a screenshot of `SERVER-FEHLER / KANN KEINE NEUE SITZUNG
+ANLEGEN!` on map selection. No create RPC reached the endpoint. In the exact
+executable, `ED62D0` passes the already-replaced login check at `ED62FC`, then
+calls `ED7270` at `ED630B`. Failure takes `ED6317 -> ED20A0` before creating
+the asynchronous `Create Session` job at `ED634C`. A read-only live snapshot
+confirmed owner `+0x3A` false while actual connection, helper SpaceId, master
+startup and owner attachment remained ready.
+
+The new candidate replaces only that five-byte call with
+`QueryLocalSessionCreate`. It requires the same exact local ownership,
+bootstrap thread, explicit probe, started/attached network and native SpaceId
+transfer used for search. It does not alter the NAT flag or claim lobby/match
+success; the original asynchronous job still owns the result. Native patch
+guards increase to 18. Build `work/native-create-build`: 248 bootstrap, 88
+platform, 18 connection-state and 38 network checks pass, as do all 18 original
+guards and real configuration/wrong-executable rejection.
+
+The service classifier now recognizes fixed `CreateSession_V1` and
+`CreateSession2_V1` labels. Neither receives a fabricated success response;
+the search handler rejects both. Codec checks pass (20,215 assertions), and
+the full server suite passes 1,926 checks. The separate launcher selects the
+hash-verified `Server-Create-Diagnostic` service; the previous service and
+launcher are retained. The loaded adapter is unchanged until the user closes
+S7. Deployment script: `work/deploy_create_adapter.py`, expected previous
+adapter `8d3bc91`, backup `LocalData/adapter-8d3bc91.dll`. Next: confirm process
+exit, deploy, run no-game-launch preflight, then request a manual launch and
+one create attempt. A create error remains possible because the handler is
+not yet implemented. Do not inject diagnostic libraries.
 
 ## Local workspace (not portable paths)
 

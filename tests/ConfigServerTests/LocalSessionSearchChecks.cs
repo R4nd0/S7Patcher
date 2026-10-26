@@ -68,6 +68,11 @@ internal static class LocalSessionSearchChecks
         wrong = Body(); wrong[4 + Ddl("MatchmakingSession").Length] = 2; Reject(Request(body: wrong));
         wrong = Request(); wrong[6] = (byte)'X'; Reject(wrong);
         wrong = Request(); wrong[26] = 0; Reject(wrong);
+        foreach (string method in new[] { "MatchmakingProtocol::CreateSession_V1", "MatchmakingProtocol::CreateSession2_V1" })
+        {
+            byte[] create = [0, 0, 0, 0, .. Ddl("MatchmakingProtocol"), 1, 0, 0, 0, 0, .. Ddl(method), .. Body()];
+            BinaryPrimitives.WriteUInt32LittleEndian(create, (uint)(create.Length - 4)); Reject(create);
+        }
         Random random = new(20261026);
         for (int i = 0; i < 1000; i++)
         {
