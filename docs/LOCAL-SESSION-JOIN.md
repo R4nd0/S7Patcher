@@ -336,3 +336,35 @@ D3F92D..D3F984; the positive branch uses the neighboring report wrapper E4E2C0.
 Both branches use the same kind/ID fields. The actual failure description from
 PC 2 remains unknown because the installed old service discarded the body.
 No memory injection, native function invocation or new game launch was used.
+
+## Native admission reached; success report follow-up (2026-10-26)
+
+With the lab core-resume adapter, the host now dispatches the queued native
+JoinRequest to the original open game gate. The guest logs a positive native
+join completion. The service receives ReportJoinSuccess_V1 immediately after
+JoinSession_V1 and previously rejected this unsupported operation. The user
+still reports session error 0: native completion is not proof of visible lobby
+membership or a playable match.
+
+Static request serialization E532D6..E53303 writes an empty class-version map,
+Space, the kind selector and session ID. D3F954/E4E2C0 supplies zero kind and
+the same ID as JoinSession. E55675..E556BE matches the response without reading
+return fields. LocalSessionJoinSuccessCodec therefore returns a correlated
+void response only after validating the complete bounded request, zero kind,
+existing reservation, transport ownership and registered peer. Unknown,
+unregistered, foreign, expired and cross-space callers receive no success.
+
+Confirmation is idempotent and retains ownership/host privilege boundaries.
+Owned snapshots expose pending and confirmed profiles separately, using local
+member states 0 and 3 respectively. Conservative slot accounting is unchanged:
+a success report does not itself prove a host slot update. Leaving or closing
+a transport removes only that member; host cleanup removes the whole record.
+No host notification is synthesized. The native adapter remains unchanged.
+
+Tests cover the independently transcribed request vector, truncation and
+scope rejection, exact void response/correlation, retries, cleanup and ten
+encrypted two-client scenarios in both hosting directions. These service tests
+do not establish native admission, lobby UI behavior or synchronized gameplay.
+Candidate: work/server-pair-join-success. Live result pending.
+Final verification passes 5,975 lab and 5,953 default service checks; both
+builds have zero warnings/errors. Deployed only to the one-PC pair laboratory.

@@ -13,7 +13,8 @@ With `95603b5`, the user also reached the created lobby with player slots.
 Login, Register, search, create and update each received an acknowledged reply;
 there were no rejected requests in that observed run. Match startup is not yet
 verified. A second PC now discovers the lobby and sends a join request, but
-the native join fails after the service response; no successful join is verified.
+the native admission now completes, followed by an unsupported success-report
+RPC. Visible lobby membership and a playable join are not yet verified.
 
 The current native candidate passed 354 adapter checks, 38 network-guard checks
 and 18 original-byte comparisons, plus configuration validation. The
@@ -94,9 +95,24 @@ The blocking-join bridge uses the same policy. Default builds retain the old
 natural-update behavior. 876 lab bootstrap checks, 69 network checks and 359
 default bootstrap checks pass. Both candidates build with warnings as errors.
 The regression reproduces an isolated owner callback followed by queued core
-work, and tests resumption after a genuine external core tick. Live result
-pending; no successful join or match is established.
-Service remains work/server-pair-catalogue-route, unchanged in this milestone.
+work, and tests resumption after a genuine external core tick. Live result:
+host dispatch resumes, JoinRequest reaches the original game gate (open), and
+the guest's native join completion returns positive. The service then receives
+ReportJoinSuccess_V1 and rejects it as unsupported-session-operation. The user
+still sees session error 0; UI membership and a match are not established.
+
+The next service candidate work/server-pair-join-success implements that exact
+follow-up. Static E532D6..E53303 writes an empty class map, Space, kind and ID;
+D3F954/E4E2C0 supplies kind zero. E55675..E556BE consumes no return fields.
+Only the original registered reservation owner can confirm its own record;
+repeated confirmations are idempotent. Snapshots distinguish pending state 0
+from locally confirmed state 3. Existing conservative slot reservations remain
+held; host slot reconciliation/notifications are not fabricated. The native
+adapter remains work/native-pair-core-resume. Live candidate result pending.
+Final verification: 5,975 lab and 5,953 default service checks passed, including
+real HTTP/UDP and encrypted two-peer confirmations in both host directions;
+both builds completed without warnings/errors. The candidate is deployed only
+to the one-PC pair laboratory. Normal PC1/PC2 copies and installer are unchanged.
 Normal native behavior
 is isolated by S7_LOCAL_PAIR_LAB. No successful join or match is established.
 Details and exact observations: LOCAL-PAIR-LAB.md.

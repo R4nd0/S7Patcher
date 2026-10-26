@@ -67,6 +67,7 @@ namespace S7Patcher.Source
             internal readonly LocalLoginRpcEngine.RegisteredPeer Peer = peer;
             internal readonly LocalSessionMetadata Metadata = metadata;
             internal readonly byte[] Body = body.ToArray();
+            internal bool Confirmed;
             public void Dispose() { Peer.Dispose(); Metadata.Dispose(); CryptographicOperations.ZeroMemory(Body); }
         }
 
@@ -160,9 +161,12 @@ namespace S7Patcher.Source
             foreach (var member in entry.Pending.Values)
                 if (!Add(member)) { snapshot.Dispose(); return null; }
             if (extra != null && !Add(extra)) { snapshot.Dispose(); return null; }
-            if (snapshot.PendingProfiles.Count > 0 && Slots(metadata, "settlers_free_slots", out long free))
+            // Keep the existing conservative reservation accounting. A success
+            // report alone does not prove the host's slot metadata was updated.
+            int reservedProfiles = snapshot.PendingProfiles.Count + snapshot.ConfirmedProfiles.Count;
+            if (reservedProfiles > 0 && Slots(metadata, "settlers_free_slots", out long free))
                 BinaryPrimitives.WriteInt64LittleEndian(metadata.Attributes[JoinKey("settlers_free_slots")].AsSpan(1),
-                    Math.Max(0, free - snapshot.PendingProfiles.Count));
+                    Math.Max(0, free - reservedProfiles));
             return snapshot;
 
             bool Add(PendingMember member)
@@ -180,7 +184,7 @@ namespace S7Patcher.Source
                     }
                 }
                 merged.Dispose();
-                snapshot.PendingProfiles.Add(member.Peer.ProfileId.ToArray());
+                (member.Confirmed ? snapshot.ConfirmedProfiles : snapshot.PendingProfiles).Add(member.Peer.ProfileId.ToArray());
                 return true;
             }
         }

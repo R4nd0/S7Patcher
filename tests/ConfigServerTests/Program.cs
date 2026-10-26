@@ -336,6 +336,7 @@ passed += LocalSessionCatalogueChecks.Run();
 passed += LocalNetworkPolicyChecks.Run();
 passed += LocalSessionJoinShapeChecks.Run();
 passed += LocalSessionJoinChecks.Run();
+passed += LocalJoinSuccessChecks.Run();
 passed += LocalJoinFailureChecks.Run();
 passed += LocalStormRouteChecks.Run();
 passed += LocalPairRouteChecks.Run();

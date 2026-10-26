@@ -61,6 +61,17 @@ namespace S7Patcher.Source
             textLength = text.Length; category = LocalJoinFailureDescription.Classify(text); return true;
         }
 
+        internal static bool TryReadJoinSuccessBody(ReadOnlySpan<byte> body,
+            out ReadOnlySpan<byte> space, out uint sessionId)
+        {
+            space = default; sessionId = 0;
+            if (body.Length > 8192) return false;
+            Reader reader = new(body);
+            return reader.Number(out uint classes) && classes == 0 && reader.Text(out space)
+                && space.Length <= 1024 && reader.Number(out uint kind) && kind == 0
+                && reader.Number(out sessionId) && sessionId is > 0 and < uint.MaxValue && reader.AtEnd;
+        }
+
         internal static bool TryReadLeaveBody(ReadOnlySpan<byte> body,
             out ReadOnlySpan<byte> space, out uint sessionId)
         {

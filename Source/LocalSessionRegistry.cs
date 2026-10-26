@@ -104,7 +104,7 @@ namespace S7Patcher.Source
             }
         }
 
-        // Hosts remove their record; pending clients remove only their own
+        // Hosts remove their record; reserved/confirmed clients remove only their own
         // reservation, never another transport's session or membership.
         internal bool TryLeave(object owner, ReadOnlySpan<byte> body, out string reason)
         {
@@ -118,7 +118,8 @@ namespace S7Patcher.Source
                 if (!ReferenceEquals(entry.Owner, owner))
                 {
                     if (!entry.Pending.Remove(owner, out var pending)) continue;
-                    pending.Dispose(); reason = "local-session-pending-member-left"; return true;
+                    reason = pending.Confirmed ? "local-session-confirmed-member-left" : "local-session-pending-member-left";
+                    pending.Dispose(); return true;
                 }
                 if (DisplayProbe && (previews.ContainsKey(owner) || previews.Count < MaximumSessions))
                 {
@@ -204,11 +205,14 @@ namespace S7Patcher.Source
             internal LocalSessionMetadata Metadata { get; } = metadata;
             internal LocalLoginRpcEngine.RegisteredPeer Host { get; } = host;
             internal List<byte[]> PendingProfiles { get; } = new();
+            internal List<byte[]> ConfirmedProfiles { get; } = new();
             public void Dispose()
             {
                 CryptographicOperations.ZeroMemory(Space); Metadata.Dispose(); Host.Dispose();
                 foreach (var profile in PendingProfiles) CryptographicOperations.ZeroMemory(profile);
                 PendingProfiles.Clear();
+                foreach (var profile in ConfirmedProfiles) CryptographicOperations.ZeroMemory(profile);
+                ConfirmedProfiles.Clear();
             }
         }
 

@@ -541,7 +541,7 @@ internal static class LocalLoginSessionChecks
             CryptographicOperations.ZeroMemory(expected);
         }
         // Two independently encrypted peers, in both host directions. This tests
-        // discovery/Get/pending join, not completed membership or gameplay.
+        // discovery/Get/reservation/confirmation, not native peer admission or gameplay.
         for (int direction = 0; direction < 10; direction++)
         {
             using LocalSessionRegistry registry = new(catalogueProbe: true);
@@ -613,13 +613,26 @@ internal static class LocalLoginSessionChecks
                 && failureJson.Contains("reported_session_kind") && failureJson.Contains("session-request-refused")
                 && !failureJson.Contains("reported_error_code"), "Failure report redaction and field meaning");
             Check(visitor.Session.TakeDue(550, visitor.Events.Add).Count == 0 && registry.Count == 1, "Diagnostic fabricated reply or removed session");
+            // The native game emits this only after its ticket/peer join succeeds.
+            // An encrypted RPC retry must return the same void response, without
+            // adding another member or granting authority over host settings.
+            byte[] success = visitor.Data(14, 0, LocalJoinSuccessChecks.Request());
+            visitor.Session.ProcessData(success, visitor.Events.Add);
+            packet = visitor.Session.TakeDue(560, visitor.Events.Add).Single();
+            VerifySearchResponse(packet, visitor.Key, 0x12345678, visitor.ServerSession, LocalJoinSuccessChecks.Response()); passed++;
+            visitor.Session.ProcessData(success, visitor.Events.Add);
+            Check(ReferenceEquals(packet, visitor.Session.TakeDue(1560, visitor.Events.Add).Single()), "Confirmation retransmit changed ciphertext");
+            Check(visitor.Session.TryAcknowledge(Ack(ServerCookie, 6)) && packet.All(b=>b==0), "Success ACK cleanup");
+            Check(visitor.Events.Count(e=>e.Event=="local-session-join-success-response-queued")==1, "Success duplicate dispatch");
+            Check(registry.TryCopyLiveSession(host.Session, "invented-space"u8, 1, out var joined), "Encrypted success snapshot");
+            using(joined) Check(joined.PendingProfiles.Count==0 && joined.ConfirmedProfiles.Count==1, "Encrypted confirmation membership");
             host.Session.ProcessData(host.Data(9, 0, LocalSessionLeaveChecks.Request()), host.Events.Add);
             host.Session.TakeDue(600, host.Events.Add);
             Check(host.Session.TryAcknowledge(Ack(ServerCookie, 4)) && registry.Count == 0, "Host leave failed");
-            visitor.Session.ProcessData(visitor.Data(14, 0, search), visitor.Events.Add);
+            visitor.Session.ProcessData(visitor.Data(15, 0, search), visitor.Events.Add);
             packet = visitor.Session.TakeDue(700, visitor.Events.Add).Single();
             VerifySearchResponse(packet, visitor.Key, 0x12345678, visitor.ServerSession); passed++;
-            Check(visitor.Session.TryAcknowledge(Ack(ServerCookie, 6)), "Empty-after-leave ACK failed");
+            Check(visitor.Session.TryAcknowledge(Ack(ServerCookie, 7)), "Empty-after-leave ACK failed");
         }
         foreach (bool keepAlive in new[] { false, true })
         {
