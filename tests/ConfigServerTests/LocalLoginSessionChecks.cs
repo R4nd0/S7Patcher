@@ -132,6 +132,30 @@ internal static class LocalLoginSessionChecks
         }
         finally { CryptographicOperations.ZeroMemory(envelope); if (expanded != null) CryptographicOperations.ZeroMemory(expanded); }
     }
+    private static void VerifySearchResponse(byte[] packet, byte[] key, uint callId, byte serverSession)
+    {
+        if (!PrudpDataPacketDecoder.TryDecode(packet, out var data, out _, 0) || data.BytesConsumed != packet.Length
+            || packet[0] != 0x31 || packet[1] != 0x3a || packet[2] != 0x32 || packet[3] != serverSession || packet[10] != 0
+            || BinaryPrimitives.ReadUInt32LittleEndian(packet.AsSpan(4)) != ClientCookie)
+            throw new Exception("Invalid search response transport");
+        byte[] envelope = NativeCngFixtures.Decrypt(packet.AsSpan(27, data.PayloadLength - 16).ToArray(), key, packet.AsSpan(11, 16).ToArray());
+        byte[] expanded = null;
+        try
+        {
+            if (envelope[0] == 0) expanded = envelope.AsSpan(1).ToArray();
+            else
+            {
+                using MemoryStream input = new(envelope, 1, envelope.Length - 1, false);
+                using ZLibStream zlib = new(input, CompressionMode.Decompress);
+                using MemoryStream output = new(); zlib.CopyTo(output); expanded = output.ToArray();
+            }
+            if (expanded.Length != 84 || BinaryPrimitives.ReadUInt16LittleEndian(expanded.AsSpan(82))
+                != BinaryPrimitives.ReadUInt16LittleEndian(packet.AsSpan(8))
+                || !expanded.AsSpan(0, 82).SequenceEqual(LocalSessionSearchChecks.EmptyResponse(callId)))
+                throw new Exception("Search response differs from fixed native wire vector");
+        }
+        finally { CryptographicOperations.ZeroMemory(envelope); if (expanded != null) CryptographicOperations.ZeroMemory(expanded); }
+    }
     private sealed class Fixture : IDisposable
     {
         internal readonly PrudpProbePeer Peer;
@@ -299,6 +323,53 @@ internal static class LocalLoginSessionChecks
             Check(fixture.Events.All(e => !JsonSerializer.Serialize(e, ConfigServerJsonContext.Default.ConfigServerEvent).Contains("invented-private-body")),
                 "Diagnostic event leaked argument bytes");
         }
+        using (Fixture fixture = new())
+        {
+            fixture.Register();
+            fixture.Session.ProcessData(fixture.Data(8, 0, LocalSessionSearchChecks.Request()), fixture.Events.Add);
+            Check(fixture.Session.PendingCount == 0, "Baseline login probe unexpectedly enabled search replies");
+        }
+        using (Fixture fixture = new(keepAlive: true))
+        {
+            fixture.Login(); fixture.Session.TakeDue(100, fixture.Events.Add);
+            fixture.Session.TryAcknowledge(Ack(ServerCookie, 1));
+            fixture.Session.ProcessData(fixture.Data(7, 0, Request(true)), fixture.Events.Add);
+            fixture.Session.ProcessData(fixture.Data(8, 0, LocalSessionSearchChecks.Request()), fixture.Events.Add);
+            Check(fixture.Session.PendingCount == 1 && !fixture.Events.Any(e => e.Event == "local-session-search-response-queued"),
+                "Search replied before Register acknowledgement");
+        }
+        using (Fixture fixture = new(keepAlive: true))
+        {
+            fixture.Register();
+            for (ushort i = 0; i < PrudpLocalLoginSession.MaximumSearchResponses; ++i)
+            {
+                byte[] packet = fixture.Data((ushort)(8 + i), 0, LocalSessionSearchChecks.Request(i));
+                fixture.Session.ProcessData(packet, fixture.Events.Add);
+                fixture.Session.ProcessData(packet, fixture.Events.Add);
+                Check(fixture.Session.PendingCount == 1, "Duplicate search requeued a response");
+                byte[] response = fixture.Session.TakeDue(2000 + i * 2000, fixture.Events.Add).Single();
+                VerifySearchResponse(response, fixture.Key, i, fixture.ServerSession); passed++;
+                if (i == 0)
+                {
+                    Check(fixture.Session.TakeDue(2999, fixture.Events.Add).Count == 0, "Search retried early");
+                    Check(ReferenceEquals(response, fixture.Session.TakeDue(3000, fixture.Events.Add).Single()), "Search retry changed ciphertext");
+                }
+                Check(fixture.Session.TryAcknowledge(Ack(ServerCookie, (ushort)(3 + i))) && response.All(b => b == 0),
+                    "Search ACK failed to clear response ciphertext");
+            }
+            fixture.Session.ProcessData(fixture.Data(40, 0, LocalSessionSearchChecks.Request()), fixture.Events.Add);
+            Check(fixture.Session.PendingCount == 0 && fixture.Events.Count(e => e.Event == "local-session-search-response-queued") == 32,
+                "Search response cap exceeded");
+            Check(fixture.Session.TryReplyToPing(Ping(), 70000, fixture.Events.Add, out _), "Search budget broke keepalive");
+        }
+        using (Fixture fixture = new(keepAlive: true))
+        {
+            fixture.Register();
+            for (ushort i = 8; i < 11; ++i)
+                fixture.Session.ProcessData(fixture.Data(i, 0, LocalSessionSearchChecks.Request(i)), fixture.Events.Add);
+            Check(fixture.Session.PendingCount == 2 && fixture.Events.Count(e => e.Event == "local-session-search-response-queued") == 2,
+                "Search pending window exceeded");
+        }
         foreach (bool lifetime in new[] { false, true })
         {
             using Fixture fixture = new(); fixture.Login();
@@ -391,6 +462,17 @@ internal static class LocalLoginSessionChecks
             await Wait(() => events.Any(item => item.Event == "local-ping-ack-sent"));
             await client.SendAsync(Ping(cookie, 8)); await Silence(150);
             await client.SendAsync(Ping(cookie ^ 1)); await Silence(150);
+            byte[] searchPacket = Data(cookie, key, 9, 0, LocalSessionSearchChecks.Request());
+            await client.SendAsync(searchPacket);
+            firstReceived = await Receive(); secondReceived = await Receive();
+            response = firstReceived.Length == 15 ? secondReceived : firstReceived;
+            Check(firstReceived.Length == 15 || secondReceived.Length == 15, "Search DATA ACK missing");
+            VerifySearchResponse(response, key, 0x12345678, serverSession); passed++;
+            await client.SendAsync(Ack(cookie, BinaryPrimitives.ReadUInt16LittleEndian(response.AsSpan(8))));
+            await Wait(() => events.Count(item => item.Event == "local-login-ack-observed" && item.Reason == "response-acknowledged") == 3);
+            await client.SendAsync(searchPacket); Check((await Receive()).Length == 15, "Duplicate search DATA not acknowledged");
+            await Silence(1200);
+            Check(events.Count(item => item.Event == "local-session-search-response-queued") == 1, "Duplicate search created another response");
             Check(events.Count(item => item.Event == "local-login-response-queued") == 2, "Network RPC duplication or missing registration");
             string json = string.Join("\n", events.Select(item => JsonSerializer.Serialize(item, ConfigServerJsonContext.Default.ConfigServerEvent)));
             Check(!json.Contains("test-secret") && !json.Contains(PublicUrl) && !json.Contains(Convert.ToHexString(key))

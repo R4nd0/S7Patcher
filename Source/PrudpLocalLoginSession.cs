@@ -15,6 +15,7 @@ namespace S7Patcher.Source
         internal const int LifetimeMilliseconds = 120000;
         internal const int KeepAliveMaximumMilliseconds = 1200000;
         internal const int PingReplyIntervalMilliseconds = 100;
+        internal const int MaximumSearchResponses = 32;
         private readonly PrudpProbePeer peer;
         private readonly ReliableMessageAssembler assembler;
         private readonly LocalLoginRpcEngine rpc;
@@ -26,6 +27,8 @@ namespace S7Patcher.Source
         private ushort nextOutgoing = 1;
         private int responseCount;
         private int postLoginObservations;
+        private int searchResponseCount;
+        private bool registrationAcknowledged;
         private bool closed;
 
         internal PrudpLocalLoginSession(PrudpProbePeer peer, IPEndPoint endpoint, string authUrl, long now, bool keepAlive = false)
@@ -87,9 +90,11 @@ namespace S7Patcher.Source
                 byte[] response = null;
                 try
                 {
-                    // At most two successful RPC responses, each one conservative
-                    // DATA fragment. Unknown subsequent services are observed only.
-                    if (responseCount >= 2 || pending.Count >= 2)
+                    bool search = responseCount == 2;
+                    string reason;
+                    // Login/Register keep their two-response budget. The opt-in
+                    // keepalive service can additionally answer bounded searches.
+                    if (search)
                     {
                         if (postLoginObservations < 8)
                         {
@@ -97,10 +102,18 @@ namespace S7Patcher.Source
                             emit(new() { Event = "local-post-login-request-observed",
                                 Reason = LoginRpcCodec.ClassifyPostLoginRequest(message) });
                         }
-                        emit(new() { Event = "local-login-message-rejected", Reason = "response-budget-exhausted" });
-                        continue;
+                        if (!keepAlive || !registrationAcknowledged || searchResponseCount >= MaximumSearchResponses || pending.Count >= 2)
+                        {
+                            emit(new() { Event = "local-login-message-rejected", Reason = "response-budget-exhausted" });
+                            continue;
+                        }
+                        if (!LocalSessionSearchCodec.TryReply(message, out response, out reason))
+                        {
+                            emit(new() { Event = "local-login-message-rejected", Reason = reason });
+                            continue;
+                        }
                     }
-                    if (!rpc.TryHandle(message, out response, out string reason))
+                    else if (!rpc.TryHandle(message, out response, out reason))
                     {
                         emit(new() { Event = "local-login-message-rejected", Reason = reason });
                         continue;
@@ -114,8 +127,8 @@ namespace S7Patcher.Source
                     byte[] encoded = peer.Connect.CreateDataPacket(nextOutgoing, response, key);
                     pending.Add(nextOutgoing, new(encoded));
                     nextOutgoing = unchecked((ushort)(nextOutgoing + 1));
-                    responseCount++;
-                    emit(new() { Event = "local-login-response-queued", Reason = reason,
+                    if (search) searchResponseCount++; else responseCount++;
+                    emit(new() { Event = search ? "local-session-search-response-queued" : "local-login-response-queued", Reason = reason,
                         AuthenticationImplemented = false, UdpProtocolImplemented = false });
                 }
                 finally
@@ -148,6 +161,7 @@ namespace S7Patcher.Source
                 return false;
             }
             CryptographicOperations.ZeroMemory(sent.Packet);
+            if (responseCount == 2 && !pending.ContainsKey(1) && !pending.ContainsKey(2)) registrationAcknowledged = true;
             return true;
         }
 

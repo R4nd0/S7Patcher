@@ -19,6 +19,7 @@
     <Compile Include="../../Source/PrudpLocalLoginSession.cs" Link="PrudpLocalLoginSession.cs" />
     <Compile Include="../../Source/ReliableMessageAssembler.cs" Link="ReliableMessageAssembler.cs" />
     <Compile Include="../../Source/LoginRpcCodec.cs" Link="LoginRpcCodec.cs" />
+    <Compile Include="../../Source/LocalSessionSearchCodec.cs" Link="LocalSessionSearchCodec.cs" />
     <Compile Include="../../Source/LoginRpcArgumentShape.cs" Link="LoginRpcArgumentShape.cs" />
     <Compile Include="../../Source/LocalLoginRpcEngine.cs" Link="LocalLoginRpcEngine.cs" />
   </ItemGroup>

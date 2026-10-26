@@ -48,7 +48,9 @@ bytes; no DATA sequence is consumed. Replies are limited to ten per second.
 The optional session expires after two minutes without an accepted PING or
 after twenty minutes total, whichever comes first. Expiry clears session keys
 and pending ciphertext; traffic cannot revive a closed session. The existing
-four-transmission response timeout and two-RPC response budget remain. These
+four-transmission response timeout and two-RPC login budget remain. The opt-in
+service now also supports a separately bounded empty session search; see
+[local search details](LOCAL-SESSION-SEARCH.md). These
 are bounded test policies, not a complete reconnect or server lifecycle.
 
 Synthetic Windows checks cover reply encoding with an independent checksum,
@@ -76,6 +78,9 @@ or a successfully handled search. Unknown names, call IDs and arguments are
 never emitted. Retransmitted fragments do not consume another observation.
 Plaintext is still cleared in the existing finally block. The classifier
 neither creates replies nor enlarges response, lifetime or transport limits.
+The following live run identified actual `SearchSessions_V1` requests. The
+separate search handler described above now handles that exact method after
+registration, with full argument-shape validation.
 
 ## Live result, 2026-10-25
 

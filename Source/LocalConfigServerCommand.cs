@@ -173,7 +173,9 @@ namespace S7Patcher.Source
                     Event = "configuration-server-ready", Address = "127.0.0.1", HttpPort = httpPort, UdpPort = udpPort,
                     ConfigurationPath = ConfigurationPath, AuthenticationImplemented = false, UdpProtocolImplemented = false,
                     SigningKeyPersistence = "memory-only",
-                    Message = options.LocalLoginProbe
+                    Message = options.LocalKeepAliveProbe
+                        ? "Experimental local Login/Register responses and bounded empty session searches enabled; no Ubisoft authentication, hosting, joining or playable LAN. Plaintext stays bounded in memory."
+                        : options.LocalLoginProbe
                         ? "Experimental local Login/Register responses enabled with run-local identities; no Ubisoft authentication, lobby, matchmaking or playable LAN. Plaintext stays bounded in memory."
                         : options.DataCryptoProbe
                         ? "DATA crypto metadata probe enabled after SYN/CONNECT, with transport ACKs. Plaintext is bounded and discarded; no login, RPC or application response."

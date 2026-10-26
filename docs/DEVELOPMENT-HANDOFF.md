@@ -12,16 +12,15 @@ state now enables the multiplayer menu. The user opened an empty session list.
 
 The current native change passed 335 adapter checks, 38 network-guard checks
 and 17 original-byte comparisons, plus configuration validation. The
-unchanged keepalive service previously passed 612 checks.
+current search-capable service passes 1,924 checks.
 These are separate results, not evidence of a playable LAN match.
 
-## Current blocker: post-login request identification and handling
+## Current blocker: live verification of the empty search response
 
-The SpaceId transfer is now live-verified. After opening the session list,
-additional encrypted messages reach the service but are rejected by its
-two-response budget before their RPC type is identified. A bounded header
-classifier is the next service change; search response handling is not yet
-implemented. Packet arrival alone does not establish which RPC was sent.
+The SpaceId transfer and real `SearchSessions_V1` requests are live-verified.
+The service now has a tested, bounded handler returning two genuinely empty
+result collections. The game must still verify that response. Hosting,
+joining, match startup and LAN transport remain unimplemented.
 
 Earlier observations established the following startup/readiness blockers,
 subsequently addressed by the scoped changes documented below.
@@ -180,7 +179,7 @@ length 36 and capacity 47, owner attached, and no injected diagnostic library.
 The adapter logged `local-session-search-space-ready`. New encrypted DATA
 messages decoded successfully (231-byte messages in the observed tail), but
 were rejected as `response-budget-exhausted`. Their protocol/method is still
-unknown; no real search response or multiplayer has been verified.
+unknown at that stage; no real search response or multiplayer was verified.
 
 The next service candidate classifies at most eight complete post-budget
 messages per peer into fixed labels, including the statically identified
@@ -196,11 +195,22 @@ service and selects a hash-verified copy in `Server-Search-Diagnostic` through
 The deployed service passed a two-second loopback startup/shutdown check on
 ephemeral ports. The game EXE, adapter and UI hashes remain unchanged. A new
 user-started game run is needed because the running launcher owns the old
-service instance. The classifier has not yet been observed on real requests.
+service instance. That following run confirmed six exact
+`matchmaking-search-sessions-v1` observations. The request is now identified.
 
-Next verify that the real search reaches the local service. Its
-existing two-response RPC budget still only supports Login/Register; a new
-search RPC is expected to need protocol identification and implementation.
+The new service candidate validates the complete search argument shape and
+returns an 82-byte response with an empty session list and empty result map.
+Only the keepalive probe enables it, after both login responses are acknowledged.
+Its separate 32-response cap and two-outstanding-packet window preserve the
+baseline login budget, retry policy and session lifetime. Static anchors and
+the 1,924-check validation are documented in `LOCAL-SESSION-SEARCH.md`.
+Build: `work/empty-search-server`. Live game acceptance is still pending.
+The candidate is deployed in the separate bundle's `Server-Empty-Search`
+directory. The test launcher selects it, with the prior launcher retained as
+`LocalData/Test-Lokale-Anmeldung-before-empty-search.cmd`. Service file hashes
+match the build; all three game-bundle hashes are unchanged. A two-second
+loopback startup/shutdown smoke check passed. The user has been asked to
+restart through the test launcher and leave the session list open for a minute.
 
 ## Local workspace (not portable paths)
 
