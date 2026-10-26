@@ -9,13 +9,12 @@ The user also reported that the create button is disabled/missing on the first
 session-list visit and enabled on the second.
 
 The new service allocates a bounded, memory-only session record before sending
-the native u32 session-ID response. This is not yet a functional lobby or LAN:
-session detail serialization, membership, joining and match startup
-remain unimplemented. `GetSession_V1` has a fixed diagnostic label, not a reply.
-The live game acknowledged the new create response at transport level; complete
-lobby creation remains unverified.
-The subsequent `UpdateSession_V1` blocker is implemented in a new candidate;
-see [local metadata updates](LOCAL-SESSION-UPDATES.md) for its pending live test.
+the native u32 session-ID response. After the subsequent `UpdateSession_V1`
+implementation, the user reached a lobby with player slots and the create/update
+replies were acknowledged. Session detail serialization and joining remain
+unimplemented; match startup and LAN remain unverified. `GetSession_V1` has a
+fixed diagnostic label, not a reply. See
+[local metadata updates](LOCAL-SESSION-UPDATES.md) for the live evidence.
 
 ## Verified wire layout
 

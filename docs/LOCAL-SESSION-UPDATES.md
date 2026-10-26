@@ -8,8 +8,9 @@ It then issued two `MatchmakingProtocol::UpdateSession_V1` requests, rejected
 because that operation was missing. The create button was already live-verified
 as immediately available on the first session-list visit.
 
-This implementation addresses those updates. It does not implement session
-detail serialization, joining, a full lobby or a playable LAN match.
+This implementation addresses those updates. The user has now reached a local
+lobby with player slots. Session detail serialization, joining and a playable
+LAN match remain unimplemented or unverified.
 
 ## Native wire shape
 
@@ -73,13 +74,18 @@ Tests cover malformed input, all supported Variant encodings, exact void reply
 layout, foreign owners, wrong space/ID, initial create metadata, independent
 snapshots, nested merges, repeat calls, aggregate count/byte limits, atomic
 rejection, teardown, encrypted DATA retries/ACK clearing and the shared response
-cap. The game has not yet acknowledged an update response from this candidate.
+cap. The live game subsequently acknowledged an update response from this build.
 All 2,834 service checks pass; the build has no warnings or errors.
 
 Build: `work/server-session-update`. The separate test service is staged in
-`Server-Session-Update`; the launcher selects it for the next user start.
+`Server-Session-Update`; the launcher selected it for the successful lobby run.
 The previous launcher remains in
 `LocalData/Test-Lokale-Anmeldung-before-session-update.cmd`. No native adapter,
-game archive or original installation changes are needed. After restarting the
-test launcher, attempt creation once and leave the game open; inspect update
-ACKs and the next distinct operation before claiming lobby success.
+game archive or original installation changes were needed.
+
+Live result with `95603b5`: the user reported a lobby with player slots. The
+service sent five replies (Login, Register, search, create and update), all
+acknowledged, with no rejection in the observed sample. This establishes lobby
+creation, not a playable match or second-client join. The next user test is to
+start a match from that open lobby, using AI/closed slots if required. Inspect
+the next operations and actual game behavior before extending the service.

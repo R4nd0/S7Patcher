@@ -9,6 +9,10 @@ Ubisoft Connect, startup movies or a click gate. The user confirmed this.
 The native adapter establishes a genuine local Login/Register exchange and
 the service acknowledges keepalives beyond three minutes. The real connected
 state now enables the multiplayer menu. The user opened an empty session list.
+With `95603b5`, the user also reached the created lobby with player slots.
+Login, Register, search, create and update each received an acknowledged reply;
+there were no rejected requests in that observed run. Match startup is not yet
+verified, and no second-client LAN join has been implemented or tested.
 
 The current native candidate passed 354 adapter checks, 38 network-guard checks
 and 18 original-byte comparisons, plus configuration validation. The
@@ -17,16 +21,19 @@ RPC codec previously passed 20,288 isolated assertions. Its UI archive verifies
 all 284 entries and parses.
 These are separate results, not evidence of a playable LAN match.
 
-## Current blocker: live verification of session metadata updates
+## Current step: test match startup from the confirmed local lobby
 
 The follow-up diagnostic identified `UpdateSession_V1`: two requests arrived
 after the acknowledged create response. The candidate now validates and merges
 metadata into the owner's record, with exact space/ID checks, atomic bounded
 state changes and the native void response. See `LOCAL-SESSION-UPDATES.md`.
 Build `work/server-session-update` is staged as `Server-Session-Update`; the test
-launcher selects it for the next user restart. Adapter and archive are unchanged.
-Update reply acceptance and lobby completion remain unverified. `GetSession`,
-nonempty search results, membership, joining and match startup are still absent.
+launcher selected it for the successful lobby run. Adapter and archive are unchanged.
+Update acceptance and reaching the player-slot lobby are now live-verified.
+The user has been asked to start a match from that lobby, adding AI to required
+slots or closing slots if necessary, and leave the game open. Inspect new fixed
+operation labels and replies before changing code. `GetSession`, nonempty search
+results and joining remain unimplemented; match startup remains unverified.
 The diagnostic now retains at most eight distinct fixed operation labels, so
 repeated updates cannot hide the next unsupported operation.
 
@@ -37,8 +44,8 @@ opened game settings. The scoped create gate is now live-verified: two
 `CreateSession_V1` requests reached the service, which had no handler yet.
 A bounded shared session registry and native-shaped create response are now
 deployed and both a create reply and an idempotent retry were acknowledged.
-The user confirmed the create button is immediately active, but creation still
-loads or errors. One subsequent Matchmaking operation was unclassified; it was
+In the preceding create-only run, the user confirmed the create button was
+immediately active, but creation still loaded or errored. One subsequent Matchmaking operation was unclassified; it was
 not `GetSession_V1`, whose classifier was already present. `GetSession`, nonempty search results,
 joining, match startup and LAN remain absent. See `LOCAL-SESSION-CREATION.md`.
 
