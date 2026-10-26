@@ -113,3 +113,21 @@ Still needed: real client acceptance of the candidate reply, observed
 JoinSuccess/HostSuccess semantics, native notifications, P2P connection and
 real two-PC match startup/synchronization. JoinSession2_V1 is a distinct named
 method; this parser must not be used for it by assumption.
+
+## Paired service run: host route rejected
+
+Both copies applied the pending-reply candidate. Run 18:15:08 confirms one
+JoinSession_V1 rejected as local-join-host-route-invalid before serialization
+or reservation. The client reports a join error. This does not test the
+candidate response layout or member status. The retained creation route may
+have an unsupported format or address; the existing event cannot distinguish
+these causes, and neither is established yet.
+
+The diagnostic follow-up preserves all acceptance conditions but emits fixed
+sub-reasons for route length/ASCII, list structure, scheme/section/escaping,
+syntax, address ownership and redirected routing. It discloses no raw route,
+identity or payload. Tests verify reason propagation through TryJoin and no
+encoder invocation or pending membership on rejection. Full fresh suite:
+4,952 checks. Transactional updater tests: 16. Deliverable:
+S7-LAN-Routen-Diagnose.zip, installed via Routen-Diagnose.cmd on both closed
+test copies. This is a diagnostic update, not a claimed join fix.

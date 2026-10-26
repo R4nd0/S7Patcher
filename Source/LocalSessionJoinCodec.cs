@@ -54,14 +54,45 @@ namespace S7Patcher.Source
         }
 
         internal static bool HostRoutesOwned(ReadOnlySpan<byte> bytes, LocalLoginRpcEngine.RegisteredPeer host)
+            => HostRoutesOwned(bytes, host, out _);
+
+        internal static bool HostRoutesOwned(ReadOnlySpan<byte> bytes, LocalLoginRpcEngine.RegisteredPeer host,
+            out string reason)
         {
-            if (bytes.IsEmpty || bytes.Length > 2048 || !LocalLoginRpcEngine.PrudpUrl.IsSupportedAscii(bytes)
-                || !LocalLoginRpcEngine.PrudpUrl.TryRead(host.PublicUrl, out var registered)) return false;
+            // Fixed classifications only: never include routes, identifiers or raw request bytes.
+            reason = "local-join-host-route-empty";
+            if (bytes.IsEmpty) return false;
+            reason = "local-join-host-route-too-long";
+            if (bytes.Length > 2048) return false;
+            reason = "local-join-host-route-non-ascii";
+            if (!LocalLoginRpcEngine.PrudpUrl.IsSupportedAscii(bytes)) return false;
+            reason = "local-join-host-registration-route-invalid";
+            if (host == null || !LocalLoginRpcEngine.PrudpUrl.TryRead(host.PublicUrl, out var registered)) return false;
             string[] urls = Encoding.ASCII.GetString(bytes).Split('|');
+            reason = "local-join-host-route-count";
             if (urls.Length is < 1 or > 4) return false;
             foreach (string text in urls)
-                if (!LocalLoginRpcEngine.PrudpUrl.TryRead(text, out var url)
-                    || !url.Address.Equals(registered.Address) || url.Has("redirected")) return false;
+            {
+                reason = "local-join-host-route-empty-item";
+                if (text.Length == 0) return false;
+                reason = "local-join-host-route-scheme";
+                if (!text.StartsWith("prudp:/", StringComparison.Ordinal)) return false;
+                reason = "local-join-host-route-section";
+                if (text.Contains('#')) return false;
+                reason = "local-join-host-route-escaped";
+                if (text.Contains('%')) return false;
+                reason = "local-join-host-route-syntax";
+                if (!LocalLoginRpcEngine.PrudpUrl.TryRead(text, out var url)) return false;
+                reason = "local-join-host-route-loopback";
+                if (!url.Address.Equals(registered.Address) && System.Net.IPAddress.IsLoopback(url.Address)) return false;
+                reason = "local-join-host-route-unspecified";
+                if (!url.Address.Equals(registered.Address) && url.Address.Equals(System.Net.IPAddress.Any)) return false;
+                reason = "local-join-host-route-address-mismatch";
+                if (!url.Address.Equals(registered.Address)) return false;
+                reason = "local-join-host-route-redirected";
+                if (url.Has("redirected")) return false;
+            }
+            reason = "local-join-host-route-owned";
             return true;
         }
 
@@ -124,9 +155,9 @@ namespace S7Patcher.Source
                 reason = "local-join-session-not-public-or-not-found";
                 if (selected == null || !selected.Metadata.Attributes.TryGetValue(JoinKey("private"), out var privacy)
                     || !privacy.AsSpan().SequenceEqual(new byte[] { 3, 0 })) return false;
-                reason = "local-join-host-route-invalid";
-                if (selected.Metadata.Creation == null
-                    || !HostRoutesOwned(selected.Metadata.Creation.StationUrls, selected.Host)) return false;
+                reason = "local-join-host-route-missing-creation";
+                if (selected.Metadata.Creation == null) return false;
+                if (!HostRoutesOwned(selected.Metadata.Creation.StationUrls, selected.Host, out reason)) return false;
                 reason = "local-join-identity-collision";
                 if (selected.Host.ProfileId.SequenceEqual(peer.ProfileId)) return false;
                 bool replay = selected.Pending.TryGetValue(owner, out var previous);

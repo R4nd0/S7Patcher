@@ -23,6 +23,38 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
+### Current: real join rejected by host-route validation
+
+Both PCs installed the first pending-reply service. User reports another join
+error. Host run 18:15:08 (20261026-181508-65219410-lan-server.jsonl) confirms
+two registered peers, host create/update, catalogue replies, one actual
+JoinSession_V1 and rejection local-join-host-route-invalid. No join response
+was queued; native reply acceptance/member status cannot yet be evaluated.
+Host game PID 15552 and service PID 26316 were left open for inspection.
+
+The next service changes diagnostics only, preserving route acceptance policy.
+It distinguishes missing/empty/oversized/non-ASCII routes, list count/empty
+items, scheme/section/escaping/syntax, mismatched/loopback/unspecified addresses,
+redirects and invalid registration. All reasons are fixed strings; no raw
+routes or identifiers are logged. Do not infer which condition failed until
+the next real run. No fallback to the login port or blanket route acceptance.
+
+Build work/server-join-route-diagnostic, service SHA256:
+067eb993e745745dec01701ca6ccc589edfcde4ae42aae850fa106136f86fdfe.
+4,952 freshly built service checks and 16 updater checks pass. The test build
+was moved to work/join-route-tests after a concurrent old test process locked
+the default output; only the subsequent fresh build verifies the new tests.
+Package outputs/S7-LAN-Routen-Diagnose.zip (nine entries), SHA256:
+6c8b607d2ebad4ac73e770b20a4ae510a9c768d37b4e7de9a7d6a3dfb4257715.
+tools/installer/update_join_routes.py requires service 8ccac3f... and retains
+the current menu/adapter, using backup Before-join-route-diagnostic-v1.
+
+User has been asked to close BOTH games and apply Routen-Diagnose.cmd on PC 2,
+without restarting. PC 1 deployment is pending closure; extract the verified
+ZIP beside its starter, run S7-Routen-Diagnose/update_join_routes.py with bundled
+Python, then the no-game LAN host preflight. Check host processes/ports first.
+After both copies match, request exactly one public four-slot join attempt.
+
 ### Current: real JoinSession received; first pending reply prepared
 
 Run 17:52:43 confirms an actual JoinSession_V1 from PC 2, rejected by the old

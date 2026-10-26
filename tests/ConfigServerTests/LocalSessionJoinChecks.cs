@@ -92,6 +92,33 @@ internal static class LocalSessionJoinChecks
             LocalSessionDisplayChecks.Route + ";redirected=1", "prudp:/address=127.0.0.1;port=0" })
             Check(!LocalSessionRegistry.HostRoutesOwned(Encoding.ASCII.GetBytes(bad), hp), "Unsafe host route");
         Check(LocalSessionRegistry.HostRoutesOwned(Encoding.ASCII.GetBytes(LocalSessionDisplayChecks.Route), hp), "Owned game port route rejected");
+        foreach (var (route, suffix) in new[] {
+            ("", "empty"), (new string('x', 2049), "too-long"), ("prudp:/address=127.0.0.1;port=4\n", "non-ascii"),
+            (string.Join('|', Enumerable.Repeat(LocalSessionDisplayChecks.Route, 5)), "count"),
+            (LocalSessionDisplayChecks.Route + "|", "empty-item"), ("udp:/address=127.0.0.1;port=4", "scheme"),
+            (LocalSessionDisplayChecks.Route + "#x=1", "section"), (LocalSessionDisplayChecks.Route + ";x=%20", "escaped"),
+            ("prudp:/address=127.0.0.1;port=0", "syntax"), ("prudp:/address=0.0.0.0;port=4", "unspecified"),
+            ("prudp:/address=192.0.2.1;port=4", "address-mismatch"),
+            (LocalSessionDisplayChecks.Route + ";redirected=1", "redirected") })
+        {
+            Check(!LocalSessionRegistry.HostRoutesOwned(Encoding.ASCII.GetBytes(route), hp, out var diagnosis)
+                && diagnosis == "local-join-host-route-" + suffix, "Wrong bounded route diagnosis: " + suffix);
+        }
+        Check(LocalSessionRegistry.HostRoutesOwned(Encoding.ASCII.GetBytes(LocalSessionDisplayChecks.Route), hp,
+            out var ownedReason) && ownedReason == "local-join-host-route-owned", "Valid route diagnosis");
+        // The reported route failure must propagate through the real join handler,
+        // without reserving a member or invoking the response encoder.
+        using var invalidRouteRegistry = new LocalSessionRegistry(catalogueProbe: true);
+        byte[] invalidCreate = LocalSessionCatalogueChecks.PublicBody();
+        byte[] validRoute = Encoding.ASCII.GetBytes(LocalSessionDisplayChecks.Route);
+        int routeOffset = invalidCreate.AsSpan().IndexOf(validRoute);
+        Check(routeOffset >= 0, "Route fixture not found");
+        invalidCreate[routeOffset] = (byte)'x';
+        Check(invalidRouteRegistry.TryCreate(owner, host, invalidCreate, out _, out _), "Malformed route fixture");
+        Check(!invalidRouteRegistry.TryJoin(visitor, guest, own, _ => throw new Exception("Invalid route encoded"),
+            out _, out var rejectedReason) && rejectedReason == "local-join-host-route-scheme", "Join lost route diagnosis");
+        Check(invalidRouteRegistry.TryCopyLiveSession(visitor, "invented-space"u8, 1, out var untouched), "Route diagnostic snapshot");
+        using (untouched) Check(untouched.PendingProfiles.Count == 0, "Rejected route reserved membership");
         using var privateRegistry = new LocalSessionRegistry(catalogueProbe: true);
         Check(privateRegistry.TryCreate(owner, host, LocalSessionCatalogueChecks.PublicBody(true), out _, out _), "Private fixture");
         Check(!LocalSessionJoinCodec.TryReply(Request(), privateRegistry, visitor, guest, out _, out _), "Private join accepted");
