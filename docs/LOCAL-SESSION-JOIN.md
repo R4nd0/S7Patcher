@@ -279,18 +279,60 @@ sends DATA. Transport acknowledgements follow; the client then sends
 ReportJoinFailure_V1. UI reports session error 0. This establishes progress
 beyond our previous validation rejections, not completed native join/P2P.
 
-Static serializer E530A6 writes class map, E530AB..B2 Space qString,
-E530BA..C4 session ID u32, E530C9..D3 report code u32, E530D8..DF auxiliary
-qString. A bounded parser and read-only observer now record just the numeric
-code and text length for an owned pending caller matching registration and
-space/session. No raw text, claimed identity or route is emitted; one event per
-registered transport. Observation neither replies to this RPC nor changes
-membership/reservations. Unknown reports remain unacknowledged at RPC level;
-existing reliable transport ACKs are unaffected. Exact code semantics still
-need evidence from the next real report and its native caller.
+### Corrected report field meaning from the native caller (2026-10-26)
 
-5,649 tests pass, including encrypted reports, redaction, observation cap,
-truncations, ownership/registration isolation and absence of state mutation or
-fabricated response. Build server-join-failure-diagnostic; update package
-S7-LAN-Beitrittsbericht.zip requires Gateway-Update. This diagnostic is not
-presented as a fix for the remaining native connection failure.
+The first diagnostic inferred the two integers incorrectly from serialization
+alone. Full caller tracing shows D3F9BE..D3F9D6 passes request-data +4 by value and
++8 by address through E4E2A0 to E52F70. E530BA..C4 emits the first; E530C9..D3 the
+second. The same +8 supplies JoinSession_V1's session ID at D3FC05; D48A00 sets
++4 to zero on the RendezVous join path. The wire order is therefore Space,
+kind/context selector, session ID, auxiliary result description. "Kind" is our
+local name for that selector; its complete value domain is not established.
+It is not an error code. ID ownership checks apply to the second integer.
+
+The bounded parser now accepts kind zero and reads the correct session ID.
+The original diagnostic had not been installed; its package is superseded.
+One redacted observation per registered transport, matching pending owner,
+registration, Space and ID; no mutation or RPC reply. Existing packet ACKs remain.
+
+D3F98E invokes CC5700 on the result, which calls CC5640. That formatter emits
+error group, colon, description, " (System error: " plus decimal value, and the
+fixed suffix ") - No eresult string available.". CC4F20 selects a fixed group;
+CC45F0 selects fixed descriptions. LocalJoinFailureDescription validates the
+bounded format and maps selected known descriptions to constant categories.
+Unknown/malformed text becomes unclassified. Raw text, identity, number spelling
+and client-supplied strings never become event labels. The event records only
+reported_session_kind, report_text_length, reported_failure_category and the
+existing fixed observation reason. Numeric system codes are not logged.
+
+5,746 checks pass. An independent literal-byte fixture places kind zero before
+ID 0x11223344, catching the former reversal. Tests cover null/truncated qStrings,
+format truncation and suffix/prefix injection, integer bounds, owner isolation,
+encrypted reports in both directions, redaction, cap and no state/reply mutation.
+Build server-join-report-layout; service SHA256:
+21a0be26d73a39d163fe348793d481aeedd5ea6788bbacce69c062de927283ac.
+Updated S7-LAN-Beitrittsbericht.zip still requires Gateway-Update, not the older
+undeployed diagnostic. This is diagnostic preparation, not a native join fix.
+
+### First response string: native consumer now identified
+
+In D47080's continuation, D4752D saves request-data +18; D47606 restores that
+pointer into EDI. D476F2 reads EDI+1C, the output string passed at D3FBFD.
+E598E0 copies it; E4DD30 splits on the literal pipe at 10F826C and constructs
+StationURL entries through E5D2D0. D47779 passes that list to D4D170, which reads
+Storm, loads the descriptor via CDEEE0, and parses RoutingOption. D4781C then
+calls D49B10 -> BABBD0 for the native join request. This confirms the output is
+a game route list, rather than just an unexplained qString. It does not establish
+that our exact descriptor projection or pending member state is accepted.
+
+BABBD0 also has an earlier native engine gate: C0A000 must return an object,
+and its +8 object's +4 state must equal 3 (BABBF0..BABC04). Otherwise it returns
+the generic failure 0xFFF0BDC0 at BABCB6 without queuing the native request.
+On success B7AED0 builds the request and BABC73 submits it to the engine.
+This is a candidate boundary to inspect, not evidence that PC 2 failed it.
+
+The failure report is sent only on the non-positive result branch at
+D3F92D..D3F984; the positive branch uses the neighboring report wrapper E4E2C0.
+Both branches use the same kind/ID fields. The actual failure description from
+PC 2 remains unknown because the installed old service discarded the body.
+No memory injection, native function invocation or new game launch was used.

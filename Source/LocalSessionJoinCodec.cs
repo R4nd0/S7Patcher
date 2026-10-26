@@ -35,14 +35,19 @@ namespace S7Patcher.Source
     internal sealed partial class LocalSessionRegistry
     {
         internal bool TryObserveJoinFailure(object owner, LocalLoginRpcEngine registration,
-            ReadOnlySpan<byte> message, out uint code, out int textLength, out string reason)
+            ReadOnlySpan<byte> message, out uint sessionKind, out int textLength, out string reason)
+            => TryObserveJoinFailure(owner, registration, message, out sessionKind, out textLength, out reason, out _);
+
+        internal bool TryObserveJoinFailure(object owner, LocalLoginRpcEngine registration,
+            ReadOnlySpan<byte> message, out uint sessionKind, out int textLength, out string reason, out string category)
         {
-            code = 0; textLength = 0; reason = "local-join-failure-shape";
+            category = null;
+            sessionKind = 0; textLength = 0; reason = "local-join-failure-shape";
             if (closed || !CatalogueProbe || owner == null || registration == null
                 || LoginRpcCodec.ClassifyPostLoginRequest(message) != "matchmaking-report-join-failure-v1") return false;
             int offset = 31 + 3 + "MatchmakingProtocol::ReportJoinFailure_V1".Length;
             if (!LocalSessionMetadata.TryReadJoinFailureBody(message[offset..], out var space, out uint id,
-                out uint reported, out int length)) return false;
+                out uint reported, out int length, out var classified)) return false;
             reason = "local-join-failure-not-pending-caller";
             if (!registration.TryCopyRegisteredPeer(out var peer)) return false;
             using (peer)
@@ -50,7 +55,7 @@ namespace S7Patcher.Source
                     if (entry.Id == id && space.SequenceEqual(entry.Space)
                         && entry.Pending.TryGetValue(owner, out var pending) && pending.Peer.Matches(peer))
                     {
-                        code = reported; textLength = length;
+                        sessionKind = reported; textLength = length; category = classified;
                         reason = "local-join-failure-observed"; return true;
                     }
             return false;

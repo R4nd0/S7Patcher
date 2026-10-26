@@ -600,13 +600,18 @@ internal static class LocalLoginSessionChecks
             CryptographicOperations.ZeroMemory(expected);
             visitor.Session.ProcessData(visitor.Data(11, 0, LocalSessionUpdateChecks.Request()), visitor.Events.Add);
             Check(visitor.Session.TakeDue(500, visitor.Events.Add).Count == 0 && registry.Count == 1, "Visitor changed host record");
-            visitor.Session.ProcessData(visitor.Data(12, 0, LocalJoinFailureChecks.Request()), visitor.Events.Add);
+            visitor.Session.ProcessData(visitor.Data(12, 0, LocalJoinFailureChecks.Request(
+                LocalJoinFailureChecks.Body(text:LocalJoinFailureChecks.NativeDescription))), visitor.Events.Add);
             visitor.Session.ProcessData(visitor.Data(13, 0, LocalJoinFailureChecks.Request()), visitor.Events.Add);
             var failure = visitor.Events.Where(e => e.Event == "local-session-join-failure-observed").ToArray();
-            Check(failure.Length == 1 && failure[0].ReportedErrorCode == 0x80000001 && failure[0].ReportTextLength == 20
+            Check(failure.Length == 1 && failure[0].ReportedSessionKind == 0
+                && failure[0].ReportTextLength == LocalJoinFailureChecks.NativeDescription.Length
+                && failure[0].ReportedFailureCategory == "session-request-refused"
                 && failure[0].Reason == "local-join-failure-observed", "Encrypted failure report or diagnostic cap");
             string failureJson = System.Text.Json.JsonSerializer.Serialize(failure[0], ConfigServerJsonContext.Default.ConfigServerEvent);
-            Check(!failureJson.Contains("private-fixture-text") && failureJson.Contains("reported_error_code"), "Failure report redaction");
+            Check(!failureJson.Contains("private-fixture-text") && !failureJson.Contains(LocalJoinFailureChecks.NativeDescription)
+                && failureJson.Contains("reported_session_kind") && failureJson.Contains("session-request-refused")
+                && !failureJson.Contains("reported_error_code"), "Failure report redaction and field meaning");
             Check(visitor.Session.TakeDue(550, visitor.Events.Add).Count == 0 && registry.Count == 1, "Diagnostic fabricated reply or removed session");
             host.Session.ProcessData(host.Data(9, 0, LocalSessionLeaveChecks.Request()), host.Events.Add);
             host.Session.TakeDue(600, host.Events.Add);

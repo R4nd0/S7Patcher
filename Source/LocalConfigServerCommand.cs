@@ -561,7 +561,8 @@ namespace S7Patcher.Source
 
     internal sealed class ConfigServerEvent
     {
-        public uint? ReportedErrorCode { get; init; }
+        public uint? ReportedSessionKind { get; init; }
+        public string ReportedFailureCategory { get; init; }
         public int? ReportTextLength { get; init; }
         public string Event { get; set; }
         public string Reason { get; set; }

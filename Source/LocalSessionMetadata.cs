@@ -39,18 +39,26 @@ namespace S7Patcher.Source
             }
         }
 
-        // E530AB..E530DF: empty class map, Space, session ID, u32 result, text.
+        // D3F9BE..D3F9D6 / E4E2A0 / E530AB..E530DF: Space, session kind,
+        // session ID, result description. Kind is zero on the RendezVous join path
+        // (D48A00); the ID comes from the same +8 field used by JoinSession_V1.
         // Diagnostic only; no raw text or claimed identities leave this parser.
         internal static bool TryReadJoinFailureBody(ReadOnlySpan<byte> body,
-            out ReadOnlySpan<byte> space, out uint sessionId, out uint code, out int textLength)
+            out ReadOnlySpan<byte> space, out uint sessionId, out uint sessionKind, out int textLength)
+            => TryReadJoinFailureBody(body, out space, out sessionId, out sessionKind, out textLength, out _);
+
+        internal static bool TryReadJoinFailureBody(ReadOnlySpan<byte> body,
+            out ReadOnlySpan<byte> space, out uint sessionId, out uint sessionKind, out int textLength, out string category)
         {
-            space = default; sessionId = code = 0; textLength = 0;
+            category = null;
+            space = default; sessionId = sessionKind = 0; textLength = 0;
             if (body.Length > 8192) return false;
             Reader reader = new(body);
             if (!reader.Number(out uint classes) || classes != 0 || !reader.Text(out space)
-                || space.Length > 1024 || !reader.Number(out sessionId) || sessionId is 0 or uint.MaxValue
-                || !reader.Number(out code) || !reader.Text(out var text) || text.Length > 4096 || !reader.AtEnd) return false;
-            textLength = text.Length; return true;
+                || space.Length > 1024 || !reader.Number(out sessionKind)
+                || !reader.Number(out sessionId) || sessionId is 0 or uint.MaxValue
+                || !reader.Text(out var text) || text.Length > 4096 || !reader.AtEnd) return false;
+            textLength = text.Length; category = LocalJoinFailureDescription.Classify(text); return true;
         }
 
         internal static bool TryReadLeaveBody(ReadOnlySpan<byte> body,

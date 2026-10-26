@@ -26,6 +26,7 @@
     <Compile Include="../../Source/LocalSessionCreationCodec.cs" Link="LocalSessionCreationCodec.cs" />
     <Compile Include="../../Source/LocalSessionRegistry.cs" Link="LocalSessionRegistry.cs" />
     <Compile Include="../../Source/LocalSessionJoinCodec.cs" Link="LocalSessionJoinCodec.cs" />
+    <Compile Include="../../Source/LocalJoinFailureDescription.cs" Link="LocalJoinFailureDescription.cs" />
     <Compile Include="../../Source/LocalStormRoute.cs" Link="LocalStormRoute.cs" />
     <Compile Include="../../Source/LocalSessionMetadata.cs" Link="LocalSessionMetadata.cs" />
     <Compile Include="../../Source/LocalSessionUpdateCodec.cs" Link="LocalSessionUpdateCodec.cs" />

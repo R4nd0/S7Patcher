@@ -121,9 +121,10 @@ namespace S7Patcher.Source
                             if (!joinFailureObserved)
                             {
                                 joinFailureObserved = true;
-                                bool valid = sessions.TryObserveJoinFailure(this, rpc, message, out uint code, out int length, out reason);
+                                bool valid = sessions.TryObserveJoinFailure(this, rpc, message, out uint sessionKind, out int length, out reason, out var category);
                                 emit(new() { Event = "local-session-join-failure-observed", Reason = reason,
-                                    ReportedErrorCode = valid ? code : null, ReportTextLength = valid ? length : null });
+                                    ReportedSessionKind = valid ? sessionKind : null, ReportTextLength = valid ? length : null,
+                                    ReportedFailureCategory = valid ? category : null });
                             }
                             continue;
                         }

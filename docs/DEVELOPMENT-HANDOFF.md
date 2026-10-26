@@ -12,7 +12,8 @@ state now enables the multiplayer menu. The user opened an empty session list.
 With `95603b5`, the user also reached the created lobby with player slots.
 Login, Register, search, create and update each received an acknowledged reply;
 there were no rejected requests in that observed run. Match startup is not yet
-verified, and no second-client LAN join has been implemented or tested.
+verified. A second PC now discovers the lobby and sends a join request, but
+the native join fails after the service response; no successful join is verified.
 
 The current native candidate passed 354 adapter checks, 38 network-guard checks
 and 18 original-byte comparisons, plus configuration validation. The
@@ -23,40 +24,54 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
-### Current: real join reply sent; client reports failure, diagnostic candidate ready
+### Current: independent investigation; corrected report layout, no new live test
 
-Run 20261026-194159-fb0b0eb4 finally records local-session-join-response-queued /
-local-join-reservation-created, response DATA sends and subsequent transport ACKs.
-It then receives MatchmakingProtocol::ReportJoinFailure_V1, previously rejected
-unsupported-session-operation. User sees "Sitzungsfehler 0 ... kann der gewaehlten
-Sitzung nicht beitreten". Timing not supplied. This is progress past host route
-validation, not proof of completed membership, native response correctness or P2P.
+User: "mach alleine weiter, ich kann nicht mehr helfen". Do not repeat restart,
+update or two-PC test questions now. No new games launched, no injections and
+no installed test-copy changes in this milestone. PC 1 later had no game process
+or UDP 3074 listener; its existing test-game inbound TCP/UDP allow rules were
+present. PC 2 is not remotely accessible. Do not infer its state or a firewall
+cause from this. Both copies remain on the Gateway service as last verified.
 
-Original-hash-checked serializer E530A6 emits class map; E530AB..B2 Space qString,
-E530BA..C4 session u32, E530C9..D3 result u32, E530D8..DF auxiliary qString.
-Added bounded read-only parser (8192 body / 1024 space / 4096 text limits).
-Observer requires catalogue opt-in, completed acknowledged registration, existing
-pending membership owned by this transport, matching registration/space/session.
-One observation per transport: fixed reason, reported_error_code and
-report_text_length only. No raw text/identity logging, no report RPC success reply,
-no reservation deletion or membership mutation. Packet ACK behavior unchanged.
-Diagnostic only; the numeric report field's precise meaning remains to be mapped.
+Last real run 20261026-194159-fb0b0eb4 sends a join reply, receives transport ACKs,
+then ReportJoinFailure_V1. UI: "Sitzungsfehler 0 ... kann der gewaehlten Sitzung
+nicht beitreten". No completed native membership, reverse hosting or match exists.
 
-5,649 checks pass, including truncation/bounds, registration/owner/session checks,
-unchanged reservation and encrypted reports with redaction/cap/no synthetic reply.
-Build work/server-join-failure-diagnostic; tests join-failure-diagnostic-tests.
-Service SHA256:
-badb6591ffcdcfcc1b6efef128383c7aafbffc62dc78278f45bf671f24ebca2c.
-outputs/S7-LAN-Beitrittsbericht.zip (nine files) SHA256:
-3bc586c6d4ee26a09a98fe6d6c51c10617eb2453c966d909ab58f929ace7f9a8.
-ZIP CRC, exact updater/source, old/new service hashes and wrong-source rejection
-pass. Requires Gateway service bc73ef4e...; backup Before-join-failure-diagnostic-v1.
-Both copies still on Gateway-Update. User asked to close both games, apply
-Beitrittsbericht-Update.cmd plus full S7-Beitrittsbericht folder on PC 2, no restart.
-Upon confirmation check processes/ports, extract verified ZIP to PC 1 test root,
-run bundled Python S7-Beitrittsbericht/update_join_failure_diagnostic.py --bundle
-<root>, host check-only, then one public four-slot join; inspect the failure event.
-Real successful join, reverse hosting, match startup and synchronization unverified.
+Static caller tracing found an error in the prior undeployed diagnostic:
+ReportJoinFailure fields are class map, Space, kind, session ID, result text.
+D3F9BE..D3F9D6 passes object+4 by value and object+8 by address; E4E2A0 forwards
+these to E52F70. The same object+8 is JoinSession's ID at D3FC05. Kind is initialized
+to zero at D48A00 on this RendezVous path. The prior parser incorrectly treated
+kind as a nonzero ID and ID as an error code. Corrected the parser and renamed
+reported_error_code to reported_session_kind. This is not a numeric error code.
+
+CC5700 -> CC5640 constructs group:description (System error: decimal) plus a fixed
+suffix. A bounded whitelist now emits reported_failure_category (or unclassified)
+without exposing any raw text. Existing ownership/registration/space checks,
+one-observation cap, no RPC response and no membership mutation remain intact.
+
+The first join response string is now traced through D476F2 -> E4DD30 (pipe-split
+StationURL list) -> D47779/D4D170 (Storm descriptor and RoutingOption) -> D4781C /
+D49B10 / BABBD0 (native request join).
+This supports the URL-list meaning. It does not prove the exact projected route,
+member state or native connection is accepted. Details in LOCAL-SESSION-JOIN.md.
+
+5,746 service checks pass, including a manually specified native-layout fixture,
+zero kind / distinct session ID, fixed-category parsing and encrypted two-peer
+reports in both directions. No real games are used by these tests.
+Build work/server-join-report-layout; tests work/join-report-layout-tests.
+Service SHA256: 21a0be26d73a39d163fe348793d481aeedd5ea6788bbacce69c062de927283ac.
+outputs/S7-LAN-Beitrittsbericht.zip now replaces the undeployed earlier diagnostic.
+Nine-file ZIP SHA256: 045a5c2d45c026b24877e3230b986ce25b9dd6b51d237bee3bd0d4f42953df9b.
+CRC, source equality, old/new payload hashes and wrong-source rejection pass.
+Requires Gateway bc73ef4e...; backup Before-join-failure-diagnostic-v2. Not deployed.
+
+Remaining blocker: actual native failure category is unavailable in the old log.
+When live testing becomes possible, both closed copies need the same version;
+read its bounded report rather than requesting another blind format adjustment.
+Independent static work can follow BABBD0 -> session/peer setup and native result
+propagation. Report acceptance/cleanup and success notifications are still absent.
+Neither simulated checks nor static tracing establish working LAN or no desyncs.
 
 ### Current: second native gateway sentinel; deployed, real join pending
 
