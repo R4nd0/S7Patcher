@@ -23,7 +23,19 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
-### Current: second native gateway sentinel; candidate pending deployment
+### Current: second native gateway sentinel; deployed, real join pending
+
+User confirms both games closed and Gateway-Update installed on PC 2.
+PC 1 had no game but orphan service PID 63676; exact path/command and absent
+parent 63520 verified before stopping it. Ports 9110/9111 then free. Verified
+nine-entry ZIP extracted with exclusive writes; transactional updater succeeded.
+Installed service SHA256 bc73ef4e... matches candidate; content ID:
+5a22ca288510dfd3689f5997f80c03eec95d31ade40fa6f9832418f048faf7db.
+Host --check-only passed for .125 / .85; no game launched by agent. User asked
+for exactly one public four-slot join from PC 2, leaving both games/starters open.
+Await actual result/logs. User also asked about one-computer testing: existing
+automated tests use simulated clients; two real isolated game instances have
+not been configured. No VM or other system setup was performed.
 
 Run 20261026-193235-63c78150 still rejects one JoinSession_V1 with
 local-join-storm-descriptor-values. Installed service hash da48ed8c... confirmed.
@@ -45,12 +57,9 @@ outputs/S7-LAN-Gateway-Update.zip (nine entries), SHA256:
 3557c931937502cd0d126353181ee8c1ad2a24bf857404a19a379bf892f520d4.
 CRC, source/updater equality, old/new payload hashes and wrong-source rejection
 pass. Requires Profilfeld service da48ed8c...; backup Before-gateway-sentinel-v1.
-Both installed copies remain on Profilfeld-Update pending closure/deployment.
-Full suite passes 5,546 checks. User asked to close both games, install
-Gateway-Update on PC 2 and not restart. Upon confirmation check processes/ports,
-extract verified ZIP into PC 1 test root, run bundled Python
-S7-Gateway-Update/update_gateway_sentinel.py --bundle <root>, then host check-only.
-Request exactly one public four-slot join and inspect response/ACK/follow-up.
+Both installed copies now have Gateway-Update (PC 2 user-confirmed, PC 1 verified).
+Full suite passes 5,546 checks. Inspect next public four-slot join for its
+response/ACK/follow-up.
 Real join, reverse hosting, match startup and synchronization still unverified.
 
 ### Current: empty native ProfileID supported; deployed, real join pending
