@@ -388,6 +388,12 @@ internal static class LocalLoginSessionChecks
             reply = host.Session.TakeDue(1300, host.Events.Add).Single();
             VerifySearchResponse(reply, host.Key, 7, host.ServerSession, LocalSessionCreationChecks.Response(7)); passed++;
             Check(registry.Count == 1 && host.Session.TryAcknowledge(Ack(ServerCookie, 4)), "Application create retry duplicated record");
+            host.Session.ProcessData(host.Data(10, 0, LocalSessionCreationChecks.Request(method: "MatchmakingProtocol::UpdateSession_V1")), host.Events.Add);
+            Check(host.Session.PendingCount == 0 && registry.Count == 1
+                && host.Events.Any(e => e.Event == "local-post-login-request-observed" && e.Reason == "matchmaking-update-session-v1")
+                && host.Events.Any(e => e.Reason == "unsupported-session-operation")
+                && !host.Events.Any(e => e.Reason == "nonempty-session-catalogue-not-yet-supported"),
+                "Unsupported follow-up changed registry or was misreported as a search");
             visitor.Session.ProcessData(visitor.Data(8, 0, LocalSessionSearchChecks.Request()), visitor.Events.Add);
             Check(visitor.Session.PendingCount == 0 && visitor.Events.Any(e => e.Reason == "nonempty-session-catalogue-not-yet-supported"),
                 "Other peer received false empty catalogue");

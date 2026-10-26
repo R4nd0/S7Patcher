@@ -12,7 +12,8 @@ The new service allocates a bounded, memory-only session record before sending
 the native u32 session-ID response. This is not yet a functional lobby or LAN:
 session detail serialization, updates, membership, joining and match startup
 remain unimplemented. `GetSession_V1` has a fixed diagnostic label, not a reply.
-The live game has not yet accepted the new create response.
+The live game acknowledged the new create response at transport level; complete
+lobby creation remains unverified.
 
 ## Verified wire layout
 
@@ -93,3 +94,27 @@ The test launcher selects `Server-Create-Records`; the native adapter is unchang
 The no-game-launch preflight passed. The user has been asked to check the first
 session-list visit, attempt creation once and leave S7 open. Inspect response
 acknowledgements and subsequent fixed RPC labels before claiming live success.
+
+### Live create response and subsequent blocker
+
+The subsequent run confirmed the first-visit button is immediately active.
+The service received three create requests: one allocated a record, an identical
+retry returned the same ID, and changed arguments were rejected because that
+transport already owned a record. Both create replies were acknowledged. Two
+searches and Login/Register also received replies and acknowledgements.
+
+After the first create response, the client sent one previously unclassified
+Matchmaking request. It was not `GetSession_V1`, which already had a fixed label.
+The old dispatcher misleadingly reported it as an unsupported nonempty search.
+The current diagnostic classifies all 40 method names present in the supported
+executable using fixed labels, never arbitrary method text or arguments. It
+rejects unsupported operations explicitly before checking search catalogue state.
+It does not implement any additional operation or alter the eight-observation cap.
+
+Validation: 2,499 service checks and 20,288 isolated RPC codec assertions pass;
+the build has no warnings. `Server-Create-Followup` is staged and its files match
+the build. The test launcher selects it on the next start, retaining the previous
+launcher as `LocalData/Test-Lokale-Anmeldung-before-create-followup.cmd`. The
+running game, adapter and archive remain unchanged. The next run must identify
+the exact follow-up operation after a single create attempt; do not infer it from
+the generic old rejection reason.

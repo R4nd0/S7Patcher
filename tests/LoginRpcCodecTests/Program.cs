@@ -107,6 +107,51 @@ Check(LoginRpcCodec.ClassifyPostLoginRequest(DiagnosticRequest("MatchmakingProto
 Check(LoginRpcCodec.ClassifyPostLoginRequest(search) == "matchmaking-search-sessions-v1", "Known search header not classified");
 Check(LoginRpcCodec.ClassifyPostLoginRequest(DiagnosticRequest("MatchmakingProtocol", "MatchmakingProtocol::CreateSession_V1", [])) == "matchmaking-create-session-v1"
     && LoginRpcCodec.ClassifyPostLoginRequest(DiagnosticRequest("MatchmakingProtocol", "MatchmakingProtocol::CreateSession2_V1", [])) == "matchmaking-create-session2-v1", "Known create headers not classified");
+// Fixed names extracted from the supported executable; payloads remain opaque.
+foreach (var (method, label) in new (string, string)[] {
+    ("MatchmakingProtocol::AcceptInvitation_V1", "matchmaking-accept-invitation-v1"),
+    ("MatchmakingProtocol::AddReservations_V1", "matchmaking-add-reservations-v1"),
+    ("MatchmakingProtocol::CancelAllTickets_V1", "matchmaking-cancel-all-tickets-v1"),
+    ("MatchmakingProtocol::CancelInvitation_V1", "matchmaking-cancel-invitation-v1"),
+    ("MatchmakingProtocol::CancelTicket_V1", "matchmaking-cancel-ticket-v1"),
+    ("MatchmakingProtocol::CreateTicket_V1", "matchmaking-create-ticket-v1"),
+    ("MatchmakingProtocol::DeclineInvitation_V1", "matchmaking-decline-invitation-v1"),
+    ("MatchmakingProtocol::ErasePlayerProfile_V1", "matchmaking-erase-player-profile-v1"),
+    ("MatchmakingProtocol::FetchPlayerProfile_V1", "matchmaking-fetch-player-profile-v1"),
+    ("MatchmakingProtocol::GetMatchmakingStats_V1", "matchmaking-get-matchmaking-stats-v1"),
+    ("MatchmakingProtocol::GetMemberSessions_V1", "matchmaking-get-member-sessions-v1"),
+    ("MatchmakingProtocol::GetPlayerBans_V1", "matchmaking-get-player-bans-v1"),
+    ("MatchmakingProtocol::GetReceivedInvitations_V1", "matchmaking-get-received-invitations-v1"),
+    ("MatchmakingProtocol::GetSentInvitations_V1", "matchmaking-get-sent-invitations-v1"),
+    ("MatchmakingProtocol::JoinSession2_V1", "matchmaking-join-session2-v1"),
+    ("MatchmakingProtocol::JoinSession_V1", "matchmaking-join-session-v1"),
+    ("MatchmakingProtocol::KickPlayer_V1", "matchmaking-kick-player-v1"),
+    ("MatchmakingProtocol::LeaveSession_V1", "matchmaking-leave-session-v1"),
+    ("MatchmakingProtocol::LockSession_V1", "matchmaking-lock-session-v1"),
+    ("MatchmakingProtocol::MigrateSession_V1", "matchmaking-migrate-session-v1"),
+    ("MatchmakingProtocol::OpportunisticClaimSession_V1", "matchmaking-opportunistic-claim-session-v1"),
+    ("MatchmakingProtocol::PlayerDisconnected_V1", "matchmaking-player-disconnected-v1"),
+    ("MatchmakingProtocol::QueryStats_V1", "matchmaking-query-stats-v1"),
+    ("MatchmakingProtocol::RenewReservation_V1", "matchmaking-renew-reservation-v1"),
+    ("MatchmakingProtocol::ReportHostFailure_V1", "matchmaking-report-host-failure-v1"),
+    ("MatchmakingProtocol::ReportHostSuccess_V1", "matchmaking-report-host-success-v1"),
+    ("MatchmakingProtocol::ReportJoinFailure_V1", "matchmaking-report-join-failure-v1"),
+    ("MatchmakingProtocol::ReportJoinSuccess_V1", "matchmaking-report-join-success-v1"),
+    ("MatchmakingProtocol::ReportMatchStart_V1", "matchmaking-report-match-start-v1"),
+    ("MatchmakingProtocol::ReportMigrationSuccess_V1", "matchmaking-report-migration-success-v1"),
+    ("MatchmakingProtocol::ReportQoS_V1", "matchmaking-report-qos-v1"),
+    ("MatchmakingProtocol::SendInvitation_V1", "matchmaking-send-invitation-v1"),
+    ("MatchmakingProtocol::StorePlayerProfile_V1", "matchmaking-store-player-profile-v1"),
+    ("MatchmakingProtocol::UnlockSession_V1", "matchmaking-unlock-session-v1"),
+    ("MatchmakingProtocol::UpdatePlayerMetadata_V1", "matchmaking-update-player-metadata-v1"),
+    ("MatchmakingProtocol::UpdateSession_V1", "matchmaking-update-session-v1"),
+})
+{
+    Check(LoginRpcCodec.ClassifyPostLoginRequest(DiagnosticRequest("MatchmakingProtocol", method, [0, 255, 128])) == label,
+        "Known follow-up method not classified");
+    Check(LoginRpcCodec.ClassifyPostLoginRequest(DiagnosticRequest("invented-private-protocol", method, [])) == "other-protocol",
+        "Follow-up method escaped protocol guard");
+}
 Check(LoginRpcCodec.ClassifyPostLoginRequest(login) == "login-with-token-v1"
     && LoginRpcCodec.ClassifyPostLoginRequest(register) == "login-register-v1", "Repeated login header classification differs");
 Check(LoginRpcCodec.ClassifyPostLoginRequest(DiagnosticRequest("MatchmakingProtocol", "private-invented-text", [])) == "matchmaking-other-method"

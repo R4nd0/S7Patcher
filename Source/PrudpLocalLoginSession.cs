@@ -154,8 +154,15 @@ namespace S7Patcher.Source
 
         private bool TryReplyToSessionRequest(ReadOnlySpan<byte> message, out byte[] response, out string reason)
         {
-            if (LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-create-session-v1")
+            string operation = LoginRpcCodec.ClassifyPostLoginRequest(message);
+            if (operation == "matchmaking-create-session-v1")
                 return LocalSessionCreationCodec.TryReply(message, sessions, this, out response, out reason);
+            if (operation != "matchmaking-search-sessions-v1")
+            {
+                response = null;
+                reason = "unsupported-session-operation";
+                return false;
+            }
             // Until MatchmakingSession serialization is implemented, never claim
             // an empty catalogue after any local peer has actually created one.
             if (sessions.Count != 0)

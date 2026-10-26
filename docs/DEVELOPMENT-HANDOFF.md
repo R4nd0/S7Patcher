@@ -12,11 +12,11 @@ state now enables the multiplayer menu. The user opened an empty session list.
 
 The current native candidate passed 354 adapter checks, 38 network-guard checks
 and 18 original-byte comparisons, plus configuration validation. The
-current create-record candidate passes 2,498 service checks and 20,216 isolated
+current create-followup diagnostic passes 2,499 service checks and 20,288 isolated
 RPC codec assertions. Its UI archive verifies all 284 entries and parses.
 These are separate results, not evidence of a playable LAN match.
 
-## Current blocker: live verification of create-record response / first-visit button
+## Current blocker: identify unsupported operation after create response
 
 The SpaceId transfer and real `SearchSessions_V1` exchange are live-verified
 at transport level: 16 empty search replies, 18 acknowledgements including
@@ -24,7 +24,10 @@ Login/Register, no rejection or expiry in the recorded sample. The user
 opened game settings. The scoped create gate is now live-verified: two
 `CreateSession_V1` requests reached the service, which had no handler yet.
 A bounded shared session registry and native-shaped create response are now
-deployed; no game acceptance is claimed. `GetSession`, nonempty search results,
+deployed and both a create reply and an idempotent retry were acknowledged.
+The user confirmed the create button is immediately active, but creation still
+loads or errors. One subsequent Matchmaking operation was unclassified; it was
+not `GetSession_V1`, whose classifier was already present. `GetSession`, nonempty search results,
 joining, match startup and LAN remain absent. See `LOCAL-SESSION-CREATION.md`.
 
 The user's first-visit disabled create button is a separate Lua transition bug:
@@ -42,6 +45,15 @@ and launcher remain in `LocalData/Interface-before-create-ready.bba` and
 is unchanged. The no-game-launch preflight passed. The user has been asked to
 check create on the first session-list visit, attempt one creation and leave S7
 open. Do not rerun the completed deployment transaction.
+
+Latest diagnostic: `work/server-create-followup`, staged and hash-verified as
+`Server-Create-Followup`. The test launcher now selects it for the next run; its
+previous version is retained in `LocalData/Test-Lokale-Anmeldung-before-create-followup.cmd`.
+It adds fixed labels for all 40 Matchmaking method names from the supported EXE
+and separates unsupported operations from nonempty-search rejections. No new
+handler, native change or archive change is included. The current game remains
+on the old service until the user restarts. Request one create attempt with the
+new diagnostic, then inspect its fixed follow-up label.
 
 Earlier observations established the following startup/readiness blockers,
 subsequently addressed by the scoped changes documented below.
