@@ -29,7 +29,7 @@ namespace S7Patcher.Source
         private readonly Dictionary<ushort, Pending> pending = new();
         private ushort nextOutgoing = 1;
         private int responseCount;
-        private int postLoginObservations;
+        private readonly HashSet<string> observedOperations = new(StringComparer.Ordinal);
         private int postLoginResponseCount;
         private bool registrationAcknowledged;
         private bool closed;
@@ -103,11 +103,11 @@ namespace S7Patcher.Source
                     // and create requests, sharing the same post-login budget.
                     if (search)
                     {
-                        if (postLoginObservations < 8)
+                        if (observedOperations.Count < 8)
                         {
-                            postLoginObservations++;
-                            emit(new() { Event = "local-post-login-request-observed",
-                                Reason = LoginRpcCodec.ClassifyPostLoginRequest(message) });
+                            string operation = LoginRpcCodec.ClassifyPostLoginRequest(message);
+                            if (observedOperations.Add(operation))
+                                emit(new() { Event = "local-post-login-request-observed", Reason = operation });
                         }
                         if (!keepAlive || !registrationAcknowledged || postLoginResponseCount >= MaximumPostLoginResponses || pending.Count >= 2)
                         {
@@ -137,7 +137,9 @@ namespace S7Patcher.Source
                     if (search) postLoginResponseCount++; else responseCount++;
                     emit(new() { Event = !search ? "local-login-response-queued"
                         : LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-create-session-v1"
-                            ? "local-session-create-response-queued" : "local-session-search-response-queued", Reason = reason,
+                            ? "local-session-create-response-queued"
+                            : LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-update-session-v1"
+                                ? "local-session-update-response-queued" : "local-session-search-response-queued", Reason = reason,
                         AuthenticationImplemented = false, UdpProtocolImplemented = false });
                 }
                 finally
@@ -157,6 +159,8 @@ namespace S7Patcher.Source
             string operation = LoginRpcCodec.ClassifyPostLoginRequest(message);
             if (operation == "matchmaking-create-session-v1")
                 return LocalSessionCreationCodec.TryReply(message, sessions, this, out response, out reason);
+            if (operation == "matchmaking-update-session-v1")
+                return LocalSessionUpdateCodec.TryReply(message, sessions, this, out response, out reason);
             if (operation != "matchmaking-search-sessions-v1")
             {
                 response = null;
@@ -225,6 +229,7 @@ namespace S7Patcher.Source
         {
             if (closed) return;
             closed = true;
+            observedOperations.Clear();
             sessions.RemoveOwner(this);
             if (ownsRegistry) sessions.Dispose();
             foreach (Pending sent in pending.Values) CryptographicOperations.ZeroMemory(sent.Packet);

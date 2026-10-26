@@ -18,22 +18,60 @@ namespace S7Patcher.Source
         {
             id = 0;
             reason = "unsupported-create-arguments";
-            if (closed || owner == null || !LocalSessionCreationCodec.ValidBody(body)) return false;
-            foreach (Entry entry in entries)
+            if (closed || owner == null || !LocalSessionMetadata.TryReadBody(body, true, out var space, out _, out var metadata)) return false;
+            try
             {
-                if (!ReferenceEquals(entry.Owner, owner)) continue;
-                reason = "local-session-owner-already-hosting";
-                if (!body.SequenceEqual(entry.Body)) return false;
-                id = entry.Id;
-                reason = "local-session-create-replayed";
+                foreach (Entry entry in entries)
+                {
+                    if (!ReferenceEquals(entry.Owner, owner)) continue;
+                    reason = "local-session-owner-already-hosting";
+                    if (!body.SequenceEqual(entry.Body)) return false;
+                    id = entry.Id;
+                    reason = "local-session-create-replayed";
+                    return true;
+                }
+                reason = "local-session-capacity-exhausted";
+                if (entries.Count >= MaximumSessions || nextId == uint.MaxValue) return false;
+                entries.Add(new(owner, nextId, body.ToArray(), space.ToArray(), metadata));
+                metadata = null; // Registry now owns it.
+                id = nextId++;
+                reason = "local-session-record-created";
                 return true;
             }
-            reason = "local-session-capacity-exhausted";
-            if (entries.Count >= MaximumSessions || nextId == uint.MaxValue) return false;
-            entries.Add(new(owner, nextId, body.ToArray()));
-            id = nextId++;
-            reason = "local-session-record-created";
-            return true;
+            finally { metadata?.Dispose(); }
+        }
+
+        internal bool TryUpdate(object owner, ReadOnlySpan<byte> body, out string reason)
+        {
+            reason = "unsupported-update-arguments";
+            if (closed || owner == null || !LocalSessionMetadata.TryReadBody(body, false, out var space, out uint id, out var patch)) return false;
+            using (patch)
+            {
+                reason = "local-session-update-owner-or-space-mismatch";
+                foreach (Entry entry in entries)
+                {
+                    if (entry.Id != id || !ReferenceEquals(entry.Owner, owner) || !space.SequenceEqual(entry.Space)) continue;
+                    reason = "local-session-metadata-limit";
+                    if (!entry.Metadata.TryMerge(patch, out var merged)) return false;
+                    entry.Metadata.Dispose(); entry.Metadata = merged;
+                    reason = "local-session-metadata-updated";
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        // Owned snapshot for a future GetSession serializer; the caller disposes it.
+        internal bool TryGetMetadata(object owner, uint id, out LocalSessionMetadata metadata)
+        {
+            metadata = null;
+            if (closed) return false;
+            foreach (Entry entry in entries)
+                if (entry.Id == id && ReferenceEquals(entry.Owner, owner))
+                {
+                    metadata = entry.Metadata.Clone(); return true;
+                }
+            return false;
         }
 
         internal void RemoveOwner(object owner)
@@ -41,7 +79,7 @@ namespace S7Patcher.Source
             for (int i = entries.Count - 1; i >= 0; --i)
                 if (ReferenceEquals(entries[i].Owner, owner))
                 {
-                    CryptographicOperations.ZeroMemory(entries[i].Body);
+                    entries[i].Dispose();
                     entries.RemoveAt(i);
                 }
         }
@@ -50,10 +88,21 @@ namespace S7Patcher.Source
         {
             if (closed) return;
             closed = true;
-            foreach (Entry entry in entries) CryptographicOperations.ZeroMemory(entry.Body);
+            foreach (Entry entry in entries) entry.Dispose();
             entries.Clear();
         }
 
-        private sealed record Entry(object Owner, uint Id, byte[] Body);
+        private sealed class Entry(object owner, uint id, byte[] body, byte[] space, LocalSessionMetadata metadata) : IDisposable
+        {
+            internal readonly object Owner = owner;
+            internal readonly uint Id = id;
+            internal readonly byte[] Body = body, Space = space;
+            internal LocalSessionMetadata Metadata = metadata;
+            public void Dispose()
+            {
+                CryptographicOperations.ZeroMemory(Body); CryptographicOperations.ZeroMemory(Space);
+                Metadata.Dispose();
+            }
+        }
     }
 }

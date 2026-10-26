@@ -12,11 +12,23 @@ state now enables the multiplayer menu. The user opened an empty session list.
 
 The current native candidate passed 354 adapter checks, 38 network-guard checks
 and 18 original-byte comparisons, plus configuration validation. The
-current create-followup diagnostic passes 2,499 service checks and 20,288 isolated
-RPC codec assertions. Its UI archive verifies all 284 entries and parses.
+current session-update candidate passes 2,834 service checks; the unchanged
+RPC codec previously passed 20,288 isolated assertions. Its UI archive verifies
+all 284 entries and parses.
 These are separate results, not evidence of a playable LAN match.
 
-## Current blocker: identify unsupported operation after create response
+## Current blocker: live verification of session metadata updates
+
+The follow-up diagnostic identified `UpdateSession_V1`: two requests arrived
+after the acknowledged create response. The candidate now validates and merges
+metadata into the owner's record, with exact space/ID checks, atomic bounded
+state changes and the native void response. See `LOCAL-SESSION-UPDATES.md`.
+Build `work/server-session-update` is staged as `Server-Session-Update`; the test
+launcher selects it for the next user restart. Adapter and archive are unchanged.
+Update reply acceptance and lobby completion remain unverified. `GetSession`,
+nonempty search results, membership, joining and match startup are still absent.
+The diagnostic now retains at most eight distinct fixed operation labels, so
+repeated updates cannot hide the next unsupported operation.
 
 The SpaceId transfer and real `SearchSessions_V1` exchange are live-verified
 at transport level: 16 empty search replies, 18 acknowledgements including

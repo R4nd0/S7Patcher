@@ -317,7 +317,13 @@ internal static class LocalLoginSessionChecks
                 fixture.Session.ProcessData(packet, fixture.Events.Add); // Retransmission is not a new observation.
             }
             var observations = fixture.Events.Where(e => e.Event == "local-post-login-request-observed").ToArray();
-            Check(observations.Length == 8 && observations.All(e => e.Reason == "matchmaking-search-sessions-v1"), "Diagnostic cap or decrypted request classification failed");
+            Check(observations.Length == 1 && observations[0].Reason == "matchmaking-search-sessions-v1", "Repeated operation consumed diagnostic budget");
+            string[] methods = ["GetSession", "CreateSession", "UpdateSession", "JoinSession", "LeaveSession", "LockSession", "UnlockSession", "CreateSession2", "ReportHostSuccess"];
+            for (int i = 0; i < methods.Length; ++i)
+                fixture.Session.ProcessData(fixture.Data((ushort)(18 + i), 0,
+                    LocalSessionCreationChecks.Request(body: [], method: "MatchmakingProtocol::" + methods[i] + "_V1")), fixture.Events.Add);
+            Check(fixture.Events.Count(e => e.Event == "local-post-login-request-observed") == 8
+                && !fixture.Events.Any(e => e.Reason == "matchmaking-create-session2-v1"), "Distinct operation diagnostic cap exceeded");
             Check(fixture.Session.PendingCount == 0 && fixture.Session.TakeDue(200, fixture.Events.Add).Count == 0,
                 "Observation enlarged response budget");
             Check(fixture.Session.TryReplyToPing(Ping(), 200, fixture.Events.Add, out _), "Observation disrupted keepalive");
@@ -388,12 +394,22 @@ internal static class LocalLoginSessionChecks
             reply = host.Session.TakeDue(1300, host.Events.Add).Single();
             VerifySearchResponse(reply, host.Key, 7, host.ServerSession, LocalSessionCreationChecks.Response(7)); passed++;
             Check(registry.Count == 1 && host.Session.TryAcknowledge(Ack(ServerCookie, 4)), "Application create retry duplicated record");
-            host.Session.ProcessData(host.Data(10, 0, LocalSessionCreationChecks.Request(method: "MatchmakingProtocol::UpdateSession_V1")), host.Events.Add);
+            host.Session.ProcessData(host.Data(10, 0, LocalSessionCreationChecks.Request(method: "MatchmakingProtocol::GetSession_V1")), host.Events.Add);
             Check(host.Session.PendingCount == 0 && registry.Count == 1
-                && host.Events.Any(e => e.Event == "local-post-login-request-observed" && e.Reason == "matchmaking-update-session-v1")
+                && host.Events.Any(e => e.Event == "local-post-login-request-observed" && e.Reason == "matchmaking-get-session-v1")
                 && host.Events.Any(e => e.Reason == "unsupported-session-operation")
                 && !host.Events.Any(e => e.Reason == "nonempty-session-catalogue-not-yet-supported"),
                 "Unsupported follow-up changed registry or was misreported as a search");
+            byte[] update = host.Data(11, 0, LocalSessionUpdateChecks.Request());
+            host.Session.ProcessData(update, host.Events.Add); host.Session.ProcessData(update, host.Events.Add);
+            Check(host.Session.PendingCount == 1 && host.Events.Count(e => e.Event == "local-session-update-response-queued") == 1,
+                "Update transport retry queued another reply");
+            reply = host.Session.TakeDue(1350, host.Events.Add).Single();
+            VerifySearchResponse(reply, host.Key, 0x12345678, host.ServerSession, LocalSessionUpdateChecks.Response()); passed++;
+            Check(ReferenceEquals(reply, host.Session.TakeDue(2350, host.Events.Add).Single()), "Update retry changed ciphertext");
+            Check(host.Session.TryAcknowledge(Ack(ServerCookie, 5)) && reply.All(b => b == 0), "Update ACK failed to clear ciphertext");
+            Check(registry.TryGetMetadata(host.Session, 1, out var updated), "Transport update lost record");
+            using (updated) Check(updated.Attributes[Convert.ToHexString("attribute"u8)].SequenceEqual(new byte[] { 3, 1 }), "Transport update not persisted");
             visitor.Session.ProcessData(visitor.Data(8, 0, LocalSessionSearchChecks.Request()), visitor.Events.Add);
             Check(visitor.Session.PendingCount == 0 && visitor.Events.Any(e => e.Reason == "nonempty-session-catalogue-not-yet-supported"),
                 "Other peer received false empty catalogue");
@@ -406,6 +422,23 @@ internal static class LocalLoginSessionChecks
             Check(visitor.Session.Closed && registry.Count == 0, "Owner expiry leaked session record");
             Check(host.Events.Concat(visitor.Events).All(e => !JsonSerializer.Serialize(e, ConfigServerJsonContext.Default.ConfigServerEvent).Contains("invented-")),
                 "Create events leaked body fields");
+        }
+        using (LocalSessionRegistry registry = new())
+        using (Fixture fixture = new(keepAlive: true, sessions: registry))
+        {
+            fixture.Register();
+            fixture.Session.ProcessData(fixture.Data(8, 0, LocalSessionCreationChecks.Request()), fixture.Events.Add);
+            fixture.Session.TakeDue(100, fixture.Events.Add); fixture.Session.TryAcknowledge(Ack(ServerCookie, 3));
+            for (ushort i = 0; i < PrudpLocalLoginSession.MaximumPostLoginResponses - 1; ++i)
+            {
+                fixture.Session.ProcessData(fixture.Data((ushort)(9 + i), 0, LocalSessionUpdateChecks.Request(i)), fixture.Events.Add);
+                byte[] response = fixture.Session.TakeDue(200 + i * 10, fixture.Events.Add).Single();
+                VerifySearchResponse(response, fixture.Key, i, fixture.ServerSession, LocalSessionUpdateChecks.Response(i)); passed++;
+                Check(fixture.Session.TryAcknowledge(Ack(ServerCookie, (ushort)(4 + i))), "Update budget response ACK failed");
+            }
+            fixture.Session.ProcessData(fixture.Data(40, 0, LocalSessionUpdateChecks.Request(body: LocalSessionUpdateChecks.Body(attributes: LocalSessionUpdateChecks.Map()))), fixture.Events.Add);
+            Check(fixture.Session.PendingCount == 0 && fixture.Events.Count(e => e.Event == "local-session-update-response-queued") == 31
+                && fixture.Events.Any(e => e.Reason == "response-budget-exhausted"), "Updates bypassed shared response cap");
         }
         foreach (bool keepAlive in new[] { false, true })
         {

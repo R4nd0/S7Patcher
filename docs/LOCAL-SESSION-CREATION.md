@@ -10,10 +10,12 @@ session-list visit and enabled on the second.
 
 The new service allocates a bounded, memory-only session record before sending
 the native u32 session-ID response. This is not yet a functional lobby or LAN:
-session detail serialization, updates, membership, joining and match startup
+session detail serialization, membership, joining and match startup
 remain unimplemented. `GetSession_V1` has a fixed diagnostic label, not a reply.
 The live game acknowledged the new create response at transport level; complete
 lobby creation remains unverified.
+The subsequent `UpdateSession_V1` blocker is implemented in a new candidate;
+see [local metadata updates](LOCAL-SESSION-UPDATES.md) for its pending live test.
 
 ## Verified wire layout
 
