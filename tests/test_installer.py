@@ -31,7 +31,7 @@ class InstallerTests(unittest.TestCase):
         for name in ['Payload/uplay_r1_loader.dll', 'Payload/Server/S7Patcher.dll', 'Runtime/python/python.exe',
                      'Runtime/dotnet/dotnet.exe', 'Tools/offline-ui/patch-spec.json', 'Tools/LICENSE.txt']:
             write(self.package, name, b'invented package')
-        for original, target in [('compatibility.py', 'installer/compatibility.py'), ('start.py', 'installer/start.py')]:
+        for original, target in [('compatibility.py', 'installer/compatibility.py'), ('start.py', 'installer/start.py'), ('launch_lan.py', 'installer/launch_lan.py')]:
             write(self.package, 'Tools/' + target, (TOOLS / original).read_bytes())
         write(self.package, 'Tools/offline-ui/launch_local.py', b'# invented launcher fixture\n')
         write(self.package, 'Tools/lan/prepare.py', b'''from pathlib import Path

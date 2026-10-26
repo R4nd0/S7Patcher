@@ -22,13 +22,14 @@ namespace S7Patcher.Source
         private uint did, rvConnectionId;
         private bool loginHandled, registerHandled, disposed;
 
-        internal LocalLoginRpcEngine(byte clientSourceVirtualPort, IPEndPoint observedLoopbackPeer, string serverAuthUrl)
+        internal LocalLoginRpcEngine(byte clientSourceVirtualPort, IPEndPoint observedLoopbackPeer, string serverAuthUrl, LocalNetworkPolicy network = null)
         {
+            network ??= LocalNetworkPolicy.Loopback;
             if (clientSourceVirtualPort >> 4 != 3) throw new ArgumentException("Unsupported local peer stream");
             if (observedLoopbackPeer == null || observedLoopbackPeer.AddressFamily != AddressFamily.InterNetwork
-                || !IPAddress.IsLoopback(observedLoopbackPeer.Address) || observedLoopbackPeer.Port == 0)
-                throw new ArgumentException("A bound IPv4 loopback peer is required");
-            if (!PrudpUrl.TryRead(serverAuthUrl, out PrudpUrl auth) || !IPAddress.IsLoopback(auth.Address)
+                || !network.Allows(observedLoopbackPeer.Address) || observedLoopbackPeer.Port == 0)
+                throw new ArgumentException("A bound explicitly allowed IPv4 peer is required");
+            if (!PrudpUrl.TryRead(serverAuthUrl, out PrudpUrl auth) || !network.IsServerAddress(auth.Address)
                 || auth.Has("redirected") || (auth.Has("stream") && !auth.NumberIs("stream", 3))
                 || (auth.Has("sid") && !auth.NumberIs("sid", 1)))
                 throw new ArgumentException("Unsupported local authentication URL");

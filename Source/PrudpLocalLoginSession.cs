@@ -34,12 +34,12 @@ namespace S7Patcher.Source
         private bool closed;
 
         internal PrudpLocalLoginSession(PrudpProbePeer peer, IPEndPoint endpoint, string authUrl, long now, bool keepAlive = false,
-            LocalSessionRegistry sessions = null)
+            LocalSessionRegistry sessions = null, LocalNetworkPolicy network = null)
         {
             if (peer?.ConnectReplySent != true || peer.Connect == null)
                 throw new ArgumentException("Established CONNECT context required");
             this.peer = peer;
-            rpc = new(peer.SourceVirtualPort, endpoint, authUrl);
+            rpc = new(peer.SourceVirtualPort, endpoint, authUrl, network);
             try { key = peer.Connect.DeriveDataKey(); }
             catch { rpc.Dispose(); throw; }
             assembler = new(peer.Connect.InitialClientDataSequence);

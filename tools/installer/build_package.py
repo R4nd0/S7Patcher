@@ -13,7 +13,7 @@ import compatibility as content
 from install import write_json, FORMAT
 
 PYTHON_SHA256 = '90905e64a840557d8c1bc4f5b74db3d7ee85e3ffb217611cac1c7813acea4159'
-ADAPTER_SHA256 = '17d86b1ebfe670a838ff89dbdddd8e477ef1abc128001eb301268930c9c3ed09'
+ADAPTER_SHA256 = '441dcb75fe925a44de302859dcaef3bedff5ad49f8831a73b6fb0d1c49d5ae9f'
 ARCHIVE_SHA256 = 'ebee0ff593cdb9c38442d03875041f8c1825c0fc3e2414291098e08f3517ced5'
 
 
@@ -47,7 +47,7 @@ def build(adapter, service, dotnet, python_zip, output):
     for name in ('S7Patcher.dll', 'S7Patcher.deps.json', 'S7Patcher.runtimeconfig.json'):
         shutil.copyfile(service / name, server / name)
     shutil.copyfile(adapter, output / 'Payload/uplay_r1_loader.dll')
-    names = ['installer/install.py', 'installer/start.py', 'installer/compatibility.py',
+    names = ['installer/install.py', 'installer/start.py', 'installer/launch_lan.py', 'installer/compatibility.py',
              'offline-ui/launch_local.py', 'offline-ui/patch-spec.json', 'lan/bba.py', 'lan/prepare.py']
     for name in names:
         target = output / 'Tools' / name; target.parent.mkdir(parents=True, exist_ok=True)
@@ -59,7 +59,7 @@ def build(adapter, service, dotnet, python_zip, output):
         'files': content.inventory(output, ('Payload', 'Runtime', 'Tools'))})
     (output / 'Installieren.cmd').write_text('@echo off\n"%~dp0Runtime\\python\\python.exe" -B "%~dp0Tools\\installer\\install.py" --package "%~dp0."\npause\n', encoding='ascii')
     (output / 'LIESMICH.txt').write_text(
-        'S7 Patch-Installer: Vorbereitungsversion\n\n'
+        'S7 Patch-Installer: LAN-Verbindungstest\n\n'
         'Paket vollstaendig entpacken und Installieren.cmd starten.\n'
         'Den eigenen S7-History-Installationsordner und einen neuen Testordner eingeben.\n'
         'Eine separate Kopie benoetigt etwa 7 GB freien Speicher. Das Original bleibt erhalten.\n'
@@ -70,6 +70,10 @@ def build(adapter, service, dotnet, python_zip, output):
         'Das gleiche Paket ist fuer beide PCs vorgesehen. Lokale Spielerkennungen entstehen auf jedem PC neu.\n'
         'Nur dieses Paket weitergeben, niemals die vorbereitete Spielkopie oder LocalData.\n'
         'Dateistand-pruefen.cmd prueft die vorbereitete Kopie; compatibility.json enthaelt nur Dateinamen und Pruefsummen.\n'
+        'Test-LAN-Verbindung.cmd verbindet zwei explizit angegebene PCs fuer den Sitzungstest.\n'
+        'Zuerst Host starten, danach den Mitspieler. Auf beiden PCs dieselbe Paketversion verwenden.\n'
+        'TCP 9110 und UDP 9111 muessen am Host fuer den anderen PC erreichbar sein.\n'
+        'Sitzungsbeitritt und laufende Mehrspielerpartien sind noch nicht implementiert bzw. verifiziert.\n'
         'Gleiche Dateien verhindern nicht alle Synchronisationsfehler der Spielsimulation.\n', encoding='utf-8')
     (output / 'RUNTIME-SOURCES.txt').write_text(
         'CPython 3.14.10 Windows embeddable x64\n'

@@ -333,6 +333,7 @@ Check(loginOutput.Contains("Experimental local Login/Register responses enabled"
 passed += LocalSessionSearchChecks.Run();
 passed += LocalSessionDisplayChecks.Run();
 passed += LocalSessionCatalogueChecks.Run();
+passed += LocalNetworkPolicyChecks.Run();
 passed += LocalSessionCreationChecks.Run();
 passed += RegisteredHostChecks.Run();
 passed += CreationFieldChecks.Run();
@@ -347,6 +348,9 @@ await Cli(2, "--local-config-server", "--local-catalogue-probe", "--local-sessio
 await Cli(2, "--local-config-server", "--local-catalogue-probe", "--local-catalogue-probe");
 string catalogueOutput = await Cli(0, "--local-config-server", "--http-port", "0", "--local-catalogue-probe", "--seconds", "1");
 Check(catalogueOutput.Contains("Public catalogue candidate:", StringComparison.Ordinal), "Catalogue mode not disclosed by CLI");
+await Cli(2, "--local-config-server", "--local-catalogue-probe", "--lan-address", "192.168.10.10");
+await Cli(2, "--local-config-server", "--local-catalogue-probe", "--lan-address", "192.168.10.10", "--lan-peer", "8.8.8.8");
+await Cli(2, "--local-config-server", "--lan-address", "192.168.10.10", "--lan-peer", "192.168.10.20");
 passed += await LocalLoginSessionChecks.RunNetworkAsync();
 Check(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(sentinel))) == originalHash && File.GetLastWriteTimeUtc(sentinel) == originalTime, "Server modified an existing file");
 Check(Directory.GetFileSystemEntries(scratch).SequenceEqual(new[] { sentinel }), "Server persisted a key, configuration or log file");

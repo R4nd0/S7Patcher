@@ -7,3 +7,7 @@ extern "C" __declspec(dllexport) bool __cdecl S7TestInstallGuard() {
 extern "C" __declspec(dllexport) bool __cdecl S7TestEndpoint(const sockaddr* address, int length) {
     return IsOfflineEndpointAllowed(address, length);
 }
+
+extern "C" __declspec(dllexport) bool __cdecl S7TestConfigureLan(const char* local, const char* peer) {
+    return ConfigureLanNetworkGuard(local, peer);
+}

@@ -105,7 +105,7 @@ def prepare(package, source, destination, emit=print):
     shutil.copytree(package / 'Payload/Server', destination / 'Server')
     shutil.copytree(package / 'Runtime', destination / 'Runtime')
     (destination / 'Launcher').mkdir()
-    for original, target in [('offline-ui/launch_local.py', 'launch_local.py'), ('installer/compatibility.py', 'compatibility.py')]:
+    for original, target in [('offline-ui/launch_local.py', 'launch_local.py'), ('installer/compatibility.py', 'compatibility.py'), ('installer/launch_lan.py', 'launch_lan.py')]:
         shutil.copyfile(tools / original, destination / 'Launcher' / target)
     shutil.copyfile(tools / 'installer/start.py', destination / 'Launcher/start.py')
     shutil.copyfile(tools / 'LICENSE.txt', destination / 'Launcher/LICENSE.txt')
@@ -124,14 +124,15 @@ def prepare(package, source, destination, emit=print):
     if content.inventory(destination, ('Runtime',)) != content.inventory(package, ('Runtime',)):
         raise ValueError('Laufzeitkopie stimmt nicht ueberein.')
     for original, target in [('offline-ui/launch_local.py', 'launch_local.py'),
-                             ('installer/compatibility.py', 'compatibility.py'), ('installer/start.py', 'start.py')]:
+                             ('installer/compatibility.py', 'compatibility.py'), ('installer/launch_lan.py', 'launch_lan.py'), ('installer/start.py', 'start.py')]:
         if content.digest(tools / original) != content.digest(destination / 'Launcher' / target):
             raise ValueError('Starterkopie stimmt nicht ueberein.')
     write_json(destination / 'local-bundle.json', bundle)
     write_json(destination / 'compatibility.json', content.create(destination))
     (destination / 'LIESMICH.txt').write_text(
         'S7 lokale Testkopie\n\nStart-S7-Test.cmd startet den lokalen Test.\n'
-        'Host und Beitritt zwischen PCs sind noch nicht freigegeben.\n'
+        'Test-LAN-Verbindung.cmd bietet Host/Mitspieler fuer den Sitzungstest.\n'
+        'Host zuerst starten, dann den Mitspieler. Beitritt/Partiestart bleiben in Entwicklung.\n'
         'Dateistand-pruefen.cmd prueft Spiel und Patch auf Veraenderungen.\n'
         'compatibility.json kann zum Vergleich auf den zweiten PC kopiert werden.\n'
         'Gleiche Dateien allein garantieren keine desyncfreie Simulation.\n'
@@ -140,6 +141,8 @@ def prepare(package, source, destination, emit=print):
     with (destination / 'Start-S7-Test.cmd').open('x', encoding='ascii') as stream: stream.write(starter)
     with (destination / 'Dateistand-pruefen.cmd').open('x', encoding='ascii') as stream:
         stream.write('@echo off\n"%~dp0Runtime\\python\\python.exe" -B "%~dp0Launcher\\compatibility.py" --bundle "%~dp0."\npause\n')
+    with (destination / 'Test-LAN-Verbindung.cmd').open('x', encoding='ascii') as stream:
+        stream.write('@echo off\n"%~dp0Runtime\\python\\python.exe" -B "%~dp0Launcher\\launch_lan.py" --bundle "%~dp0."\npause\n')
     incomplete.unlink()
     emit('Testkopie ist vorbereitet. LAN-Host/Beitritt sind noch nicht freigegeben.')
     return destination

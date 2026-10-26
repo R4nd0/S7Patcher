@@ -1,4 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
+#include "network_guard.h"
+#include "lan_address.h"
 #include <windows.h>
 #include <string>
 #include <map>
@@ -52,7 +54,14 @@ bool ReadConfiguration(std::wstring& root, std::map<std::string, std::string>& f
         if (!fields.emplace(line.substr(0, equals), line.substr(equals + 1)).second) return false;
     }
     bool valid_probe = fields.count("connect_probe") == 0 || fields.at("connect_probe") == "0" || fields.at("connect_probe") == "1";
-    return valid_probe && fields.size() == 7 + fields.count("connect_probe") && fields["format"] == "s7-local-runtime-v1" && fields["address"] == "127.0.0.1"
+    bool lan = fields.count("lan_local") && fields.count("lan_peer");
+    bool valid_address = lan
+        ? ValidLanPair(fields.at("lan_local").c_str(), fields.at("lan_peer").c_str())
+            && (fields["address"] == fields.at("lan_local") || fields["address"] == fields.at("lan_peer"))
+            && fields.count("connect_probe") && fields.at("connect_probe") == "1"
+        : fields["address"] == "127.0.0.1";
+    return valid_probe && valid_address && fields.size() == 7 + fields.count("connect_probe") + (lan ? 2 : 0)
+        && fields["format"] == "s7-local-runtime-v1"
         && fields.count("udp_port") && fields.count("public_key") && fields.count("profile_id")
         && fields.count("display_name") && fields.count("ticket");
 }
@@ -94,7 +103,11 @@ bool InitializeOfflineBootstrap() {
             fields.at("display_name").c_str(), fields.at("ticket").c_str())) return false;
         OfflineBootstrapConfig config{static_cast<unsigned short>(value), fields.at("public_key").c_str(), fields.at("ticket").c_str()};
         config.local_connect_probe = fields.count("connect_probe") && fields.at("connect_probe") == "1";
+        config.server_address = fields.at("address").c_str();
         if (!InitializeOfflineBootstrap(config)) { ReportLocalStatus(GetOfflineBootstrapError()); return false; }
+        if (fields.count("lan_local") && !ConfigureLanNetworkGuard(fields.at("lan_local").c_str(), fields.at("lan_peer").c_str()))
+        { ReportLocalStatus("lan-network-configuration-rejected"); return false; }
+        if (fields.count("lan_local")) ReportLocalStatus("explicit-two-peer-lan-enabled");
         initialized = true;
         ReportLocalStatus(config.local_connect_probe ? "native-bootstrap-installed-local-connect-probe" : "native-bootstrap-installed-login-trigger-unverified");
         return true;

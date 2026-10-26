@@ -23,6 +23,31 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
+### Current LAN transport candidate
+
+See `TWO-PEER-LAN-TRANSPORT.md`. Explicit paired IPv4 service/native/launcher
+support is implemented. Both roles are in `outputs/S7-LAN-Verbindungstest.zip`;
+this is a catalogue experiment, not a playable join release. Build source:
+`work/installer-package-lan-catalogue`, adapter `work/native-lan-build`, service
+`work/server-two-peer-lan`. ZIP SHA256:
+`07434eced4c9c884d19a8ea1dc376cd6d5fbc8f1c98ecf23e84fb05feff69c83`.
+Adapter SHA256 `441dcb75fe925a44de302859dcaef3bedff5ad49f8831a73b6fb0d1c49d5ae9f`.
+
+User closed S7; deployed into the separate copy with backups under
+LocalData/Before-two-peer-lan. Portable Server/Launcher/Runtime now align with
+the installer; compatibility.json describes the complete Base/Server/Launcher
+inventory. No-game LAN preflight passed. User started Test-LAN-Host.cmd and
+confirmed a public four-player lobby; live PID 46740, exact test path, native
+LAN mode and connected, five responses acknowledged through Create/Update.
+The runtime addresses remain private local configuration, never repository data.
+Windows already has user-created Allow rules for this copy and its bundled
+runtime; no firewall settings were changed by the agent.
+
+The second PC still needs installation/discovery testing. Host's current
+connection has the inherited 20-minute test lifetime. New launcher performs
+cooperative pre-start content-ID comparison, not authenticated RPC admission.
+Join and live match semantics are still missing. Keep progressing after testing.
+
 ### Real catalogue candidate (not yet selected by the game launcher)
 
 `--local-catalogue-probe` enables public other-owner searches and GetSession

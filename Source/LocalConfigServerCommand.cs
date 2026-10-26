@@ -31,7 +31,7 @@ namespace S7Patcher.Source
             if (!TryParse(args, out LocalConfigServerOptions options))
             {
                 Emit(new() { Event = "configuration-server-error", Reason = "invalid-arguments",
-                    Message = "Usage: S7Patcher --local-config-server [--http-port 0..65535] [--udp-port 0..65535] [--seconds 1..86400] [--handshake-metadata] [--syn-probe] [--connect-probe] [--data-ack-probe] [--data-crypto-probe] [--local-login-probe] [--local-keepalive-probe] [--local-session-display-probe] [--local-catalogue-probe]" });
+                    Message = "Usage: S7Patcher --local-config-server [--http-port 0..65535] [--udp-port 0..65535] [--seconds 1..86400] [--handshake-metadata] [--syn-probe] [--connect-probe] [--data-ack-probe] [--data-crypto-probe] [--local-login-probe] [--local-keepalive-probe] [--local-session-display-probe] [--local-catalogue-probe] [--lan-address IPv4 --lan-peer IPv4 --content-id SHA256]" });
                 exitCode = 2;
                 return true;
             }
@@ -56,11 +56,15 @@ namespace S7Patcher.Source
             return true;
         }
 
+        internal static bool ValidContentId(string value) => value?.Length == 64
+            && value.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
+
         private static bool TryParse(string[] args, out LocalConfigServerOptions options)
         {
             options = new();
             if (args.Length == 0 || args[0] != "--local-config-server")
                 return false;
+            string lanAddress = null, lanPeer = null;
             HashSet<string> seen = new(StringComparer.Ordinal);
             for (int index = 1; index < args.Length; index++)
             {
@@ -105,6 +109,13 @@ namespace S7Patcher.Source
                     options.HandshakeMetadata = true;
                     continue;
                 }
+                if (name is "--lan-address" or "--lan-peer" or "--content-id")
+                {
+                    if (++index >= args.Length) return false;
+                    if (name == "--lan-address") lanAddress = args[index];
+                    else if (name == "--lan-peer") lanPeer = args[index]; else options.ContentId = args[index];
+                    continue;
+                }
                 if (++index >= args.Length || !int.TryParse(args[index], NumberStyles.None, CultureInfo.InvariantCulture, out int value))
                     return false;
                 switch (name)
@@ -115,12 +126,19 @@ namespace S7Patcher.Source
                     default: return false;
                 }
             }
+            if (lanAddress != null || lanPeer != null || options.ContentId != null)
+            {
+                if (!options.LocalCatalogueProbe || !ValidContentId(options.ContentId) || !LocalNetworkPolicy.TryCreate(lanAddress, lanPeer, out var policy)) return false;
+                options.Network = policy;
+            }
             return !(options.LocalSessionDisplayProbe && options.LocalCatalogueProbe);
         }
     }
 
     internal sealed class LocalConfigServerOptions
     {
+        public string ContentId { get; set; }
+        public LocalNetworkPolicy Network { get; set; } = LocalNetworkPolicy.Loopback;
         public int HttpPort { get; set; } = 9110;
         public int UdpPort { get; set; } = 0;
         public int? Seconds { get; set; }
@@ -146,6 +164,9 @@ namespace S7Patcher.Source
         {
             if (options.LocalSessionDisplayProbe || options.LocalCatalogueProbe) options.LocalKeepAliveProbe = true;
             if (options.LocalKeepAliveProbe) options.LocalLoginProbe = true;
+            LocalNetworkPolicy network = options.Network ?? throw new ArgumentException("Missing network policy");
+            if (network.IsLan && (!options.LocalCatalogueProbe || !LocalConfigServerCommand.ValidContentId(options.ContentId)))
+                throw new ArgumentException("LAN catalogue requires a verified content ID");
             bool dataAckProbe = options.DataAckProbe || options.DataCryptoProbe || options.LocalLoginProbe;
             bool connectProbe = options.ConnectProbe || dataAckProbe;
             using CancellationTokenSource stop = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
@@ -154,7 +175,7 @@ namespace S7Patcher.Source
             using ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
             using UdpClient udp = new(AddressFamily.InterNetwork);
             udp.Client.ExclusiveAddressUse = true;
-            TcpListener http = new(IPAddress.Loopback, options.HttpPort);
+            TcpListener http = new(network.BindAddress, options.HttpPort);
             http.Server.ExclusiveAddressUse = true;
             long datagrams = 0;
             long datagramBytes = 0;
@@ -164,22 +185,25 @@ namespace S7Patcher.Source
             using LocalSessionRegistry sessions = new(options.LocalSessionDisplayProbe, options.LocalCatalogueProbe);
             try
             {
-                udp.Client.Bind(new IPEndPoint(IPAddress.Loopback, options.UdpPort));
+                udp.Client.Bind(new IPEndPoint(network.BindAddress, options.UdpPort));
                 int udpPort = ((IPEndPoint)udp.Client.LocalEndPoint).Port;
                 http.Start(16);
                 int httpPort = ((IPEndPoint)http.LocalEndpoint).Port;
                 byte[] response = JsonSerializer.SerializeToUtf8Bytes(new LocalServerConfiguration
                 {
+                    ContentId = network.IsLan ? options.ContentId : null,
                     PublicKey = ExportPublicBlob(key),
                     PrudpLoadbalancerUrl = "",
-                    PrudpUrls = ["prudp:/address=127.0.0.1;port=" + udpPort.ToString(CultureInfo.InvariantCulture)]
+                    PrudpUrls = ["prudp:/address=" + network.BindAddress + ";port=" + udpPort.ToString(CultureInfo.InvariantCulture)]
                 }, ConfigServerJsonContext.Default.LocalServerConfiguration);
                 emit(new()
                 {
-                    Event = "configuration-server-ready", Address = "127.0.0.1", HttpPort = httpPort, UdpPort = udpPort,
+                    Event = "configuration-server-ready", Address = network.BindAddress.ToString(), HttpPort = httpPort, UdpPort = udpPort,
                     ConfigurationPath = ConfigurationPath, AuthenticationImplemented = false, UdpProtocolImplemented = false,
                     SigningKeyPersistence = "memory-only",
-                    Message = options.LocalCatalogueProbe
+                    Message = network.IsLan
+                        ? "Two-peer LAN catalogue experiment: explicit addresses only. Game joining and match synchronization remain unverified."
+                        : options.LocalCatalogueProbe
                         ? "Public catalogue candidate: real other-owner sessions and GetSession. Explicit local filtering policy; no joined clients or LAN."
                         : options.LocalSessionDisplayProbe
                         ? "Display probe: a same-owner copy of the last left lobby is labelled as a test. No live catalogue/filtering, joining or LAN. Memory only."
@@ -200,7 +224,7 @@ namespace S7Patcher.Source
                         : "Configuration endpoint only. UDP datagrams are counted; no authentication or game protocol is implemented."
                 });
 
-                Task httpTask = AcceptRequestsAsync(http, response, emit, stop.Token);
+                Task httpTask = AcceptRequestsAsync(http, response, network, emit, stop.Token);
                 Task udpTask = ObserveDatagramsAsync();
                 try
                 {
@@ -239,6 +263,7 @@ namespace S7Patcher.Source
                             }
                             UdpReceiveResult packet = await receive;
                             receive = null;
+                            if (!network.Allows(packet.RemoteEndPoint.Address)) continue;
                             // Default: lengths only. Optional decoding never logs content,
                             // routing fields, crypto material or the remote endpoint.
                             int length = packet.Buffer.Length;
@@ -288,7 +313,7 @@ namespace S7Patcher.Source
                                 }
                             }
                             emit(observation);
-                            if ((options.SynProbe || connectProbe) && IPAddress.IsLoopback(packet.RemoteEndPoint.Address)
+                            if ((options.SynProbe || connectProbe) && network.Allows(packet.RemoteEndPoint.Address)
                                 && PrudpSynProbeCodec.TryReadRequest(packet.Buffer, out PrudpHandshakeMetadata syn))
                             {
                                 if (!peers.TryGetValue(packet.RemoteEndPoint, out PrudpProbePeer peer))
@@ -311,7 +336,7 @@ namespace S7Patcher.Source
                                 emit(new() { Event = "syn-probe-reply-sent", DatagramLength = reply.Length,
                                     AuthenticationImplemented = false, UdpProtocolImplemented = false });
                             }
-                            else if (connectProbe && IPAddress.IsLoopback(packet.RemoteEndPoint.Address)
+                            else if (connectProbe && network.Allows(packet.RemoteEndPoint.Address)
                                 && packet.Buffer.Length >= 3 && (packet.Buffer[2] & 7) == 1)
                             {
                                 if (!peers.TryGetValue(packet.RemoteEndPoint, out PrudpProbePeer peer) || !peer.SynReplySent)
@@ -335,12 +360,12 @@ namespace S7Patcher.Source
                                 peer.ConnectReplySent = true;
                                 if (options.LocalLoginProbe && !loginSessions.ContainsKey(packet.RemoteEndPoint))
                                     loginSessions.Add(packet.RemoteEndPoint, new(peer, packet.RemoteEndPoint,
-                                        "prudp:/address=127.0.0.1;port=" + udpPort.ToString(CultureInfo.InvariantCulture)
-                                        + ";sid=1;stream=3;type=2", Environment.TickCount64, options.LocalKeepAliveProbe, sessions));
+                                        "prudp:/address=" + network.BindAddress + ";port=" + udpPort.ToString(CultureInfo.InvariantCulture)
+                                        + ";sid=1;stream=3;type=2", Environment.TickCount64, options.LocalKeepAliveProbe, sessions, network));
                                 emit(new() { Event = "connect-probe-reply-sent", DatagramLength = reply.Length,
                                     AuthenticationImplemented = false, UdpProtocolImplemented = false });
                             }
-                            else if (options.LocalKeepAliveProbe && IPAddress.IsLoopback(packet.RemoteEndPoint.Address)
+                            else if (options.LocalKeepAliveProbe && network.Allows(packet.RemoteEndPoint.Address)
                                 && packet.Buffer.Length >= 3 && (packet.Buffer[2] & 7) == 4)
                             {
                                 if (loginSessions.TryGetValue(packet.RemoteEndPoint, out var session)
@@ -351,7 +376,7 @@ namespace S7Patcher.Source
                                         AuthenticationImplemented = false, UdpProtocolImplemented = false });
                                 }
                             }
-                            else if (dataAckProbe && IPAddress.IsLoopback(packet.RemoteEndPoint.Address)
+                            else if (dataAckProbe && network.Allows(packet.RemoteEndPoint.Address)
                                 && packet.Buffer.Length >= 3 && (packet.Buffer[2] & 7) == 2)
                             {
                                 peers.TryGetValue(packet.RemoteEndPoint, out PrudpProbePeer peer);
@@ -416,7 +441,7 @@ namespace S7Patcher.Source
             return Convert.ToBase64String(blob);
         }
 
-        private static async Task AcceptRequestsAsync(TcpListener listener, byte[] configuration, Action<ConfigServerEvent> emit, CancellationToken stop)
+        private static async Task AcceptRequestsAsync(TcpListener listener, byte[] configuration, LocalNetworkPolicy network, Action<ConfigServerEvent> emit, CancellationToken stop)
         {
             using SemaphoreSlim slots = new(ConcurrentRequestLimit);
             List<Task> requests = [];
@@ -434,6 +459,8 @@ namespace S7Patcher.Source
                     TcpClient client;
                     try { client = await listener.AcceptTcpClientAsync(stop); }
                     catch { slots.Release(); throw; }
+                    if (client.Client.RemoteEndPoint is not IPEndPoint remote || !network.Allows(remote.Address))
+                    { client.Dispose(); slots.Release(); continue; }
                     requests.Add(ServeAndReleaseAsync(client));
                 }
             }
@@ -526,6 +553,7 @@ namespace S7Patcher.Source
 
     internal sealed class LocalServerConfiguration
     {
+        public string ContentId { get; set; }
         public string PublicKey { get; set; }
         public string PrudpLoadbalancerUrl { get; set; }
         public string[] PrudpUrls { get; set; }

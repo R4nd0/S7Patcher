@@ -29,6 +29,7 @@
     <Compile Include="../../Source/LocalSessionUpdateCodec.cs" Link="LocalSessionUpdateCodec.cs" />
     <Compile Include="../../Source/LocalSessionLeaveCodec.cs" Link="LocalSessionLeaveCodec.cs" />
     <Compile Include="../../Source/LoginRpcArgumentShape.cs" Link="LoginRpcArgumentShape.cs" />
+    <Compile Include="../../Source/LocalNetworkPolicy.cs" Link="LocalNetworkPolicy.cs" />
     <Compile Include="../../Source/LocalLoginRpcEngine.cs" Link="LocalLoginRpcEngine.cs" />
   </ItemGroup>
 </Project>

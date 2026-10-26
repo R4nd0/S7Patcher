@@ -9,6 +9,7 @@ struct OfflineBootstrapConfig {
     const char* public_key_base64;
     const char* local_ticket;
     bool local_connect_probe = false;
+    const char* server_address = "127.0.0.1";
 };
 
 // Startup only, before the relevant game constructors execute. Copies inputs.

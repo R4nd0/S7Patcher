@@ -4,11 +4,14 @@
 #include <windows.h>
 #include <winhttp.h>
 #include <shellapi.h>
+#include "lan_address.h"
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>
 
 extern "C" __declspec(dllimport) bool __cdecl S7TestInstallGuard();
 extern "C" __declspec(dllimport) bool __cdecl S7TestEndpoint(const sockaddr*, int);
+extern "C" __declspec(dllimport) bool __cdecl S7TestConfigureLan(const char*, const char*);
 static int checks = 0, failures = 0;
 static void Check(bool result, const char* label) {
     ++checks; if (!result) { ++failures; std::printf("FAIL %s\n", label); }
@@ -22,6 +25,11 @@ static int Bound(SOCKET socket, sockaddr_in& address) {
 }
 int main() {
     setvbuf(stdout, nullptr, _IONBF, 0);
+    uint32_t parsed = 0;
+    for (const char* invalid : {"", "10", "10.0.0", "010.0.0.1", "10.0.0.256", "10.0.0.1.", "10.0.0.0", "10.0.0.255", "127.0.0.1", "8.8.8.8", "172.15.1.1", "172.32.1.1", "192.169.1.1"})
+        Check(!ParsePrivateLanAddress(invalid, parsed), "reject invalid LAN address");
+    Check(ParsePrivateLanAddress("192.168.10.20", parsed) && parsed == 0xc0a80a14, "canonical LAN address");
+    Check(!ValidLanPair("192.168.10.20", "192.168.10.20"), "reject identical LAN peers");
     WSADATA data{}; if (WSAStartup(MAKEWORD(2,2), &data) != 0) return 2;
     auto loopback = Address(0x7f000001), remote = Address(0xc0000201, 443); // RFC5737 documentation address.
     Check(!S7TestEndpoint(nullptr, 0), "null address rejected");
@@ -113,6 +121,16 @@ int main() {
           "external shell ANSI denied");
     Check(reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", L"https://example.invalid/", nullptr, nullptr, SW_HIDE)) == SE_ERR_ACCESSDENIED,
           "external shell Unicode denied");
+    Check(!S7TestConfigureLan("192.168.10.10", "8.8.8.8"), "invalid LAN configuration rejected");
+    Check(S7TestConfigureLan("192.168.10.10", "192.168.10.20"), "explicit LAN configuration accepted");
+    auto lan_peer = Address(0xc0a80a14), unrelated = Address(0xc0a80a15);
+    Check(S7TestEndpoint(reinterpret_cast<sockaddr*>(&lan_peer), sizeof(lan_peer)), "exact peer allowed");
+    Check(!S7TestEndpoint(reinterpret_cast<sockaddr*>(&unrelated), sizeof(unrelated)), "other LAN address rejected");
+    Check(!S7TestConfigureLan("192.168.10.10", "192.168.10.21"), "LAN policy immutable");
+    Check(gethostname(host, sizeof(host)) == 0 && strcmp(host, "192.168.10.10") == 0, "LAN hostname advertises local IP");
+    auto* lan_host = gethostbyname("192.168.10.20");
+    Check(lan_host && memcmp(lan_host->h_addr_list[0], &lan_peer.sin_addr, 4) == 0, "legacy DNS preserves explicit peer IP");
+    Check(gethostbyname("192.168.10.21") == nullptr, "other LAN DNS rejected");
     WSACleanup();
     std::printf("%s %d network guard checks\n", failures ? "FAIL" : "PASS", checks);
     return failures ? 1 : 0;

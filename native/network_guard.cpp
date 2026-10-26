@@ -1,4 +1,6 @@
 #include "network_guard.h"
+#include "lan_address.h"
+#include <atomic>
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <winhttp.h>
@@ -15,11 +17,31 @@
 #error This adapter targets the verified 32-bit game only.
 #endif
 
+namespace {
+std::atomic<unsigned long> lan_local{0}, lan_peer{0};
+std::atomic<bool> lan_configured{false};
+bool AllowedV4(unsigned long network_order) {
+    return (ntohl(network_order) >> 24) == 127 || (lan_configured.load(std::memory_order_acquire)
+        && (network_order == lan_local.load() || network_order == lan_peer.load()));
+}
+unsigned long LocalBindAddress() {
+    return lan_configured.load(std::memory_order_acquire) ? lan_local.load() : htonl(INADDR_LOOPBACK);
+}
+}
+bool ConfigureLanNetworkGuard(const char* local, const char* peer) {
+    uint32_t left = 0, right = 0;
+    if (lan_configured.load() || !ValidLanPair(local, peer)
+        || !ParsePrivateLanAddress(local, left) || !ParsePrivateLanAddress(peer, right)) return false;
+    // Called once by startup configuration before the game network is initialized.
+    lan_local.store(htonl(left)); lan_peer.store(htonl(right));
+    lan_configured.store(true, std::memory_order_release); return true;
+}
+
 bool IsOfflineEndpointAllowed(const sockaddr* address, int length) {
     if (!address || length < static_cast<int>(sizeof(address->sa_family))) return false;
     if (address->sa_family == AF_INET && length >= sizeof(sockaddr_in)) {
         const auto* ipv4 = reinterpret_cast<const sockaddr_in*>(address);
-        return (ntohl(ipv4->sin_addr.s_addr) >> 24) == 127;
+        return AllowedV4(ipv4->sin_addr.s_addr);
     }
     if (address->sa_family == AF_INET6 && length >= sizeof(sockaddr_in6)) {
         const auto* ipv6 = reinterpret_cast<const sockaddr_in6*>(address);
@@ -43,7 +65,9 @@ bool BindLocalSender(SOCKET socket, const sockaddr* destination) {
     if (WSAGetLastError() != WSAEINVAL || !destination) return false;
     if (destination->sa_family == AF_INET) {
         sockaddr_in address{}; address.sin_family = AF_INET;
-        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        const auto* target = reinterpret_cast<const sockaddr_in*>(destination);
+        address.sin_addr.s_addr = (ntohl(target->sin_addr.s_addr) >> 24) == 127
+            ? htonl(INADDR_LOOPBACK) : LocalBindAddress();
         return ::bind(socket, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == 0;
     }
     if (destination->sa_family == AF_INET6) {
@@ -79,7 +103,7 @@ int WSAAPI GuardBind(SOCKET socket, const sockaddr* address, int length) {
     // Native wildcard listeners become local listeners, preserving their port.
     if (length >= sizeof(sockaddr_in) && address->sa_family == AF_INET) {
         sockaddr_in local = *reinterpret_cast<const sockaddr_in*>(address);
-        if (local.sin_addr.s_addr == INADDR_ANY) local.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        if (local.sin_addr.s_addr == INADDR_ANY) local.sin_addr.s_addr = LocalBindAddress();
         return IsOfflineEndpointAllowed(reinterpret_cast<sockaddr*>(&local), sizeof(local))
             ? ::bind(socket, reinterpret_cast<sockaddr*>(&local), sizeof(local)) : DenySocket();
     }
@@ -114,23 +138,35 @@ int WSAAPI GuardAddrInfo(PCSTR node, PCSTR service, const ADDRINFOA* hints, PADD
     const char* numeric = (!node || _stricmp(node, "localhost") == 0) ? (local.ai_family == AF_INET6 ? "::1" : "127.0.0.1") : node;
     return ::getaddrinfo(numeric, service, &local, result);
 }
-hostent* LocalHost() {
+hostent* LocalHost(unsigned long numeric = htonl(INADDR_LOOPBACK)) {
     static thread_local char name[] = "localhost";
     static thread_local char address[4] = {127,0,0,1};
     static thread_local char* addresses[] = {address, nullptr};
     static thread_local char* aliases[] = {nullptr};
     static thread_local hostent value = {name, aliases, AF_INET, 4, addresses};
+    memcpy(address, &numeric, 4);
     return &value;
 }
 hostent* WSAAPI GuardHostByName(const char* name) {
     if (!name || !NumericLocal(name, AF_INET)) { WSASetLastError(WSAHOST_NOT_FOUND); return nullptr; }
-    return LocalHost();
+    IN_ADDR numeric{};
+    if (_stricmp(name, "localhost") == 0) numeric.s_addr = htonl(INADDR_LOOPBACK);
+    else if (InetPtonA(AF_INET, name, &numeric) != 1) return nullptr;
+    return LocalHost(numeric.s_addr);
 }
 hostent* WSAAPI GuardHostByAddr(const char* address, int length, int family) {
-    if (address && family == AF_INET && length == 4 && static_cast<unsigned char>(address[0]) == 127) return LocalHost();
+    if (address && family == AF_INET && length == 4) {
+        unsigned long numeric = 0; memcpy(&numeric, address, 4);
+        if (AllowedV4(numeric)) return LocalHost(numeric);
+    }
     WSASetLastError(WSAHOST_NOT_FOUND); return nullptr;
 }
 int WSAAPI GuardHostName(char* buffer, int length) {
+    if (lan_configured.load(std::memory_order_acquire)) {
+        IN_ADDR numeric{}; numeric.s_addr = lan_local.load();
+        if (!buffer || length < INET_ADDRSTRLEN) { WSASetLastError(WSAEFAULT); return SOCKET_ERROR; }
+        return InetNtopA(AF_INET, &numeric, buffer, length) ? 0 : SOCKET_ERROR;
+    }
     if (!buffer || length < 10) { WSASetLastError(WSAEFAULT); return SOCKET_ERROR; }
     memcpy(buffer, "localhost", 10); return 0;
 }

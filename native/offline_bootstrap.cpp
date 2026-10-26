@@ -1,3 +1,4 @@
+#include "lan_address.h"
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <bcrypt.h>
@@ -33,6 +34,7 @@ volatile LONG error_code = None;
 volatile LONG login_active = 0;
 uintptr_t image_base = 0;
 unsigned short udp_port = 0;
+char server_address[16] = "127.0.0.1";
 bool local_connect_probe = false;
 DWORD bootstrap_thread = 0;
 bool pump_active = false;
@@ -109,7 +111,7 @@ bool __fastcall LoginLocalFacade(void* self, void*, void* context,
     Native<NetworkKeySetter>(0xE77190)(network, key.Release());
 
     OwnedString sandbox("");
-    OwnedString address("127.0.0.1");
+    OwnedString address(server_address);
     OwnedString ticket(local_ticket);
     // E43810 consumes ticket, copies it into its normal job, and retains the
     // original context/callback lifecycle. Empty sandbox + null Ubi = mode0.
@@ -532,7 +534,10 @@ bool InitializeOfflineBootstrap(const OfflineBootstrapConfig& config) {
     if (InterlockedCompareExchange(&initialization, 1, 0) != 0) {
         SetError(RepeatedInitialization); return false;
     }
-    bool valid = config.udp_port && config.public_key_base64 && config.local_ticket;
+    uint32_t numeric_address = 0;
+    bool valid_address = config.server_address && (strcmp(config.server_address, "127.0.0.1") == 0
+        || ParsePrivateLanAddress(config.server_address, numeric_address));
+    bool valid = valid_address && config.udp_port && config.public_key_base64 && config.local_ticket;
     size_t key_length = valid ? strnlen_s(config.public_key_base64, sizeof(public_key)) : 0;
     size_t ticket_length = valid ? strnlen_s(config.local_ticket, sizeof(local_ticket)) : 0;
     valid = valid && key_length == 96 && ticket_length > 0 && ticket_length < sizeof(local_ticket);
@@ -544,6 +549,7 @@ bool InitializeOfflineBootstrap(const OfflineBootstrapConfig& config) {
     if (!ValidateImage()) { SetError(WrongExecutable); return false; }
     memcpy(public_key, config.public_key_base64, key_length + 1);
     memcpy(local_ticket, config.local_ticket, ticket_length + 1);
+    strcpy_s(server_address, config.server_address);
     udp_port = config.udp_port;
     local_connect_probe = config.local_connect_probe;
     bootstrap_thread = GetCurrentThreadId();

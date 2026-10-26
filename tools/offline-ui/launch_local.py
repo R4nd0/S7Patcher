@@ -7,6 +7,7 @@ import argparse
 import base64
 import hashlib
 import http.client
+import ipaddress
 import json
 import msvcrt
 import os
@@ -65,21 +66,44 @@ def local_identity(data):
     return value
 
 
-def write_configuration(data, configuration, udp_port, connect_probe=False):
+def lan_pair(local, peer):
+    addresses = []
+    for text in (local, peer):
+        address = ipaddress.IPv4Address(text)
+        if str(address) != text or address.packed[-1] in (0, 255) or not any(
+                address in ipaddress.IPv4Network(net) for net in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")):
+            raise ValueError("Bitte zwei genaue private IPv4-Adressen angeben.")
+        addresses.append(address)
+    if addresses[0] == addresses[1]:
+        raise ValueError("Die beiden PCs brauchen unterschiedliche Adressen.")
+    return local, peer
+
+
+def write_configuration(data, configuration, udp_port, connect_probe=False, *, address="127.0.0.1", lan=None):
+    if lan is not None:
+        lan = lan_pair(*lan)
+        if address not in lan or not connect_probe:
+            raise ValueError("LAN-Serveradresse passt nicht zu den beiden PCs.")
+    elif address != "127.0.0.1":
+        raise ValueError("LAN benoetigt die explizite Konfiguration beider PCs.")
+    if type(udp_port) is not int or not 1 <= udp_port <= 65535:
+        raise ValueError("Ungueltiger Serverport.")
     public = configuration.get("public_key")
     if not isinstance(public, str) or len(public) != 96:
         raise ValueError("Der lokale Dienst liefert keinen gueltigen oeffentlichen Schluessel.")
     blob = base64.b64decode(public, validate=True)
     if len(blob) != 72 or blob[:8] != b"ECS1\x20\0\0\0":
         raise ValueError("Der lokale Dienst verwendet ein unbekanntes Schluesselformat.")
-    if configuration.get("prudp_urls") != [f"prudp:/address=127.0.0.1;port={udp_port}"]:
+    if configuration.get("prudp_urls") != [f"prudp:/address={address};port={udp_port}"]:
         raise ValueError("Die lokale Serveradresse stimmt nicht ueberein.")
     profile = local_identity(data)
-    content = ("format=s7-local-runtime-v1\naddress=127.0.0.1\n"
+    content = (f"format=s7-local-runtime-v1\naddress={address}\n"
                f"udp_port={udp_port}\npublic_key={public}\nprofile_id={profile}\n"
                f"display_name=LocalPlayer\nticket=local-s7:{profile}\n")
     if connect_probe:
         content += "connect_probe=1\n"
+    if lan is not None:
+        content += f"lan_local={lan[0]}\nlan_peer={lan[1]}\n"
     destination = data / "s7-local-runtime.ini"
     plain_path(destination, data)
     if destination.exists() and not destination.read_bytes().startswith(b"format=s7-local-runtime-v1\n"):
@@ -97,7 +121,7 @@ def write_configuration(data, configuration, udp_port, connect_probe=False):
     return destination
 
 
-def service_ready(process, log):
+def service_ready(process, log, address="127.0.0.1"):
     deadline = time.monotonic() + 15
     while time.monotonic() < deadline:
         if process.poll() is not None:
@@ -111,7 +135,7 @@ def service_ready(process, log):
                 http_port, udp_port = record.get("http_port"), record.get("udp_port")
                 if not all(type(port) is int and 1 <= port <= 65535 for port in (http_port, udp_port)):
                     raise ValueError("Der lokale Dienst hat ungueltige Portangaben geliefert.")
-                connection = http.client.HTTPConnection("127.0.0.1", http_port, timeout=3)
+                connection = http.client.HTTPConnection(address, http_port, timeout=3)
                 try:
                     connection.request("GET", "/public/rendezvous/v1/configuration")
                     response = connection.getresponse()
