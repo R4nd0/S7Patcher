@@ -193,6 +193,54 @@ internal static class LocalLoginSessionChecks
         if (!OperatingSystem.IsWindows()) { Console.WriteLine("SKIP: native BCrypt local-login session checks require Windows."); return 0; }
         int passed = 0;
         void Check(bool value, string label) { if (!value) throw new Exception(label); passed++; }
+        // A busy browser may send RPCs instead of PINGs. Advancing receive
+        // timestamps must extend only successfully handled registered activity.
+        long idle = PrudpLocalLoginSession.KeepAliveIdleMilliseconds;
+        using (Fixture fixture = new(keepAlive:true))
+        {
+            fixture.Register();
+            long acceptedAt = 100 + idle / 2;
+            fixture.Session.ProcessData(fixture.Data(8, 0, LocalSessionSearchChecks.Request()), fixture.Events.Add, acceptedAt);
+            Check(fixture.Session.TakeDue(acceptedAt, fixture.Events.Add).Count==1
+                && fixture.Session.TryAcknowledge(Ack(ServerCookie,3)), "Timed search not answered");
+            fixture.Session.TakeDue(100 + idle, fixture.Events.Add);
+            Check(!fixture.Session.Closed, "Active registered RPC expired at old idle deadline");
+            fixture.Session.TakeDue(acceptedAt + idle, fixture.Events.Add);
+            Check(fixture.Session.Closed, "Activity removed idle expiry");
+            Check(fixture.Session.ProcessData(fixture.Data(9,0,LocalSessionSearchChecks.Request()), fixture.Events.Add,
+                acceptedAt + idle + 1).Outcome=="local-login-session-closed", "Timed DATA revived closed session");
+        }
+        foreach (bool duplicate in new[]{false,true})
+        using (Fixture fixture = new(keepAlive:true))
+        {
+            fixture.Register();
+            byte[] packet = fixture.Data(8,0,LocalSessionSearchChecks.Request());
+            fixture.Session.ProcessData(packet, fixture.Events.Add, 200);
+            fixture.Session.TakeDue(200, fixture.Events.Add); fixture.Session.TryAcknowledge(Ack(ServerCookie,3));
+            byte[] rejected = duplicate ? packet : fixture.Data(9,0,LocalSessionSearchChecks.Request(body:[0]));
+            fixture.Session.ProcessData(rejected, fixture.Events.Add, 100 + idle);
+            fixture.Session.TakeDue(200 + idle, fixture.Events.Add);
+            Check(fixture.Session.Closed, "Rejected/duplicate RPC refreshed idle activity");
+        }
+        using (Fixture fixture = new(keepAlive:true))
+        {
+            fixture.Register();
+            fixture.Session.ProcessData(fixture.Data(8,0,LocalSessionSearchChecks.Request()), fixture.Events.Add, 100 + idle);
+            Check(fixture.Session.Closed && fixture.Session.PendingCount==0, "DATA at deadline revived expired registration");
+        }
+        using (Fixture fixture = new(keepAlive:true))
+        {
+            fixture.Register();
+            long hardEnd = 100 + PrudpLocalLoginSession.KeepAliveMaximumMilliseconds;
+            long acceptedAt = hardEnd - idle / 2;
+            for(long now=60100;now<acceptedAt;now+=60000)
+                fixture.Session.TryReplyToPing(Ping(),now,fixture.Events.Add,out _);
+            fixture.Session.ProcessData(fixture.Data(8,0,LocalSessionSearchChecks.Request()), fixture.Events.Add, acceptedAt);
+            fixture.Session.TakeDue(acceptedAt,fixture.Events.Add); fixture.Session.TryAcknowledge(Ack(ServerCookie,3));
+            fixture.Session.TakeDue(hardEnd,fixture.Events.Add);
+            Check(fixture.Session.Closed && fixture.Events.Last(e=>e.Event=="local-login-session-expired").Reason=="keepalive-maximum-ended",
+                "Active RPC bypassed absolute lifetime");
+        }
         using (Fixture fixture = new())
         {
             Check(!PrudpPingAckCodec.TryCreateReply(Ping(), null, out _), "Unknown PING peer accepted");
@@ -235,15 +283,17 @@ internal static class LocalLoginSessionChecks
             Check(session.TryReplyToPing(Ping(), 120099, emit, out _), "Valid PING before idle expiry failed");
             Check(session.TakeDue(120100, emit).Count == 0 && !session.Closed, "Active keepalive hit old absolute lifetime");
             Check(!session.TryReplyToPing(Ping(cookie: 3), 200000, emit, out _), "Invalid PING refreshed activity");
-            Check(session.TakeDue(240099, emit).Count == 0 && session.Closed, "Idle deadline was extended by invalid traffic");
-            Check(!session.TryReplyToPing(Ping(), 240100, emit, out _), "Expired session was revived");
+            long idleEnd = 120099 + PrudpLocalLoginSession.KeepAliveIdleMilliseconds;
+            Check(session.TakeDue(idleEnd, emit).Count == 0 && session.Closed, "Idle deadline was extended by invalid traffic");
+            Check(!session.TryReplyToPing(Ping(), idleEnd + 1, emit, out _), "Expired session was revived");
         }
         using (Fixture fixture = new(keepAlive: true))
         {
             fixture.Register();
-            for (long now = 60100; now < 1200100; now += 60000)
+            long hardEnd = 100 + PrudpLocalLoginSession.KeepAliveMaximumMilliseconds;
+            for (long now = 60100; now < hardEnd; now += 60000)
                 Check(fixture.Session.TryReplyToPing(Ping(), now, fixture.Events.Add, out _), "Active session expired before hard cap");
-            Check(!fixture.Session.TryReplyToPing(Ping(), 1200100, fixture.Events.Add, out _) && fixture.Session.Closed,
+            Check(!fixture.Session.TryReplyToPing(Ping(), hardEnd, fixture.Events.Add, out _) && fixture.Session.Closed,
                 "Keepalive bypassed absolute cap");
         }
         using (Fixture fixture = new())
@@ -351,10 +401,11 @@ internal static class LocalLoginSessionChecks
             for (ushort i = 0; i < PrudpLocalLoginSession.MaximumPostLoginResponses; ++i)
             {
                 byte[] packet = fixture.Data((ushort)(8 + i), 0, LocalSessionSearchChecks.Request(i));
-                fixture.Session.ProcessData(packet, fixture.Events.Add);
-                fixture.Session.ProcessData(packet, fixture.Events.Add);
+                long now = 2000 + i * 1000;
+                fixture.Session.ProcessData(packet, fixture.Events.Add, now);
+                fixture.Session.ProcessData(packet, fixture.Events.Add, now);
                 Check(fixture.Session.PendingCount == 1, "Duplicate search requeued a response");
-                byte[] response = fixture.Session.TakeDue(2000 + i * 2000, fixture.Events.Add).Single();
+                byte[] response = fixture.Session.TakeDue(now, fixture.Events.Add).Single();
                 VerifySearchResponse(response, fixture.Key, i, fixture.ServerSession); passed++;
                 if (i == 0)
                 {
@@ -364,10 +415,10 @@ internal static class LocalLoginSessionChecks
                 Check(fixture.Session.TryAcknowledge(Ack(ServerCookie, (ushort)(3 + i))) && response.All(b => b == 0),
                     "Search ACK failed to clear response ciphertext");
             }
-            fixture.Session.ProcessData(fixture.Data(40, 0, LocalSessionSearchChecks.Request()), fixture.Events.Add);
-            Check(fixture.Session.PendingCount == 0 && fixture.Events.Count(e => e.Event == "local-session-search-response-queued") == 32,
+            fixture.Session.ProcessData(fixture.Data((ushort)(8 + PrudpLocalLoginSession.MaximumPostLoginResponses), 0, LocalSessionSearchChecks.Request()), fixture.Events.Add);
+            Check(fixture.Session.PendingCount == 0 && fixture.Events.Count(e => e.Event == "local-session-search-response-queued") == PrudpLocalLoginSession.MaximumPostLoginResponses,
                 "Search response cap exceeded");
-            Check(fixture.Session.TryReplyToPing(Ping(), 70000, fixture.Events.Add, out _), "Search budget broke keepalive");
+            Check(fixture.Session.TryReplyToPing(Ping(), 2000 + PrudpLocalLoginSession.MaximumPostLoginResponses * 1000, fixture.Events.Add, out _), "Search budget broke keepalive");
         }
         using (Fixture fixture = new(keepAlive: true))
         {
@@ -462,7 +513,7 @@ internal static class LocalLoginSessionChecks
             VerifySearchResponse(reply, visitor.Key, 0x12345678, visitor.ServerSession, LocalSessionCreationChecks.Response(sessionId: 2)); passed++;
             Check(visitor.Session.TryAcknowledge(Ack(ServerCookie, 3)) && registry.Count == 2, "Second owner did not obtain separate record");
             host.Session.Dispose(); Check(registry.Count == 1, "Host teardown affected another owner");
-            visitor.Session.TakeDue(120100, visitor.Events.Add);
+            visitor.Session.TakeDue(100 + PrudpLocalLoginSession.KeepAliveIdleMilliseconds, visitor.Events.Add);
             Check(visitor.Session.Closed && registry.Count == 0, "Owner expiry leaked session record");
             Check(host.Events.Concat(visitor.Events).All(e => !JsonSerializer.Serialize(e, ConfigServerJsonContext.Default.ConfigServerEvent).Contains("invented-")),
                 "Create events leaked body fields");
@@ -480,10 +531,10 @@ internal static class LocalLoginSessionChecks
                 VerifySearchResponse(response, fixture.Key, i, fixture.ServerSession, LocalSessionUpdateChecks.Response(i)); passed++;
                 Check(fixture.Session.TryAcknowledge(Ack(ServerCookie, (ushort)(4 + i))), "Update budget response ACK failed");
             }
-            fixture.Session.ProcessData(fixture.Data(40, 0, LocalSessionUpdateChecks.Request(body: LocalSessionUpdateChecks.Body(attributes: LocalSessionUpdateChecks.Map()))), fixture.Events.Add);
-            Check(fixture.Session.PendingCount == 0 && fixture.Events.Count(e => e.Event == "local-session-update-response-queued") == 31
+            fixture.Session.ProcessData(fixture.Data((ushort)(8 + PrudpLocalLoginSession.MaximumPostLoginResponses), 0, LocalSessionUpdateChecks.Request(body: LocalSessionUpdateChecks.Body(attributes: LocalSessionUpdateChecks.Map()))), fixture.Events.Add);
+            Check(fixture.Session.PendingCount == 0 && fixture.Events.Count(e => e.Event == "local-session-update-response-queued") == PrudpLocalLoginSession.MaximumPostLoginResponses - 1
                 && fixture.Events.Any(e => e.Reason == "response-budget-exhausted"), "Updates bypassed shared response cap");
-            fixture.Session.ProcessData(fixture.Data(41, 0, LocalSessionLeaveChecks.Request()), fixture.Events.Add);
+            fixture.Session.ProcessData(fixture.Data((ushort)(9 + PrudpLocalLoginSession.MaximumPostLoginResponses), 0, LocalSessionLeaveChecks.Request()), fixture.Events.Add);
             Check(registry.Count == 1 && fixture.Session.PendingCount == 0, "Leave mutated registry after response budget exhaustion");
         }
         using (LocalSessionRegistry registry = new())

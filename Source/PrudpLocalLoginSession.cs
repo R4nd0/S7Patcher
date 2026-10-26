@@ -14,9 +14,16 @@ namespace S7Patcher.Source
         internal const int RetryMilliseconds = ReliableResponseQueue.RetryMilliseconds;
         internal const int MaximumTransmissions = ReliableResponseQueue.MaximumTransmissions;
         internal const int LifetimeMilliseconds = 120000;
+#if S7_LOCAL_PAIR_LAB
+        internal const int KeepAliveIdleMilliseconds = 900000;
+        internal const int KeepAliveMaximumMilliseconds = 3600000;
+        internal const int MaximumPostLoginResponses = 512;
+#else
+        internal const int KeepAliveIdleMilliseconds = LifetimeMilliseconds;
         internal const int KeepAliveMaximumMilliseconds = 1200000;
-        internal const int PingReplyIntervalMilliseconds = 100;
         internal const int MaximumPostLoginResponses = 32;
+#endif
+        internal const int PingReplyIntervalMilliseconds = 100;
         private readonly PrudpProbePeer peer;
         private readonly ReliableMessageAssembler assembler;
         private readonly LocalLoginRpcEngine rpc;
@@ -25,7 +32,7 @@ namespace S7Patcher.Source
         private readonly bool keepAlive;
         private readonly LocalSessionRegistry sessions;
         private readonly bool ownsRegistry;
-        private long lastPingAt, nextPingReplyAt;
+        private long lastActivityAt, nextPingReplyAt;
         private readonly ReliableResponseQueue pending = new();
         private int responseCount;
         private readonly HashSet<string> observedOperations = new(StringComparer.Ordinal);
@@ -45,7 +52,7 @@ namespace S7Patcher.Source
             catch { rpc.Dispose(); throw; }
             assembler = new(peer.Connect.InitialClientDataSequence);
             createdAt = now;
-            lastPingAt = now;
+            lastActivityAt = now;
             this.keepAlive = keepAlive;
             this.sessions = sessions ?? new();
             ownsRegistry = sessions == null;
@@ -61,7 +68,7 @@ namespace S7Patcher.Source
                 || now < nextPingReplyAt || !PrudpPingAckCodec.TryCreateReply(packet, peer, out reply)) return false;
             // Refresh only a fully registered, acknowledged local session after
             // context/checksum validation. An ACK/no-request packet cannot refresh.
-            lastPingAt = now;
+            lastActivityAt = Math.Max(lastActivityAt, now);
             nextPingReplyAt = now + PingReplyIntervalMilliseconds;
             return true;
         }
@@ -69,7 +76,7 @@ namespace S7Patcher.Source
         private bool ExpireIfDue(long now, Action<ConfigServerEvent> emit)
         {
             bool expired = keepAlive
-                ? now - createdAt >= KeepAliveMaximumMilliseconds || now - lastPingAt >= LifetimeMilliseconds
+                ? now - createdAt >= KeepAliveMaximumMilliseconds || now - lastActivityAt >= KeepAliveIdleMilliseconds
                 : now - createdAt >= LifetimeMilliseconds;
             if (!expired) return false;
             emit(new() { Event = "local-login-session-expired", Reason = !keepAlive ? "probe-lifetime-ended"
@@ -77,9 +84,12 @@ namespace S7Patcher.Source
             Dispose(); return true;
         }
 
-        internal PrudpDataCryptoResult ProcessData(ReadOnlySpan<byte> packet, Action<ConfigServerEvent> emit)
+        // Production passes its monotonic receive time. Clock-free codec fixtures
+        // can omit it; they then exercise no activity extension.
+        internal PrudpDataCryptoResult ProcessData(ReadOnlySpan<byte> packet, Action<ConfigServerEvent> emit, long? now = null)
         {
-            if (closed) return new() { Outcome = "local-login-session-closed" };
+            if (closed || (now.HasValue && ExpireIfDue(now.Value, emit)))
+                return new() { Outcome = "local-login-session-closed" };
             if (!PrudpDataAckProbeCodec.TryReadRequest(packet, peer, out _, out _)
                 || (packet[2] & 0xf8) is not (0x30 or 0x70))
                 return new() { Outcome = "local-login-requires-reliable-data" };
@@ -147,6 +157,11 @@ namespace S7Patcher.Source
                         break;
                     }
                     if (search) postLoginResponseCount++; else responseCount++;
+                    // Only a fully reassembled, validated and answered RPC from
+                    // an acknowledged registration is activity. Malformed DATA,
+                    // duplicates, ACKs and rejected/budget-exhausted calls are not.
+                    if (keepAlive && registrationAcknowledged && now.HasValue)
+                        lastActivityAt = Math.Max(lastActivityAt, now.Value);
                     emit(new() { Event = !search ? "local-login-response-queued"
                         : LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-create-session-v1"
                             ? "local-session-create-response-queued"

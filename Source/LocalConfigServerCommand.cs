@@ -398,7 +398,7 @@ namespace S7Patcher.Source
                                 if (options.DataCryptoProbe || options.LocalLoginProbe)
                                 {
                                     PrudpDataCryptoResult crypto = loginSession != null
-                                        ? loginSession.ProcessData(packet.Buffer, emit)
+                                        ? loginSession.ProcessData(packet.Buffer, emit, Environment.TickCount64)
                                         : PrudpDataCryptoProbe.Inspect(packet.Buffer, peer);
                                     emit(new() { Event = "data-crypto-probe-observed", Reason = crypto.Outcome,
                                         SerializedPayloadLength = crypto.SerializedPayloadLength,

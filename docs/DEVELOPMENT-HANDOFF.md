@@ -109,6 +109,20 @@ repeated confirmations are idempotent. Snapshots distinguish pending state 0
 from locally confirmed state 3. Existing conservative slot reservations remain
 held; host slot reconciliation/notifications are not fabricated. The native
 adapter remains work/native-pair-core-resume. Live candidate result pending.
+The attempted live run could not create a session: no CreateSession_V1 reached
+the service, while one peer had already expired with keepalive-idle-timeout.
+Thus it did not test the success-report reply. The next candidate is
+work/server-pair-activity, which counts successfully answered registered DATA
+RPCs as activity and checks expiry before timestamped DATA processing. The lab
+also has a bounded 15-minute idle / one-hour total / 512-response test policy;
+default build limits remain 2-minute idle / 20-minute total / 32 responses.
+No original game, normal PC1/PC2 test copy or installer is changed.
+Activity candidate verification: 8,424 lab and 5,962 default service checks
+pass; both builds have zero warnings/errors. New regressions cover answered
+RPC activity without PING, duplicate/rejected traffic, expiry before DATA,
+absolute lifetime and the larger bounded lab response budget. Both lab games
+have been freshly launched and completed Login/Register against this service.
+Awaiting a new create/join attempt; playable membership remains unverified.
 Final verification: 5,975 lab and 5,953 default service checks passed, including
 real HTTP/UDP and encrypted two-peer confirmations in both host directions;
 both builds completed without warnings/errors. The candidate is deployed only

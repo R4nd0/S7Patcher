@@ -67,6 +67,22 @@ service now also supports a separately bounded empty session search; see
 [local search details](LOCAL-SESSION-SEARCH.md). These
 are bounded test policies, not a complete reconnect or server lifecycle.
 
+Activity correction (2026-10-26): the receive loop now passes its monotonic
+timestamp to DATA handling. A complete, validated RPC that successfully queues
+a reply for an acknowledged registration refreshes the idle deadline too.
+Previously an active session browser could expire because only PING counted.
+Malformed/incomplete DATA, duplicate sequences, rejected requests, bare ACKs
+and exhausted response budgets do not extend activity. Expiry is checked
+before processing timestamped DATA, so traffic cannot revive a closed peer;
+the absolute cap and response retransmission deadlines still apply.
+
+The compile-time S7_LOCAL_PAIR_LAB service deliberately gives human-operated
+two-window tests fifteen minutes idle, one hour total and 512 post-login
+responses per peer. Normal builds retain two minutes idle, twenty minutes
+total and 32 post-login responses. The baseline non-keepalive probe retains
+its two-minute absolute lifetime. This policy is bounded laboratory support,
+not a claim of reconnect handling or game-session stability.
+
 Synthetic Windows checks cover reply encoding with an independent checksum,
 peer/flag/payload rejection, rate limiting, activity beyond the old absolute
 deadline, invalid-traffic expiry, the hard cap and actual loopback UDP replies.
