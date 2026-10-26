@@ -21,11 +21,12 @@ internal static class LocalSessionLeaveChecks
     }
     internal static int Run()
     {
+        using LocalLoginRpcEngine registration = RegisteredHostChecks.CreateRegistered();
         int passed = 0;
         void Check(bool value, string label) { if (!value) throw new Exception(label); passed++; }
         using LocalSessionRegistry registry = new(); object owner = new(), other = new();
-        Check(registry.TryCreate(owner, LocalSessionCreationChecks.Body(), out _, out _), "Leave setup failed");
-        Check(registry.TryCreate(other, LocalSessionCreationChecks.Body(), out _, out _), "Other owner setup failed");
+        Check(registry.TryCreate(owner, registration, LocalSessionCreationChecks.Body(), out _, out _), "Leave setup failed");
+        Check(registry.TryCreate(other, registration, LocalSessionCreationChecks.Body(), out _, out _), "Other owner setup failed");
         void Reject(byte[] request, object requester = null)
         {
             Check(!LocalSessionLeaveCodec.TryReply(request, registry, requester ?? owner, out var response, out _)
@@ -58,14 +59,14 @@ internal static class LocalSessionLeaveChecks
         Check(registry.TryGetMetadata(other, 2, out var remaining), "Leave affected other owner");
         remaining.Dispose();
         Check(!LocalSessionLeaveCodec.TryReply(message, registry, owner, out _, out _), "Nonexistent record accepted");
-        Check(registry.TryCreate(owner, LocalSessionCreationChecks.Body(), out uint next, out _) && next == 3,
+        Check(registry.TryCreate(owner, registration, LocalSessionCreationChecks.Body(), out uint next, out _) && next == 3,
             "Leave did not free owner for recreation");
         Check(!LocalSessionLeaveCodec.TryReply(message, registry, owner, out _, out _) && registry.Count == 2,
             "Stale leave removed newly created record");
         foreach (uint callId in new uint[] { 0, uint.MaxValue })
         {
             using LocalSessionRegistry fresh = new();
-            Check(fresh.TryCreate(owner, LocalSessionCreationChecks.Body(), out _, out _), "Fresh setup failed");
+            Check(fresh.TryCreate(owner, registration, LocalSessionCreationChecks.Body(), out _, out _), "Fresh setup failed");
             Check(LocalSessionLeaveCodec.TryReply(Request(callId, Body(flag: 1, tail: "invented-opaque")), fresh, owner, out reply, out _)
                 && reply.SequenceEqual(Response(callId)) && fresh.Count == 0, "Void leave reply/call ID mismatch");
         }

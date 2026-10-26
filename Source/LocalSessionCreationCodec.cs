@@ -14,14 +14,14 @@ namespace S7Patcher.Source
         internal const int MaximumMembers = 256;
 
         internal static bool TryReply(ReadOnlySpan<byte> message, LocalSessionRegistry registry,
-            object owner, out byte[] response, out string reason)
+            object owner, LocalLoginRpcEngine registration, out byte[] response, out string reason)
         {
             response = null;
             reason = "unsupported-create-header";
             if (LoginRpcCodec.ClassifyPostLoginRequest(message) != "matchmaking-create-session-v1") return false;
             int callOffset = 4 + Protocol.Length + 3 + 1;
             int bodyOffset = callOffset + 4 + Method.Length + 3;
-            if (!registry.TryCreate(owner, message[bodyOffset..], out uint sessionId, out reason)) return false;
+            if (!registry.TryCreate(owner, registration, message[bodyOffset..], out uint sessionId, out reason)) return false;
             uint callId = BinaryPrimitives.ReadUInt32LittleEndian(message[callOffset..]);
             string responseMethod = Method + "*";
             response = new byte[4 + Protocol.Length + 3 + 2 + 4 + responseMethod.Length + 3 + 4];

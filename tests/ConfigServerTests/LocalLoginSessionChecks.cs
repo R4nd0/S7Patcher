@@ -386,6 +386,11 @@ internal static class LocalLoginSessionChecks
             host.Session.ProcessData(create, host.Events.Add);
             host.Session.ProcessData(create, host.Events.Add);
             Check(registry.Count == 1 && host.Session.PendingCount == 1, "Create transport retry duplicated record");
+            Check(registry.TryGetHost(host.Session, 1, out var registeredHost), "Encrypted create lost registered host");
+            using (registeredHost)
+                Check(registeredHost.ProfileId.Length == 16 && registeredHost.ProfileId.IndexOfAnyExcept((byte)0) >= 0
+                    && registeredHost.ConnectionId != 0 && registeredHost.PublicUrl.Contains("address=127.0.0.1;port=40000")
+                    && !registry.TryGetHost(visitor.Session, 1, out _), "Encrypted create host routing or ownership differs");
             byte[] reply = host.Session.TakeDue(200, host.Events.Add).Single();
             VerifySearchResponse(reply, host.Key, 0x12345678, host.ServerSession, LocalSessionCreationChecks.Response()); passed++;
             Check(ReferenceEquals(reply, host.Session.TakeDue(1200, host.Events.Add).Single()), "Create retry ciphertext changed");

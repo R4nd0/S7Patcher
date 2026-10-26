@@ -160,7 +160,7 @@ namespace S7Patcher.Source
         {
             string operation = LoginRpcCodec.ClassifyPostLoginRequest(message);
             if (operation == "matchmaking-create-session-v1")
-                return LocalSessionCreationCodec.TryReply(message, sessions, this, out response, out reason);
+                return LocalSessionCreationCodec.TryReply(message, sessions, this, rpc, out response, out reason);
             if (operation == "matchmaking-update-session-v1")
                 return LocalSessionUpdateCodec.TryReply(message, sessions, this, out response, out reason);
             if (operation == "matchmaking-leave-session-v1")

@@ -18,7 +18,7 @@ namespace S7Patcher.Source
         private readonly string observedAddress;
         private readonly int observedPort;
         private readonly byte[] profileId = new byte[16];
-        private string authenticationUrl;
+        private string authenticationUrl, registeredPublicUrl;
         private uint did, rvConnectionId;
         private bool loginHandled, registerHandled, disposed;
 
@@ -74,7 +74,41 @@ namespace S7Patcher.Source
             { fixedReason = "no-supported-registration-url"; return false; }
             if (!LoginRpcCodec.TryWriteRegisterSuccess(request.CallId, new(rvConnectionId, publicUrl), out response, out _))
             { fixedReason = "response-encoding-failed"; return false; }
+            registeredPublicUrl = publicUrl;
             registerHandled = true; fixedReason = "local-register-response-created"; return true;
+        }
+
+        // Export only completed local registration state, never request-supplied
+        // member GUIDs. The transport still gates session operations on its ACK.
+        internal bool TryCopyRegisteredPeer(out RegisteredPeer peer)
+        {
+            peer = null;
+            if (disposed || !registerHandled) return false;
+            peer = new(profileId, rvConnectionId, registeredPublicUrl);
+            return true;
+        }
+
+        internal sealed class RegisteredPeer : IDisposable
+        {
+            private readonly byte[] profile;
+            internal ReadOnlySpan<byte> ProfileId => profile;
+            internal uint ConnectionId { get; private set; }
+            internal string PublicUrl { get; private set; }
+            internal RegisteredPeer(ReadOnlySpan<byte> profileId, uint connectionId, string publicUrl)
+            { profile = profileId.ToArray(); ConnectionId = connectionId; PublicUrl = publicUrl; }
+            internal RegisteredPeer Clone()
+            {
+                if (PublicUrl == null) throw new ObjectDisposedException(nameof(RegisteredPeer));
+                return new(profile, ConnectionId, PublicUrl);
+            }
+            internal bool Matches(RegisteredPeer other) => other != null && PublicUrl != null
+                && ConnectionId == other.ConnectionId && PublicUrl == other.PublicUrl
+                && ProfileId.SequenceEqual(other.ProfileId);
+            public void Dispose()
+            {
+                CryptographicOperations.ZeroMemory(profile);
+                ConnectionId = 0; PublicUrl = null;
+            }
         }
 
         private bool TrySelectPublicUrl(ReadOnlySpan<byte> body, out string publicUrl)
@@ -117,7 +151,7 @@ namespace S7Patcher.Source
         {
             if (disposed) return;
             disposed = true; CryptographicOperations.ZeroMemory(profileId);
-            did = 0; rvConnectionId = 0; authenticationUrl = null;
+            did = 0; rvConnectionId = 0; authenticationUrl = null; registeredPublicUrl = null;
         }
 
         // Supported subset: prudp:/key=value pairs, semicolon separated, unique
@@ -161,7 +195,7 @@ namespace S7Patcher.Source
             {
                 url = null;
                 if (text == null || text.Length > MaximumUrlLength || !text.StartsWith("prudp:/", StringComparison.Ordinal)) return false;
-                foreach (char value in text) if (value is < '!' or > '~' || value is '#' or '%' or '?' or '\\') return false;
+                foreach (char value in text) if (value is < '!' or > '~' || value is '#' or '%' or '?' or '\\' or '|') return false;
                 string[] pairs = text[7..].Split(';');
                 Dictionary<string, int> positions = new(StringComparer.OrdinalIgnoreCase);
                 for (int index = 0; index < pairs.Length; index++)

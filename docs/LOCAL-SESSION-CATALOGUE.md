@@ -10,8 +10,12 @@ preferred base `0x400000`. No game code or packet bodies are included here.
 `SearchSessions_V1*` consumes a session list followed by a map. Its list reader
 `E53DB0` reads a u32 count, constructs each native session at `E53DFB`, and calls
 `E4F100` at `E53E0C` for each element. The second collection (`E54960`) contains
-u32 keys (`E54A20`) and qString values (`E54A2A`). The semantic purpose of that
-map is not yet proven; it must not simply be dropped from nonempty results.
+u32 keys (`E54A20`) and qString values (`E54A2A`). The map carries session ID -> pipe-separated StationURLs: the consumer looks
+up the session ID at D48170/D4817B, copies its qString at D4818D and passes it
+to E4DD30 at D48792. E4DD30 splits on `|` (E4DD76/E4DD8B) and constructs each
+StationURL at E4DDB8 via E5D2D0. That constructor's StationURL.cpp allocation
+anchor is E5D356 and it parses its input at E5D39E. Do not omit this map or use
+it for arbitrary reason strings. Individual supported URLs now reject `|`.
 
 `GetSession_V1*` dispatches through `E55D40`. It obtains output slot zero and
 passes the existing or temporary session object to `E4F100` (`E55D6D`/`E55DA8`).
@@ -28,7 +32,7 @@ labels for the investigation, not invented application semantics.
 | +08 | u32 | E4F118 | Session ID, copied into internal session state at D48729..D4872C |
 | +0C | u32 | E4F127 | Unresolved |
 | +10 | qString | E4F131 | Unresolved |
-| +18 | eight bytes, then native conversion | E4F143 / E66CF0 | Unresolved representation/meaning |
+| +18 | packed DateTime u64 | E4F143 / E66CF0 | Representation verified below; event semantics unresolved |
 | +20 | u32 | E4F16A | Unresolved |
 | +24 | u32 | E4F179 | Unresolved |
 | +28 | boolean | E4F184 | Unresolved |
@@ -70,12 +74,42 @@ It copies the returned session ID into an internal session object at
 `D487F4`. A response containing only a fabricated ID/title is insufficient.
 The stored and updated metadata therefore matters to actual list display.
 
+## Packed date representation
+
+E66CF0 copies the u64 without conversion. E66D70 reads GetLocalTime at E66D7C
+and packs year (14 bits) at bit 26, month (4) at bit 22, day (5) at bit 17,
+hour (5) at bit 12, minute (6) at bit 6 and second (6) at bit 0.
+Getters E66D20/E66D30/E66D40/E66D50/E66D60/E66E40 corroborate these fields.
+This establishes encoding, not whether session +18 is creation or update time.
+
+## Registered host state implemented
+
+LocalLoginRpcEngine now retains its selected, observed-endpoint registration
+URL after successfully encoding Register. TryCopyRegisteredPeer exports an
+independently owned profile GUID, generated connection ID and selected URL only
+after registration, never from request-supplied session/member metadata.
+The transport's existing Register ACK gate still applies to create operations.
+Create requires that engine and stores its host snapshot with the record. An
+identical replay cannot substitute a different registration. Metadata updates
+leave the host unchanged; leave, owner teardown and shutdown dispose it.
+Caller-owned snapshots survive registry removal and must be disposed separately.
+Profile buffers are zeroed; managed URL references are released (immutable
+strings cannot be guaranteed overwritten). No identity or address is logged.
+This does not establish that the observed auth transport endpoint will suffice
+for a peer-to-peer game connection; the real client must verify that later.
+
+The candidate builds without warnings/errors and passes 3,100 service checks,
+including 31 new host-binding checks across direct and encrypted transport
+paths. The separate login-engine suite passes 477 checks. The new tests cover
+registration gates, response/profile consistency, observed address replacement,
+URL separator rejection, mismatched registration on replay, unchanged host on
+update, independent snapshot lifetime, zeroing and removal. These are synthetic
+results, not a live nonempty-catalogue or LAN result.
+
 ## Next implementation requirements
 
-1. Trace the unresolved scalar fields and the second search-output map to their
-   state sources; distinguish native facts from an explicit local server policy.
-2. Preserve the registered peer's generated profile identity and selected
-   endpoint in bounded transport-owned state before projecting member records.
+1. Trace the unresolved scalar fields to their state sources; distinguish native facts from an explicit local server policy.
+2. Use the implemented registered host snapshot when projecting member records.
    Never infer ownership from supplied metadata GUIDs.
 3. Serialize a bounded registry snapshot with the latest attributes and member
    metadata. Respect Space, the request's selector/filter semantics and result
@@ -86,6 +120,6 @@ The stored and updated metadata therefore matters to actual list display.
    join/status transitions and broadening loopback-only binding to a deliberate
    LAN configuration. A second Windows PC with HE is available for that later test.
 
-No service or game change is deployed by this investigation. The active tested
+The host-binding candidate is built but not selected in the game launcher. The active tested
 service remains `48f7b2a`, with successful lobby lifecycle and AI selection but
 without a nonempty catalogue, second-client join or verified match startup.

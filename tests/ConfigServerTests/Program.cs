@@ -330,6 +330,7 @@ string loginOutput = await Cli(0, "--local-config-server", "--http-port", "0", "
 Check(loginOutput.Contains("Experimental local Login/Register responses enabled"), "Local login boolean switch did not enable probe mode");
 passed += LocalSessionSearchChecks.Run();
 passed += LocalSessionCreationChecks.Run();
+passed += RegisteredHostChecks.Run();
 passed += LocalSessionUpdateChecks.Run();
 passed += LocalSessionLeaveChecks.Run();
 passed += LocalLoginSessionChecks.Run();

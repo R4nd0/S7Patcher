@@ -28,11 +28,12 @@ internal static class LocalSessionUpdateChecks
     }
     internal static int Run()
     {
+        using LocalLoginRpcEngine registration = RegisteredHostChecks.CreateRegistered();
         int passed = 0;
         void Check(bool value, string label) { if (!value) throw new Exception(label); passed++; }
         using LocalSessionRegistry registry = new(); object owner = new();
         Check(!LocalSessionUpdateCodec.TryReply(Request(), registry, owner, out _, out _), "Update created a nonexistent session");
-        Check(registry.TryCreate(owner, LocalSessionCreationChecks.Body(), out uint id, out _) && id == 1, "Setup create failed");
+        Check(registry.TryCreate(owner, registration, LocalSessionCreationChecks.Body(), out uint id, out _) && id == 1, "Setup create failed");
         void Reject(byte[] message, object requester = null)
         {
             Check(!LocalSessionUpdateCodec.TryReply(message, registry, requester ?? owner, out var reply, out _)
@@ -102,14 +103,14 @@ internal static class LocalSessionUpdateChecks
         using (snapshot) Check(snapshot.Attributes.Count == 64 && snapshot.Attributes[Key("attribute")].SequenceEqual(initial), "Capacity rejection partially applied update");
         // Two individually valid updates must not accumulate beyond the state-byte cap.
         using LocalSessionRegistry bytesRegistry = new();
-        Check(bytesRegistry.TryCreate(owner, LocalSessionCreationChecks.Body(), out _, out _), "Byte-limit setup failed");
+        Check(bytesRegistry.TryCreate(owner, registration, LocalSessionCreationChecks.Body(), out _, out _), "Byte-limit setup failed");
         byte[] large = [4, .. Ddl(new string('z', 33000))];
         Check(bytesRegistry.TryUpdate(owner, Body(attributes: Map([.. Ddl("large-one"), .. large])), out _), "Valid large value rejected");
         Check(!bytesRegistry.TryUpdate(owner, Body(attributes: Map([.. Ddl("large-two"), .. large])), out var limitReason)
             && limitReason == "local-session-metadata-limit", "Aggregate byte cap bypassed");
         Check(bytesRegistry.TryGetMetadata(owner, 1, out snapshot), "Byte limit removed state");
         using (snapshot) Check(snapshot.Attributes.Count == 2 && !snapshot.Attributes.ContainsKey(Key("large-two")), "Byte limit partially applied update");
-        Check(registry.TryCreate(owner, LocalSessionCreationChecks.Body(), out uint same, out _) && same == 1, "Metadata update broke create idempotence");
+        Check(registry.TryCreate(owner, registration, LocalSessionCreationChecks.Body(), out uint same, out _) && same == 1, "Metadata update broke create idempotence");
         registry.RemoveOwner(owner);
         Check(registry.Count == 0 && !registry.TryUpdate(owner, Body(), out _) && !registry.TryGetMetadata(owner, 1, out _), "Removed session still editable");
         return passed;

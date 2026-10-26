@@ -14,16 +14,21 @@ namespace S7Patcher.Source
         private bool closed;
         internal int Count => entries.Count;
 
-        internal bool TryCreate(object owner, ReadOnlySpan<byte> body, out uint id, out string reason)
+        internal bool TryCreate(object owner, LocalLoginRpcEngine registration, ReadOnlySpan<byte> body, out uint id, out string reason)
         {
             id = 0;
             reason = "unsupported-create-arguments";
             if (closed || owner == null || !LocalSessionMetadata.TryReadBody(body, true, out var space, out _, out var metadata)) return false;
+            LocalLoginRpcEngine.RegisteredPeer host = null;
             try
             {
+                reason = "local-session-owner-not-registered";
+                if (registration == null || !registration.TryCopyRegisteredPeer(out host)) return false;
                 foreach (Entry entry in entries)
                 {
                     if (!ReferenceEquals(entry.Owner, owner)) continue;
+                    reason = "local-session-owner-registration-mismatch";
+                    if (!entry.Host.Matches(host)) return false;
                     reason = "local-session-owner-already-hosting";
                     if (!body.SequenceEqual(entry.Body)) return false;
                     id = entry.Id;
@@ -32,13 +37,13 @@ namespace S7Patcher.Source
                 }
                 reason = "local-session-capacity-exhausted";
                 if (entries.Count >= MaximumSessions || nextId == uint.MaxValue) return false;
-                entries.Add(new(owner, nextId, body.ToArray(), space.ToArray(), metadata));
-                metadata = null; // Registry now owns it.
+                entries.Add(new(owner, nextId, body.ToArray(), space.ToArray(), metadata, host));
+                metadata = null; host = null; // Registry now owns both.
                 id = nextId++;
                 reason = "local-session-record-created";
                 return true;
             }
-            finally { metadata?.Dispose(); }
+            finally { metadata?.Dispose(); host?.Dispose(); }
         }
 
         internal bool TryUpdate(object owner, ReadOnlySpan<byte> body, out string reason)
@@ -92,6 +97,19 @@ namespace S7Patcher.Source
             return false;
         }
 
+        // Independent caller-owned projection; no raw identity or URL is logged.
+        internal bool TryGetHost(object owner, uint id, out LocalLoginRpcEngine.RegisteredPeer host)
+        {
+            host = null;
+            if (closed) return false;
+            foreach (Entry entry in entries)
+                if (entry.Id == id && ReferenceEquals(entry.Owner, owner))
+                {
+                    host = entry.Host.Clone(); return true;
+                }
+            return false;
+        }
+
         internal void RemoveOwner(object owner)
         {
             for (int i = entries.Count - 1; i >= 0; --i)
@@ -110,16 +128,17 @@ namespace S7Patcher.Source
             entries.Clear();
         }
 
-        private sealed class Entry(object owner, uint id, byte[] body, byte[] space, LocalSessionMetadata metadata) : IDisposable
+        private sealed class Entry(object owner, uint id, byte[] body, byte[] space, LocalSessionMetadata metadata, LocalLoginRpcEngine.RegisteredPeer host) : IDisposable
         {
             internal readonly object Owner = owner;
             internal readonly uint Id = id;
             internal readonly byte[] Body = body, Space = space;
             internal LocalSessionMetadata Metadata = metadata;
+            internal readonly LocalLoginRpcEngine.RegisteredPeer Host = host;
             public void Dispose()
             {
                 CryptographicOperations.ZeroMemory(Body); CryptographicOperations.ZeroMemory(Space);
-                Metadata.Dispose();
+                Metadata.Dispose(); Host.Dispose();
             }
         }
     }

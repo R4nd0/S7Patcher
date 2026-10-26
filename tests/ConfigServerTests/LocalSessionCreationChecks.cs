@@ -34,6 +34,7 @@ internal static class LocalSessionCreationChecks
     }
     internal static int Run()
     {
+        using LocalLoginRpcEngine registration = RegisteredHostChecks.CreateRegistered();
         int passed = 0;
         void Check(bool value, string label) { if (!value) throw new Exception(label); passed++; }
         object owner = new();
@@ -42,7 +43,7 @@ internal static class LocalSessionCreationChecks
         void Reject(byte[] request)
         {
             int count = registry.Count;
-            Check(!LocalSessionCreationCodec.TryReply(request, registry, owner, out var response, out _)
+            Check(!LocalSessionCreationCodec.TryReply(request, registry, owner, registration, out var response, out _)
                 && response == null && registry.Count == count, "Malformed create mutated registry or replied");
         }
         for (int i = 0; i < body.Length; ++i) Reject(Request(body: body[..i]));
@@ -81,12 +82,12 @@ internal static class LocalSessionCreationChecks
             byte[] randomBody = new byte[random.Next(0, 400)]; random.NextBytes(randomBody);
             Reject(Request(body: randomBody));
         }
-        Check(LocalSessionCreationCodec.TryReply(Request(body: body), registry, owner, out var created, out var reason)
+        Check(LocalSessionCreationCodec.TryReply(Request(body: body), registry, owner, registration, out var created, out var reason)
             && reason == "local-session-record-created" && created.SequenceEqual(Response()) && registry.Count == 1,
             "Create did not allocate the exact native response");
         Check(body.SequenceEqual(original), "Input body mutated");
         body[6] ^= 1; // Registry must own a copy, not retain the caller's buffer.
-        Check(LocalSessionCreationCodec.TryReply(Request(uint.MaxValue, original), registry, owner, out var replay, out reason)
+        Check(LocalSessionCreationCodec.TryReply(Request(uint.MaxValue, original), registry, owner, registration, out var replay, out reason)
             && replay.SequenceEqual(Response(uint.MaxValue)) && reason == "local-session-create-replayed" && registry.Count == 1,
             "Application retry duplicated record or used stale call ID");
         Reject(Request(body: Body(flag: 0)));
@@ -94,17 +95,17 @@ internal static class LocalSessionCreationChecks
         for (uint i = 2; i <= LocalSessionRegistry.MaximumSessions; ++i)
         {
             object next = new(); owners.Add(next);
-            Check(LocalSessionCreationCodec.TryReply(Request(), registry, next, out var response, out _)
+            Check(LocalSessionCreationCodec.TryReply(Request(), registry, next, registration, out var response, out _)
                 && response.SequenceEqual(Response(sessionId: i)), "Independent owners collided");
         }
-        Check(!registry.TryCreate(new(), original, out _, out reason) && reason == "local-session-capacity-exhausted",
+        Check(!registry.TryCreate(new(), registration, original, out _, out reason) && reason == "local-session-capacity-exhausted",
             "Registry capacity not enforced");
-        Check(registry.TryCreate(owner, original, out uint same, out _) && same == 1, "Retry failed at capacity");
+        Check(registry.TryCreate(owner, registration, original, out uint same, out _) && same == 1, "Retry failed at capacity");
         registry.RemoveOwner(new()); Check(registry.Count == 8, "Unrelated owner removed records");
         registry.RemoveOwner(owner); Check(registry.Count == 7, "Owner record not removed");
-        Check(registry.TryCreate(new(), original, out uint replacement, out _) && replacement == 9, "Capacity not released or ID reused");
+        Check(registry.TryCreate(new(), registration, original, out uint replacement, out _) && replacement == 9, "Capacity not released or ID reused");
         registry.Dispose(); registry.Dispose();
-        Check(registry.Count == 0 && !registry.TryCreate(owner, original, out _, out _), "Disposed registry revived");
+        Check(registry.Count == 0 && !registry.TryCreate(owner, registration, original, out _, out _), "Disposed registry revived");
         return passed;
     }
 }

@@ -43,6 +43,15 @@ three searches, two creates, six updates and one leave, with zero rejections.
 Leave/recreate and AI selection are now live-verified. A second Windows PC with
 HE is available for a later LAN test; no changes were requested there yet.
 
+A new host-binding candidate is built at `work/server-registered-host` but is not
+selected in the launcher. It binds create records to the completed registration's
+owned profile/connection ID/observed endpoint and rejects a different registration
+on replay. It passes 3,100 service checks and 477 isolated login-engine checks;
+these are synthetic. The active live-verified service remains `48f7b2a`.
+The second search output is now proven to map session IDs to pipe-separated
+StationURLs, and the session date's packed u64 encoding is known. Other scalar
+semantics remain unresolved; see `LOCAL-SESSION-CATALOGUE.md`.
+
 Full match startup, `GetSession`, nonempty search serialization and joining remain
 outstanding. The next step is mapping the session-record fields to real registry
 and transport state; see `LOCAL-SESSION-CATALOGUE.md`. Do not fabricate unknown
