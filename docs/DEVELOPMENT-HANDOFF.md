@@ -67,8 +67,30 @@ The core scheduler returned success (1). Master start `C8F9D0`, its completion
 `C917A0`, and network event `C92600` remained at zero. Master child count was
 four, master flags `+0x4C4..+0x4C8` were `[0,0,0,1,0]`; owner attachment/readiness
 remained false. Thus core dispatch works, but startup/discovery is not solved.
-Next inspect the native command queue: startup completion attaches each child
-and only then marks the master started. Do not replace that with flag writes.
+The command queue was initialized but empty, with zero queue ticks. A further
+read-only check found `Network + 0xA71 == 1`: startup is deliberately skipped.
+The platform object at `13789D0` has table `112BE3C`; its `+0x28` method
+`4C7CE0` returns the offline byte `+0x80`, populated from our intentionally true
+`UPLAY_USER_IsInOfflineMode` result at `4C7F5A..4C7F65`. `ED480A` calls that
+predicate and `ED4815..ED482C` skips the whole Startup ECHO sequence. This is
+separate from actual transport readiness.
+
+### Prepared local-start policy candidate
+
+The next adapter replaces only the five-byte `MOV EAX,[EDX+28]; CALL EAX`
+sequence at `ED480A` with a guarded local-start decision. With the probe enabled,
+on the bootstrap thread and exact known platform instance, it allows the
+original Startup ECHO job. Other inputs skip startup. It does not modify the
+platform offline bit, Ubisoft session state, master attachment or NAT flags.
+Original shutdown observes the resulting network startup policy normally.
+
+Validation: 161 bootstrap, 88 platform, 18 connection-state and 38 network-guard
+checks; 15 byte guards; real configuration/fingerprint rejection test all pass.
+Build: `work/native-startup-build`. Deployed after the user closed S7, retaining
+`LocalData/adapter-23123b5.dll`; bundle hash validation and no-game-launch preflight
+passed. A bounded, passive early-start observer is waiting for the user's next
+launch. Actual startup completion is still unverified. The preceding core-only
+milestone is committed/pushed as `23123b5`.
 
 ## Local workspace (not portable paths)
 

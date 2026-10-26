@@ -106,6 +106,28 @@ int main() {
     natural_updates_seen = false;
     PumpOfflineBootstrap(); check(!pump_active); // Null network.
     VirtualProtect(memory, ExpectedImageSize, PAGE_READWRITE, &old);
+    // The local-start decision is scoped to its exact platform instance,
+    // thread and explicit opt-in. It never changes the platform's offline bit.
+    alignas(4) unsigned char policy[0x84]{};
+    *Native<void**>(0x13789D0) = policy;
+    check(SkipLocalNetworkStartup(nullptr, nullptr));
+    check(SkipLocalNetworkStartup(policy, nullptr)); // Unknown platform type.
+    *reinterpret_cast<uintptr_t*>(policy) = image_base + 0x112BE3C - PreferredBase;
+    policy[0x80] = 1;
+    check(!SkipLocalNetworkStartup(policy, nullptr) && policy[0x80] == 1);
+    local_connect_probe = false;
+    check(SkipLocalNetworkStartup(policy, nullptr) && policy[0x80] == 1);
+    local_connect_probe = true; initialization = 1;
+    check(SkipLocalNetworkStartup(policy, nullptr));
+    initialization = 2; bootstrap_thread = 0;
+    check(SkipLocalNetworkStartup(policy, nullptr));
+    bootstrap_thread = GetCurrentThreadId();
+    *Native<void**>(0x13789D0) = nullptr;
+    check(SkipLocalNetworkStartup(policy, nullptr));
+    *Native<void**>(0x13789D0) = policy;
+    policy[0x80] = 0;
+    check(!SkipLocalNetworkStartup(policy, nullptr) && policy[0x80] == 0);
+    *Native<void**>(0x13789D0) = nullptr;
     alignas(4) unsigned char network[0xa1c]{};
     alignas(4) unsigned char owner[0x2a8]{};
     *Native<unsigned char**>(0x1379E14) = network;

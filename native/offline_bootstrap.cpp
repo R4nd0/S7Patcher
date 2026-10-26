@@ -252,6 +252,19 @@ bool __fastcall QueryLocalLoginStatus(void* self, void*) {
         ReportLocalStatus(ready ? "local-game-login-status-connected" : "local-game-login-status-not-ready");
     return ready;
 }
+
+bool __fastcall SkipLocalNetworkStartup(void* self, void*) {
+    // ED480A asks the platform's offline policy only to decide whether to
+    // create the native Startup ECHO job. Allow that job for the local probe;
+    // keep the platform offline and leave actual network readiness untouched.
+    if (initialization != 2 || !local_connect_probe ||
+        GetCurrentThreadId() != bootstrap_thread || !self ||
+        self != *Native<void**>(0x13789D0) ||
+        *static_cast<uintptr_t*>(self) != image_base + 0x112BE3C - PreferredBase)
+        return true;
+    ReportLocalStatus("local-network-startup-enabled");
+    return false;
+}
 const Patch Patches[] = {
     {0xD3C62D, {0xe8,0x1e,0x6f,0x10,0x00}, reinterpret_cast<const void*>(&ConstructLocalFacade)},
     {0xD4A083, {0xe8,0xc8,0x94,0x0f,0x00}, reinterpret_cast<const void*>(&ConstructLocalFacade)},
@@ -270,6 +283,8 @@ const Patch ConnectPatches[] = {
     {0xED651D, {0xe8,0x0e,0x0d,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalLoginStatus)},
     {0xED672C, {0xe8,0xff,0x0a,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalLoginStatus)},
     {0xED6C2B, {0xe8,0x00,0x06,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalLoginStatus)},
+    // Replace the complete five-byte MOV EAX,[EDX+28]; CALL EAX sequence.
+    {0xED480A, {0x8b,0x42,0x28,0xff,0xd0}, reinterpret_cast<const void*>(&SkipLocalNetworkStartup)},
     {0x1091B08, {0xc0,0x56,0xc9,0x00,0x00}, reinterpret_cast<const void*>(&UpdateLocalGame), true}
 };
 

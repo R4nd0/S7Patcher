@@ -186,6 +186,28 @@ Validation: 147 bootstrap/bridge checks, 88 platform checks, 18 connection-state
 checks, 38 network-guard checks, 14 original-byte guards and the real local
 configuration/fingerprint rejection test pass. No game is launched by these tests.
 
+## Local network startup policy (candidate)
+
+A live read-only observation identified the startup gate: `ED480A` invokes the
+platform offline predicate through vtable offset `+0x28`; `ED4815` stores its
+result at `Network + 0xA71`. The true offline policy skips the entire original
+Startup ECHO job. The command queue is initialized but empty; master children
+exist but the three game components are unattached.
+
+The opt-in table now guards and replaces the full five-byte indirect-call
+sequence at `ED480A`. Its replacement only allows native network startup on the
+bootstrap thread with the initialized probe and exact known platform object.
+Unknown objects, another thread or disabled/uninitialized probes skip startup.
+It leaves `UPLAY_USER_IsInOfflineMode`, the platform offline byte and all genuine
+network readiness flags unchanged. The native startup job and its callbacks
+must still succeed; no success response is fabricated. The original shutdown
+path sees the same stored network policy. Baseline mode does not install this
+hook. All network operations remain subject to the loopback guard.
+
+Validation: 161 bootstrap checks, 88 platform checks, 18 connection-state checks,
+38 network-guard checks, 15 original-byte comparisons and real configuration
+validation pass. Actual startup completion still needs a user-started game run.
+
 ## Fast menu startup
 
 `tools/offline-ui/prepare.py` applies seven fingerprinted raw-Lua deltas to
