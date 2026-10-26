@@ -166,3 +166,43 @@ f199c8da7bfe01d4729b7043ec9431dcdc365e3c13799039c26a81cca87cf4a0.
 S7-LAN-Adress-Update.zip requires the preceding route diagnostic and changes
 only the service/manifests, using the existing transactional updater. Deployment
 and real-client acceptance are pending both games closing.
+
+## Actual Storm descriptor instead of a prefix endpoint
+
+The 18:40:40 run rejects section-invalid. Read-only inspection of the known
+host helper's creation URL vector establishes that the prefix has RVCID only,
+not address/port. The actual endpoint list is an Address block inside #Storm.
+The targeted inspection emitted structure and endpoint categories, never the
+complete route or identity values. One advertised endpoint matches the actual
+UDP socket 192.168.178.125:3074; three other interface addresses are present.
+
+Static D433D0 constructs the RVCID prefix and #Storm from CEBC60, then appends
+RoutingOption. CEBC60 calls CEBD50 for the base descriptor and virtual+18 for
+the derived fields. CEBD50 emits PeerGUID/Version and optional data; CEC1CA..
+CEC242 emits Address with comma-separated endpoint strings via CB5840, then
+PeerDescriptorBaseEnd. Consumer D4D170 reads Storm from the custom map with flag
+1, sends the descriptor to CDEEE0 and separately parses RoutingOption as decimal.
+This disproves the earlier assumption that every game URL has prefix address/port.
+
+LocalStormRoute supports the observed ordered blocks PeerGUID, Version, Platform,
+Gw, Address, PeerDescriptorBaseEnd, ProfileID, RoutingOption. This is an explicit
+narrow local policy, not the complete native descriptor grammar. RVCID must match
+the registered host. Gateway data is limited to the observed empty-gateway shape.
+IPv4 endpoints must be canonical, bounded and unique; the projected join response
+contains only endpoints whose IP matches the registered host, preserving the real
+game port. Other descriptor fields are retained without treating their claimed
+identities as authorization. Unknown forms fail with fixed reasons.
+
+Projection changes only the owned join-response snapshot. Original registry
+metadata and catalogue/Get output are unchanged. No invented authentication
+endpoint, success notification or completed member state is substituted.
+5,314 checks cover both encrypted host directions, original-record immutability,
+reply filtering and replay, malformed/truncated descriptors and identity/address
+rejection. A managed in-memory shape test accepts the actual live descriptor,
+with synthetic registration identity, and retains only the bound host endpoint;
+it is not evidence of real RVCID admission or a successful game join.
+
+Build work/server-storm-route, service SHA256:
+044931d88c501a11a792067af97935ba1a3920cb85c54fbf140f0c4948c2f787.
+S7-LAN-Spieladresse-Update.zip requires the preceding Adress-Update. Both test
+copies must be closed before applying; real-client acceptance remains pending.

@@ -16,6 +16,12 @@ namespace S7Patcher.Source
         // Creation-only inputs. StationURLs belong to the game connection, not
         // the login transport. Remaining field semantics stay opaque.
         internal CreationFields Creation { get; private set; }
+        internal void ReplaceCreationRoutes(ReadOnlySpan<byte> routes)
+        {
+            if (Creation == null) throw new InvalidOperationException("Missing creation fields");
+            var replacement = new CreationFields(routes, Creation.Identifiers, Creation.Scalar, Creation.Flag);
+            Creation.Dispose(); Creation = replacement;
+        }
         internal sealed class CreationFields : IDisposable
         {
             private readonly byte[] stationUrls, identifiers;

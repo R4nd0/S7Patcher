@@ -541,17 +541,23 @@ internal static class LocalLoginSessionChecks
             CryptographicOperations.ZeroMemory(expected);
         }
         // Two independently encrypted peers, in both host directions. This tests
-        // discovery/Get, not game membership, P2P gameplay or LAN routing.
-        for (int direction = 0; direction < 2; direction++)
+        // discovery/Get/pending join, not completed membership or gameplay.
+        for (int direction = 0; direction < 4; direction++)
         {
             using LocalSessionRegistry registry = new(catalogueProbe: true);
             using Fixture first = new(keepAlive: true, sessions: registry);
             using Fixture second = new(keepAlive: true, sessions: registry);
-            var host = direction == 0 ? first : second;
-            var visitor = direction == 0 ? second : first;
+            var host = direction % 2 == 0 ? first : second;
+            var visitor = direction % 2 == 0 ? second : first;
             host.Register(); visitor.Register();
+            var hostRpc = (LocalLoginRpcEngine)typeof(PrudpLocalLoginSession)
+                .GetField("rpc", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(host.Session)!;
+            hostRpc.TryCopyRegisteredPeer(out var registeredHost);
+            using var hostPeer = registeredHost;
+            string route = direction < 2 ? LocalSessionDisplayChecks.Route + (direction == 0 ? "" : "#label=fixture")
+                : LocalStormRouteChecks.Route(hostPeer.ConnectionId, "10.0.0.1:3074,127.0.0.1:3074");
             host.Session.ProcessData(host.Data(8, 0, LocalSessionCreationChecks.Request(body: LocalSessionCatalogueChecks.PublicBody(
-                route: LocalSessionDisplayChecks.Route + (direction == 0 ? "" : "#label=fixture")))), host.Events.Add);
+                route: route))), host.Events.Add);
             host.Session.TakeDue(200, host.Events.Add);
             Check(registry.Count == 1 && host.Session.TryAcknowledge(Ack(ServerCookie, 3)), "Catalogue host create");
             byte[] search = LocalSessionDisplayChecks.Search();
@@ -575,6 +581,8 @@ internal static class LocalLoginSessionChecks
             using (pendingJoin)
             {
                 Check(pendingJoin.PendingProfiles.Count == 1, "Join did not reserve one member");
+                if (direction >= 2)
+                    pendingJoin.Metadata.ReplaceCreationRoutes(Encoding.ASCII.GetBytes(LocalStormRouteChecks.Route(hostPeer.ConnectionId)));
                 expected = LocalSessionJoinCodec.Encode(0x12345678, pendingJoin);
             }
             packet = visitor.Session.TakeDue(450, visitor.Events.Add).Single();

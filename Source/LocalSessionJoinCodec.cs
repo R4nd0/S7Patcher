@@ -59,6 +59,15 @@ namespace S7Patcher.Source
         internal static bool HostRoutesOwned(ReadOnlySpan<byte> bytes, LocalLoginRpcEngine.RegisteredPeer host,
             out string reason)
         {
+            bool valid = TryHostRoutes(bytes, host, out var projection, out reason);
+            if (projection != null) CryptographicOperations.ZeroMemory(projection);
+            return valid;
+        }
+
+        private static bool TryHostRoutes(ReadOnlySpan<byte> bytes, LocalLoginRpcEngine.RegisteredPeer host,
+            out byte[] projection, out string reason)
+        {
+            projection = null;
             // Fixed classifications only: never include routes, identifiers or raw request bytes.
             reason = "local-join-host-route-empty";
             if (bytes.IsEmpty) return false;
@@ -69,10 +78,17 @@ namespace S7Patcher.Source
             reason = "local-join-host-registration-route-invalid";
             if (host == null || !LocalLoginRpcEngine.PrudpUrl.TryRead(host.PublicUrl, out var registered)) return false;
             string[] urls = Encoding.ASCII.GetString(bytes).Split('|');
+            var projected = new System.Collections.Generic.List<string>();
             reason = "local-join-host-route-count";
             if (urls.Length is < 1 or > 4) return false;
             foreach (string text in urls)
             {
+                if (text.StartsWith("prudp:/RVCID=", StringComparison.Ordinal) && text.Contains("#Storm=", StringComparison.Ordinal))
+                {
+                    if (!LocalStormRoute.TryProject(text, host, out var storm, out reason)) return false;
+                    projected.Add(storm);
+                    continue;
+                }
                 reason = "local-join-host-route-empty-item";
                 if (text.Length == 0) return false;
                 reason = "local-join-host-route-scheme";
@@ -89,7 +105,9 @@ namespace S7Patcher.Source
                 if (!url.Address.Equals(registered.Address)) return false;
                 reason = "local-join-host-route-redirected";
                 if (url.Has("redirected")) return false;
+                projected.Add(text);
             }
+            projection = Encoding.ASCII.GetBytes(string.Join('|', projected));
             reason = "local-join-host-route-owned";
             return true;
         }
@@ -135,6 +153,7 @@ namespace S7Patcher.Source
                 || !LocalSessionMetadata.TryReadJoinBody(body, out var space, out uint id, out var metadata)) return false;
             LocalLoginRpcEngine.RegisteredPeer peer = null;
             PendingMember candidate = null;
+            byte[] routes = null;
             try
             {
                 reason = "local-join-caller-not-registered";
@@ -155,7 +174,7 @@ namespace S7Patcher.Source
                     || !privacy.AsSpan().SequenceEqual(new byte[] { 3, 0 })) return false;
                 reason = "local-join-host-route-missing-creation";
                 if (selected.Metadata.Creation == null) return false;
-                if (!HostRoutesOwned(selected.Metadata.Creation.StationUrls, selected.Host, out reason)) return false;
+                if (!TryHostRoutes(selected.Metadata.Creation.StationUrls, selected.Host, out routes, out reason)) return false;
                 reason = "local-join-identity-collision";
                 if (selected.Host.ProfileId.SequenceEqual(peer.ProfileId)) return false;
                 bool replay = selected.Pending.TryGetValue(owner, out var previous);
@@ -173,13 +192,19 @@ namespace S7Patcher.Source
                 }
                 reason = "local-join-response-limit";
                 using var snapshot = Snapshot(selected, candidate);
-                if (snapshot == null || (response = encode(snapshot)) == null) return false;
+                if (snapshot == null) return false;
+                snapshot.Metadata.ReplaceCreationRoutes(routes);
+                if ((response = encode(snapshot)) == null) return false;
                 // Publish only after a bounded response has been serialized.
                 if (candidate != null) { selected.Pending.Add(owner, candidate); candidate = null; }
                 reason = replay ? "local-join-reservation-replayed" : "local-join-reservation-created";
                 return true;
             }
-            finally { candidate?.Dispose(); metadata?.Dispose(); peer?.Dispose(); }
+            finally
+            {
+                if (routes != null) CryptographicOperations.ZeroMemory(routes);
+                candidate?.Dispose(); metadata?.Dispose(); peer?.Dispose();
+            }
         }
     }
 }

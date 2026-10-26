@@ -23,6 +23,54 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
+### Current: embedded Storm endpoint identified; candidate projection ready
+
+User reports another error. Run 18:40:40 (20261026-184040-1bd3bcc7-lan-server.jsonl)
+records one JoinSession_V1 rejected as local-join-host-route-section-invalid.
+The previous section support still required address/port in the URL prefix.
+Static producer D433D0 actually creates only prudp:/RVCID=...#Storm=..., with
+the game endpoint list embedded inside the Storm descriptor.
+
+Read-only inspection of game PID 12704 used the known network/owner/helper chain,
+helper table 109CB58, helper+1D8 -> URL vector +08, and cached StationURL text
+at each 0x34-byte object's +2C. EXE hash/module path/object tables/vector bounds
+were checked. No injection, game calls or raw route files. The single 288-byte
+route has prefix RVCID and one Storm section with PeerGUID, Version, Platform,
+Gw, Address, PeerDescriptorBaseEnd, ProfileID, RoutingOption. Address contains
+four IPv4 endpoints on port 3074, one matching 192.168.178.125; the game really
+has UDP 3074 bound on that address. Gw shape is v(d)t(-)g(). Other endpoint
+addresses/identities were not emitted. Working helpers: read_host_route_shape.py
+and validate_host_route_shape.py, both outside Git.
+
+LocalStormRoute accepts only this bounded descriptor shape, ties RVCID to the
+registered host's connection ID, and projects Address to endpoints matching
+that host's observed address. It keeps actual game ports and all other supported
+descriptor fields. Unknown/ambiguous formats, active gateway text and foreign-only
+routes fail closed. TryJoin applies the projection only to its response snapshot;
+the host's original stored route and existing catalogue/Get outputs stay intact.
+Simple address/port routes and prior custom-section support remain available.
+
+5,314 service checks pass, including Storm joins through independent encrypted
+peers in both host directions, truncation/malformed/foreign-route rejection,
+exact projected reply, original-record immutability and replay. A separate
+managed shape harness accepted the live descriptor in memory and retained only
+192.168.178.125:3074. That harness used a synthetic registration identity: it
+validates syntax/projection, NOT real RVCID admission or native reply acceptance.
+The packaged updater source/payload/old hash and wrong-source rejection pass;
+transaction engine unchanged. Build work/server-storm-route; tests storm-route-tests.
+Service SHA256:
+044931d88c501a11a792067af97935ba1a3920cb85c54fbf140f0c4948c2f787.
+Deliverable outputs/S7-LAN-Spieladresse-Update.zip (nine entries), SHA256:
+802bcd4834ed709cc550232ee3f2cfa8ff1c60fbcfdc6d3d3c60d731ea4d1296.
+Requires preceding service f199c8da..., backup Before-storm-route-v1.
+
+User has been asked to close BOTH games and apply Spieladresse-Update.cmd on
+PC 2 without restarting. PC 1 remains on f199c8da pending closure. Check host
+processes/ports, extract verified ZIP beside the starter, run bundled Python
+S7-Spieladresse-Update/update_storm_route.py --bundle <test-root>, then no-game
+LAN host preflight. Request exactly one public four-slot join attempt; inspect
+fixed reason/queued reply/ACK and follow-ups. Real join/P2P/match/sync unverified.
+
 ### Current: native URL custom section identified and supported
 
 User reports join error after the diagnostic update. Host run 18:30:21
