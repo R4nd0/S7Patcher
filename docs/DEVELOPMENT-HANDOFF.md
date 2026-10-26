@@ -10,12 +10,20 @@ The native adapter establishes a genuine local Login/Register exchange and
 the service acknowledges keepalives beyond three minutes. The real connected
 state now enables the multiplayer menu. The user opened an empty session list.
 
-The last native change passed 218 checks and 14 original-byte guard checks,
-plus configuration validation. The keepalive service passed 612 checks.
+The current native change passed 335 adapter checks, 38 network-guard checks
+and 17 original-byte comparisons, plus configuration validation. The
+unchanged keepalive service previously passed 612 checks.
 These are separate results, not evidence of a playable LAN match.
 
 ## Current blocker: discovery does not reach the server
 
+The current blocker is an empty matchmaking SpaceId in the search helper,
+despite the established local connection already holding the public SpaceId.
+A guarded transfer using the game's native setter is built, tested and
+deployed; live verification is pending. See the latest section below.
+
+Earlier observations established the following startup/readiness blockers,
+subsequently addressed by the scoped changes documented below.
 A bounded observer saw seven online discovery requests and seven calls to the
 native session-search function. The LAN discovery path was not called.
 The search returns at its NAT/network-readiness gate before sending an RPC.
@@ -128,7 +136,43 @@ requires the helper at owner `+108`. Validation: 211 bootstrap, 88 platform,
 real configuration/fingerprint test pass. Build: `work/native-search-sandbox-build`.
 It is deployed after host confirmation that S7 exited; previous candidate is
 retained as `LocalData/adapter-ebd75de.dll`. Bundle hashes and no-game-launch
-preflight passed. A bounded observer awaits the user's next launch.
+preflight passed. The user opened the session list and repeated native search
+dispatch returned without the previous configuration access violation.
+The correction is committed as `bb7a733`.
+
+### Search SpaceId: deployed, awaiting live verification
+
+The native search job remained pending on four observations over 20 seconds;
+no search RPC reached the service. Static inspection established that the
+search helper's `+0x20` is the length of the native small string at `+0x10`,
+not a connection pointer. `D4A300` rejects its empty SpaceId before RPC creation.
+The normal initializer obtains configuration key `SpaceId` through `EF3430`
+and invokes native setter `D4A860` (helper virtual `+0x84`). That setter also
+updates the dependent `default_session_` name.
+
+An additional observer later crashed inside `frida-agent.dll` with Windows
+exception `0xC0000409`. This was a separate diagnostic-library failure, not
+the original Ubisoft configuration crash. The user restarted successfully
+without that observer. Do not inject Frida for the next test. The workspace
+script `work/read_search_state.py` uses only Windows process/module queries
+and ReadProcessMemory, with no hooks, writes or remote calls. It confirmed
+the empty helper string and an existing public SpaceId at backend `+0xE4`.
+
+`EnsureLocalSearchSpace` now validates current local ownership and the known
+helper layout, then passes a bounded borrowed small-string view of that
+existing public namespace to `D4A860`. The native setter copies through the
+game's allocator. The borrowed view is never destroyed; credentials are not
+read. Existing nonempty namespaces must match exactly and are not overwritten.
+Ownership and the resulting string are checked again after the native call.
+The fixed status event is `local-session-search-space-ready`; no ID is logged.
+
+Validation: 229 bootstrap, 88 platform, 18 connection-state and 38 network-guard
+checks; 17 original-byte comparisons; real configuration and wrong-executable
+fingerprint rejection all pass. Build: `work/native-search-space-build`.
+After the user closed S7, the candidate was deployed with the previous adapter
+retained as `LocalData/adapter-bb7a733.dll`. All bundle hashes and the
+no-game-launch preflight passed. The user must launch the test copy and open
+the session list; neither a real search response nor multiplayer is verified.
 
 Next verify that the real search reaches the local service. Its
 existing two-response RPC budget still only supports Login/Register; a new

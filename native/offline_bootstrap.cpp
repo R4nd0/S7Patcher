@@ -279,8 +279,9 @@ bool LocalSessionSearchReady(void* self) {
         *reinterpret_cast<int32_t*>(owner + 0x28) == 1 && owner[0x249] == 0;
 }
 
+bool EnsureLocalSearchSpace(void* self);
 bool __fastcall QueryLocalSessionSearch(void* self, void*) {
-    const bool ready = LocalSessionSearchReady(self);
+    const bool ready = LocalSessionSearchReady(self) && EnsureLocalSearchSpace(self);
     static volatile LONG previous = -1;
     if (InterlockedExchange(&previous, ready ? 1 : 0) != (ready ? 1 : 0))
         ReportLocalStatus(ready ? "local-session-search-ready" : "local-session-search-not-ready");
@@ -297,6 +298,56 @@ struct NativeSmallString {
     uint32_t capacity;
 };
 static_assert(sizeof(NativeSmallString) == 24, "native small string is 24 bytes");
+
+const char* SmallStringData(const NativeSmallString& value) {
+    return value.capacity < 16 ? value.inline_data :
+        *reinterpret_cast<const char* const*>(value.inline_data);
+}
+bool SameSearchSpace(const NativeSmallString& value, const char* text, size_t length) {
+    if (value.length != length || value.capacity < value.length) return false;
+    const char* data = SmallStringData(value);
+    return data && memcmp(data, text, length) == 0 && data[length] == 0;
+}
+bool EnsureLocalSearchSpace(void* self) {
+    if (!LocalSessionSearchReady(self)) return false;
+    auto* network = static_cast<unsigned char*>(self);
+    auto* owner = LocalUpdateOwner(network);
+    auto* helper = *reinterpret_cast<unsigned char**>(owner + 0x108);
+    if (*reinterpret_cast<uintptr_t*>(helper) != image_base + 0x109CB58 - PreferredBase ||
+        !*reinterpret_cast<void**>(helper + 0x1d8)) return false;
+    auto* facade = *reinterpret_cast<unsigned char**>(owner + 0xa4);
+    auto* backend = *reinterpret_cast<unsigned char**>(facade + 0x20);
+    if (!backend) return false;
+    // E898D0 copies the public application SpaceId to backend+E4 as qString.
+    // Read no credentials; reuse the actual local connection's namespace.
+    const char* space = *reinterpret_cast<const char**>(backend + 0xe4);
+    if (!space) return false;
+    const size_t length = strnlen_s(space, 129);
+    if (!length || length > 128) return false;
+    for (size_t i = 0; i < length; ++i)
+        if (static_cast<unsigned char>(space[i]) < 0x21 ||
+            static_cast<unsigned char>(space[i]) > 0x7e) return false;
+    auto* current = reinterpret_cast<NativeSmallString*>(helper + 0x10);
+    if (current->length) return SameSearchSpace(*current, space, length);
+
+    // Borrowed input only: D4A860 copies it through the game's string allocator,
+    // then updates its dependent default_session_ name. Never destroy this view.
+    NativeSmallString input{};
+    input.length = static_cast<uint32_t>(length);
+    input.capacity = length < 16 ? 15 : static_cast<uint32_t>(length);
+    if (length < 16) memcpy(input.inline_data, space, length + 1);
+    else memcpy(input.inline_data, &space, sizeof(space));
+    using SetSearchSpace = void (__thiscall*)(void*, const NativeSmallString*);
+    Native<SetSearchSpace>(0xD4A860)(helper, &input);
+    if (LocalUpdateOwner(network) != owner || !LocalSessionSearchReady(network) ||
+        *reinterpret_cast<void**>(owner + 0x108) != helper ||
+        *reinterpret_cast<void**>(owner + 0xa4) != facade ||
+        *reinterpret_cast<void**>(facade + 0x20) != backend ||
+        *reinterpret_cast<const char**>(backend + 0xe4) != space) return false;
+    const bool ready = SameSearchSpace(*current, space, length);
+    if (ready) ReportLocalStatus("local-session-search-space-ready");
+    return ready;
+}
 bool ConstructLocalSearchSandbox(void* self, NativeSmallString* output) {
     if (!output || initialization != 2 || !local_connect_probe ||
         GetCurrentThreadId() != bootstrap_thread) return false;

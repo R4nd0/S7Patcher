@@ -9,6 +9,21 @@ unsigned char* pump_network = nullptr;
 unsigned char* pump_owner = nullptr;
 int pump_mode = 0;
 int network_getter_calls = 0;
+int search_space_calls = 0;
+int search_space_mode = 0;
+char search_space_copy[129]{};
+void __fastcall FakeSetSearchSpace(void* self, void*, const NativeSmallString* input) {
+    ++search_space_calls;
+    auto* output = reinterpret_cast<NativeSmallString*>(static_cast<unsigned char*>(self) + 0x10);
+    *output = *input;
+    if (input->capacity >= 16) {
+        memcpy(search_space_copy, SmallStringData(*input), input->length + 1);
+        const char* copy = search_space_copy;
+        memcpy(output->inline_data, &copy, sizeof(copy));
+    }
+    if (search_space_mode == 1) *Native<void**>(0x1379E14) = nullptr;
+    if (search_space_mode == 2) output->inline_data[0] = '?';
+}
 void* __cdecl FakeNetworkGetter() { ++network_getter_calls; return pump_network; }
 void __fastcall FakeOwnerUpdate(void*, void*) {
     pump_trace.push_back('O');
@@ -251,6 +266,43 @@ int main() {
     check(!ConstructLocalSearchSandbox(owner + 0x50, &sandbox.value));
     *reinterpret_cast<void**>(facade + 0x0c) = nullptr;
     check(memcmp(&sandbox, &unchanged, sizeof(sandbox)) == 0);
+    alignas(4) unsigned char search_helper[0x1dc]{};
+    alignas(4) unsigned char backend[0xe8]{};
+    *reinterpret_cast<void**>(owner + 0x108) = search_helper;
+    check(!EnsureLocalSearchSpace(network)); // Reject unknown helper type.
+    *reinterpret_cast<uintptr_t*>(search_helper) = image_base + 0x109CB58 - PreferredBase;
+    check(!EnsureLocalSearchSpace(network)); // Missing private context.
+    *reinterpret_cast<void**>(search_helper + 0x1d8) = search_helper;
+    check(!EnsureLocalSearchSpace(network)); // Missing backend.
+    *reinterpret_cast<void**>(facade + 0x20) = backend;
+    check(!EnsureLocalSearchSpace(network)); // Missing public space string.
+    *reinterpret_cast<const char**>(backend + 0xe4) = "";
+    check(!EnsureLocalSearchSpace(network));
+    char too_long[130]; memset(too_long, 'x', sizeof(too_long)); too_long[129] = 0;
+    *reinterpret_cast<const char**>(backend + 0xe4) = too_long;
+    check(!EnsureLocalSearchSpace(network));
+    *reinterpret_cast<const char**>(backend + 0xe4) = "invalid space";
+    check(!EnsureLocalSearchSpace(network) && search_space_calls == 0);
+    check(FakeJump(0xD4A860, reinterpret_cast<const void*>(&FakeSetSearchSpace)));
+    auto* bound_space = reinterpret_cast<NativeSmallString*>(search_helper + 0x10);
+    for (const char* value : {"local-s7", "12345678-1234-1234-1234-123456789abc"}) {
+        *bound_space = {}; bound_space->capacity = 15;
+        *reinterpret_cast<const char**>(backend + 0xe4) = value;
+        const int before = search_space_calls;
+        check(EnsureLocalSearchSpace(network));
+        check(SameSearchSpace(*bound_space, value, strlen(value)));
+        check(EnsureLocalSearchSpace(network) && search_space_calls == before + 1);
+        *reinterpret_cast<const char**>(backend + 0xe4) = "different-space";
+        check(!EnsureLocalSearchSpace(network) && search_space_calls == before + 1);
+    }
+    *bound_space = {}; bound_space->capacity = 15;
+    *reinterpret_cast<const char**>(backend + 0xe4) = "local-s7";
+    search_space_mode = 1;
+    check(!EnsureLocalSearchSpace(network)); // Setter tears down ownership.
+    *Native<unsigned char**>(0x1379E14) = network;
+    *bound_space = {}; bound_space->capacity = 15; search_space_mode = 2;
+    check(!EnsureLocalSearchSpace(network)); // Setter did not preserve namespace.
+    search_space_mode = 0;
     for (int mode = 0; mode <= 8; ++mode) {
         pump_mode = mode; pump_trace.clear(); network_getter_calls = 0;
         *Native<unsigned char**>(0x1379E14) = network;

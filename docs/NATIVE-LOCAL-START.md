@@ -243,7 +243,28 @@ Validation: 211 bootstrap checks (including repeated native calling-convention
 tests, buffer canaries, missing helper and rejected-context preservation), 88
 platform, 18 connection-state, 38 network-guard checks, 17 byte comparisons and
 the real configuration test pass. The correction is deployed with backup and
-passing no-game-launch preflight. Live verification is pending.
+passing no-game-launch preflight. The user's next run opened the session list
+and repeated native search dispatch passed this formerly crashing call.
+
+The following blocker was the empty SpaceId string at search helper `+0x10`
+(length `+0x20`, capacity `+0x24`). The established local connection already
+holds its public SpaceId as a qString at backend `+0xE4`. The search gate now
+uses `EnsureLocalSearchSpace` to validate ownership, type and a bounded printable
+namespace, then invokes the game's `D4A860` setter with a borrowed 24-byte
+small-string view. The setter copies with the game's allocator and updates
+its dependent session name. The view is never destroyed by the adapter.
+Existing nonempty namespaces must match; post-call ownership and content are
+revalidated. No credentials or raw identifiers are logged.
+
+This candidate passes 229 bootstrap, 88 platform, 18 connection-state and
+38 network-guard checks, 17 original-byte comparisons and real configuration
+validation. It is deployed with backup and passing no-game-launch preflight;
+the SpaceId transfer and actual search RPC still need live verification.
+
+The additional Frida observer caused a separate `frida-agent.dll` fail-fast
+crash (`0xC0000409`). Subsequent game restart without it succeeded. Use only
+the external read-only Windows snapshot for the next test; do not inject the
+retired observer again.
 
 ## Fast menu startup
 
