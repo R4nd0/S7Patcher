@@ -368,3 +368,10 @@ do not establish native admission, lobby UI behavior or synchronized gameplay.
 Candidate: work/server-pair-join-success. Live result pending.
 Final verification passes 5,975 lab and 5,953 default service checks; both
 builds have zero warnings/errors. Deployed only to the one-PC pair laboratory.
+
+Live follow-up with work/server-pair-activity (8,424 lab / 5,962 default service
+checks): B hosted, A joined, native completion succeeded, and the service
+confirmed ReportJoinSuccess then accepted a host metadata update. No rejected
+RPC/expiry appeared during that attempt. The user confirmed both players
+visibly occupy the same lobby. This is a real one-PC join, not a two-PC LAN or
+synchronization result. A match-start test is pending; games remain running.

@@ -12,9 +12,12 @@ state now enables the multiplayer menu. The user opened an empty session list.
 With `95603b5`, the user also reached the created lobby with player slots.
 Login, Register, search, create and update each received an acknowledged reply;
 there were no rejected requests in that observed run. Match startup is not yet
-verified. A second PC now discovers the lobby and sends a join request, but
-the native admission now completes, followed by an unsupported success-report
-RPC. Visible lobby membership and a playable join are not yet verified.
+verified. A second PC discovers the lobby and sends a join request; that
+two-PC join is still unverified. The one-PC two-client laboratory now completes
+native admission and the service success report, and the user confirmed both
+players visibly occupy the same lobby. Match start and sustained synchronized
+gameplay remain unverified. Current deployed service: work/server-pair-activity;
+adapter: work/native-pair-core-resume. Host was slot B, joining guest slot A.
 
 The current native candidate passed 354 adapter checks, 38 network-guard checks
 and 18 original-byte comparisons, plus configuration validation. The
@@ -122,13 +125,17 @@ pass; both builds have zero warnings/errors. New regressions cover answered
 RPC activity without PING, duplicate/rejected traffic, expiry before DATA,
 absolute lifetime and the larger bounded lab response budget. Both lab games
 have been freshly launched and completed Login/Register against this service.
-Awaiting a new create/join attempt; playable membership remains unverified.
+Live result: the service queued create, join, join-success and subsequent host
+update replies with no rejection/expiry in that attempt. The native host gate
+was open, and guest completion succeeded. User confirmed both players in the
+same lobby. Match-start test requested; both games remain running.
 Final verification: 5,975 lab and 5,953 default service checks passed, including
 real HTTP/UDP and encrypted two-peer confirmations in both host directions;
 both builds completed without warnings/errors. The candidate is deployed only
 to the one-PC pair laboratory. Normal PC1/PC2 copies and installer are unchanged.
 Normal native behavior
-is isolated by S7_LOCAL_PAIR_LAB. No successful join or match is established.
+is isolated by S7_LOCAL_PAIR_LAB. Real one-PC lobby joining is established;
+match start, reverse hosting and two-PC LAN joining remain to be tested.
 Details and exact observations: LOCAL-PAIR-LAB.md.
 
 ### Previous: catalogue projection and Echo dispatch candidate

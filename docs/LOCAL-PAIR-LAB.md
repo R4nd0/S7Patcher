@@ -186,11 +186,19 @@ A short attempt using the physical LAN address triggered a Windows firewall
 prompt. It was not acted upon; those owned processes were stopped and the
 laboratory remained loopback-only.
 
-The next real test is the ticket-rejection diagnostic with distinct addresses,
-then the reverse direction after a successful join. Read fixed classifications and
-subsequent RPCs. Do not guess a
-success state or suppress the native failure. Membership completion, host
-notification, match start and synchronization remain unverified.
+The current real run uses work/native-pair-core-resume with
+work/server-pair-activity. Slot B hosted and A joined. Original host gate open,
+positive guest completion, service ReportJoinSuccess reply and subsequent host
+update were observed without rejection/expiry. The user confirmed both players
+visibly occupy the same lobby. This establishes a genuine one-PC lobby join.
+The earlier native-only positive result was insufficient until the service
+success report was supported; one intervening run expired before creation.
+
+The next real test is starting this shared lobby, then reversing host direction
+and eventually validating the two-PC LAN build. Read fixed classifications and
+subsequent RPCs. Do not fabricate success or suppress native failures. Match
+start, host notification details, long-run synchronization and the two-PC LAN
+join remain unverified.
 
 ## Verification
 
