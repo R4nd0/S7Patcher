@@ -4,9 +4,9 @@ using S7Patcher.Source;
 
 internal static class LocalStormRouteChecks
 {
-    internal static string Route(uint connection, string endpoints = "127.0.0.1:3074", bool emptyProfile = false) =>
+    internal static string Route(uint connection, string endpoints = "127.0.0.1:3074", bool emptyProfile = false, bool gatewaySentinel = false) =>
         "prudp:/RVCID=" + unchecked((int)connection).ToString(CultureInfo.InvariantCulture) + "#Storm=PeerGUID{InventedPeerNotAnIdentity}Version{1000000000000000001}"
-        + "Platform{1}Gw{v(0)t(-)g()}Address{" + endpoints + "}PeerDescriptorBaseEnd{}"
+        + "Platform{1}Gw{" + (gatewaySentinel ? "v(0)wk(-)" : "v(0)t(-)g()") + "}Address{" + endpoints + "}PeerDescriptorBaseEnd{}"
         + "ProfileID{" + (emptyProfile ? "" : "00000000-0000-0000-0000-000000000077") + "}RoutingOption{32}";
 
     internal static int Run()
@@ -39,6 +39,15 @@ internal static class LocalStormRouteChecks
         using var guest = RegisteredHostChecks.CreateRegistered();
         host.TryCopyRegisteredPeer(out var peer);
         using var hp = peer;
+        foreach (bool empty in new[] { false, true })
+        {
+            string sentinel = Route(hp.ConnectionId, "192.0.2.1:3074,127.0.0.1:3074", empty, true);
+            Check(LocalStormRoute.TryProject(sentinel, hp, out var filtered, out _)
+                && filtered == Route(hp.ConnectionId, emptyProfile:empty, gatewaySentinel:true), "Native gateway sentinel projection");
+            foreach (string badGateway in new[] { "v(1)wk(-)", "v(0)wk()", "v(0)wk(192.0.2.1:3074)", "v(0)wk(-)g()", "v(0)wk(-)x", "v(0)t(-)g(example.com)" })
+                Check(!LocalStormRoute.TryProject(sentinel.Replace("v(0)wk(-)", badGateway), hp, out _, out var rejected)
+                    && rejected == "local-join-storm-gateway", "Unknown gateway accepted or reason imprecise");
+        }
         string mixed = Route(hp.ConnectionId, "192.0.2.1:3074,127.0.0.1:3074,10.0.0.1:3074");
         string expected = Route(hp.ConnectionId);
         Check(LocalStormRoute.TryProject(mixed, hp, out var projection, out _) && projection == expected, "Storm ownership projection");

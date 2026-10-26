@@ -42,17 +42,25 @@ namespace S7Patcher.Source
                 values.Add(name, value); offset = end + 1;
             }
             if (offset != text.Length) return false;
-            reason = "local-join-storm-descriptor-values";
+            reason = "local-join-storm-peer-guid";
             if (values["PeerGUID"].Length is < 1 or > 64
-                || !Regex.IsMatch(values["PeerGUID"], @"\A[A-Za-z0-9+/_=-]+\z", RegexOptions.CultureInvariant)
-                || !ulong.TryParse(values["Version"], NumberStyles.None, CultureInfo.InvariantCulture, out _)
-                || !uint.TryParse(values["Platform"], NumberStyles.None, CultureInfo.InvariantCulture, out _)
-                || !Regex.IsMatch(values["Gw"], @"\Av\([0-9]\)t\(-\)g\(\)\z", RegexOptions.CultureInvariant)
-                || values["PeerDescriptorBaseEnd"] != ""
-                // Native C8FB60 accepts an empty ProfileID block. This descriptor
-                // field is not the registered identity used to authorize joins.
-                || (values["ProfileID"].Length != 0 && !Guid.TryParseExact(values["ProfileID"], "D", out _))
-                || !uint.TryParse(values["RoutingOption"], NumberStyles.None, CultureInfo.InvariantCulture, out _)) return false;
+                || !Regex.IsMatch(values["PeerGUID"], @"\A[A-Za-z0-9+/_=-]+\z", RegexOptions.CultureInvariant)) return false;
+            reason = "local-join-storm-version";
+            if (!ulong.TryParse(values["Version"], NumberStyles.None, CultureInfo.InvariantCulture, out _)) return false;
+            reason = "local-join-storm-platform";
+            if (!uint.TryParse(values["Platform"], NumberStyles.None, CultureInfo.InvariantCulture, out _)) return false;
+            reason = "local-join-storm-gateway";
+            // Native B7B017 passes this exact no-endpoint sentinel to CED160.
+            if (values["Gw"] != "v(0)wk(-)"
+                && !Regex.IsMatch(values["Gw"], @"\Av\([0-9]\)t\(-\)g\(\)\z", RegexOptions.CultureInvariant)) return false;
+            reason = "local-join-storm-base-end";
+            if (values["PeerDescriptorBaseEnd"] != "") return false;
+            reason = "local-join-storm-profile";
+            // Native C8FB60 accepts an empty ProfileID block. This descriptor
+            // field is not the registered identity used to authorize joins.
+            if (values["ProfileID"].Length != 0 && !Guid.TryParseExact(values["ProfileID"], "D", out _)) return false;
+            reason = "local-join-storm-routing-option";
+            if (!uint.TryParse(values["RoutingOption"], NumberStyles.None, CultureInfo.InvariantCulture, out _)) return false;
             reason = "local-join-storm-endpoints";
             string[] endpoints = values["Address"].Split(',');
             if (endpoints.Length is < 1 or > 16) return false;

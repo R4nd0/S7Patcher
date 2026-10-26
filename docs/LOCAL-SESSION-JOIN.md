@@ -251,3 +251,23 @@ suite: 5,463 checks pass.
 Candidate service SHA256:
 da48ed8c0751c482b6b85fb37a084336f2a19665792f0e515b5365c9665d478d.
 S7-LAN-Profilfeld-Update.zip requires Kennung-Update. No adapter or archive changes.
+
+## Second native gateway placeholder
+
+Run 19:32:35 rejects descriptor-values despite installed Profilfeld-Update.
+Read-only bounded snapshot of PID 51500 shows another gateway spelling and a
+nonempty UUID profile. Static original-hash-checked B7B017 loads the literal
+v(0)wk(-) at 10883B0, then passes it through CED160 at B7B043. The parser now
+supports that exact no-endpoint sentinel alongside the prior empty gateway
+shape. It does not admit arbitrary wk payloads, keys, versions or endpoints.
+Fixed per-field rejection reasons replace the coarse descriptor-values reason.
+
+Encrypted fixtures cover both host directions for all combinations of these
+two gateway forms and empty/nonempty ProfileID, using signed RVCIDs. The live
+shape harness accepts the current descriptor, with a synthetic registration
+ID and projection to the expected host endpoint; actual join remains untested.
+Build work/server-gateway-sentinel; service SHA256:
+bc73ef4e21c4056f591d0fd210081be2cf73d0374f00671dde69a9eb9f29a297.
+S7-LAN-Gateway-Update.zip requires Profilfeld-Update and changes only the service
+and manifests via the existing transactional updater.
+Full service suite: 5,546 checks pass; real-client acceptance pending deployment.

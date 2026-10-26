@@ -23,6 +23,36 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
+### Current: second native gateway sentinel; candidate pending deployment
+
+Run 20261026-193235-63c78150 still rejects one JoinSession_V1 with
+local-join-storm-descriptor-values. Installed service hash da48ed8c... confirmed.
+Guarded read-only test PID 51500 snapshot finds ProfileID length 36 but gateway
+shape v(d)wk(-), unlike earlier v(d)t(-)g(). Original hash-checked code B7B017
+passes exact literal v(0)wk(-) (10883B0) via CED160 at B7B043. It contains no
+endpoint. Added only that literal, retaining the previous gateway form and all
+identity/IP checks; arbitrary keys/gateways remain rejected. Descriptor value
+failures now have fixed per-field reasons (peer-guid/version/platform/gateway/
+base-end/profile/routing-option), never raw content.
+
+Encrypted tests cover both gateway forms and empty/nonempty profile across both
+host directions, including negative IDs. Read-only live-shape validation accepts
+the current descriptor and retains only expected host endpoint; synthetic ID
+substitution means this is not a real admission test. Build server-gateway-sentinel,
+tests gateway-sentinel-tests. Service SHA256:
+bc73ef4e21c4056f591d0fd210081be2cf73d0374f00671dde69a9eb9f29a297.
+outputs/S7-LAN-Gateway-Update.zip (nine entries), SHA256:
+3557c931937502cd0d126353181ee8c1ad2a24bf857404a19a379bf892f520d4.
+CRC, source/updater equality, old/new payload hashes and wrong-source rejection
+pass. Requires Profilfeld service da48ed8c...; backup Before-gateway-sentinel-v1.
+Both installed copies remain on Profilfeld-Update pending closure/deployment.
+Full suite passes 5,546 checks. User asked to close both games, install
+Gateway-Update on PC 2 and not restart. Upon confirmation check processes/ports,
+extract verified ZIP into PC 1 test root, run bundled Python
+S7-Gateway-Update/update_gateway_sentinel.py --bundle <root>, then host check-only.
+Request exactly one public four-slot join and inspect response/ACK/follow-up.
+Real join, reverse hosting, match startup and synchronization still unverified.
+
 ### Current: empty native ProfileID supported; deployed, real join pending
 
 User confirms both games closed and Profilfeld-Update installed on PC 2.

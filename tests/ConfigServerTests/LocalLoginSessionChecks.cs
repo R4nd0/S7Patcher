@@ -542,7 +542,7 @@ internal static class LocalLoginSessionChecks
         }
         // Two independently encrypted peers, in both host directions. This tests
         // discovery/Get/pending join, not completed membership or gameplay.
-        for (int direction = 0; direction < 6; direction++)
+        for (int direction = 0; direction < 10; direction++)
         {
             using LocalSessionRegistry registry = new(catalogueProbe: true);
             using Fixture first = new(keepAlive: true, sessions: registry);
@@ -559,8 +559,10 @@ internal static class LocalLoginSessionChecks
             host.Register(); visitor.Register();
             hostRpc.TryCopyRegisteredPeer(out var registeredHost);
             using var hostPeer = registeredHost;
+            bool emptyProfile = direction is 4 or 5 or 8 or 9;
+            bool gatewaySentinel = direction >= 6;
             string route = direction < 2 ? LocalSessionDisplayChecks.Route + (direction == 0 ? "" : "#label=fixture")
-                : LocalStormRouteChecks.Route(hostPeer.ConnectionId, "10.0.0.1:3074,127.0.0.1:3074", emptyProfile:direction >= 4);
+                : LocalStormRouteChecks.Route(hostPeer.ConnectionId, "10.0.0.1:3074,127.0.0.1:3074", emptyProfile, gatewaySentinel);
             host.Session.ProcessData(host.Data(8, 0, LocalSessionCreationChecks.Request(body: LocalSessionCatalogueChecks.PublicBody(
                 route: route))), host.Events.Add);
             host.Session.TakeDue(200, host.Events.Add);
@@ -587,7 +589,7 @@ internal static class LocalLoginSessionChecks
             {
                 Check(pendingJoin.PendingProfiles.Count == 1, "Join did not reserve one member");
                 if (direction >= 2)
-                    pendingJoin.Metadata.ReplaceCreationRoutes(Encoding.ASCII.GetBytes(LocalStormRouteChecks.Route(hostPeer.ConnectionId, emptyProfile:direction >= 4)));
+                    pendingJoin.Metadata.ReplaceCreationRoutes(Encoding.ASCII.GetBytes(LocalStormRouteChecks.Route(hostPeer.ConnectionId, emptyProfile:emptyProfile, gatewaySentinel:gatewaySentinel)));
                 expected = LocalSessionJoinCodec.Encode(0x12345678, pendingJoin);
             }
             packet = visitor.Session.TakeDue(450, visitor.Events.Add).Single();
