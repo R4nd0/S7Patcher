@@ -23,7 +23,31 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
-### Pending user test: explicitly labelled one-client display probe
+### Current user target: transferable installer, both host directions, sync validation
+
+The user explicitly wants a patch installer for a second Windows PC, with either
+PC able to host and the other to join, and synchronization quality treated as a
+release requirement. `docs/TWO-PC-DELIVERY.md` records implemented delivery,
+current capability limits and unrun acceptance gates. Do not promise no desyncs
+from a content hash or successful lobby alone.
+
+The preparation installer is implemented under `tools/installer/`, with 10
+synthetic tests passing. A real run copied all 54 supported game files and
+produced a separate working-copy manifest; comparison with the original found
+exactly the intended adapter and Interface.bba replacements. Its bundled
+CPython/.NET runtimes passed a no-game-launch startup check. The final portable
+ZIP has 246 entries and contains no game executable/archive or player data.
+It remains a **local-test preparation preview**, with LAN host/join false.
+Future network admission must integrate the implemented content comparison;
+the current comparison is local/offline, not a completed admission gate.
+
+Workspace artifact: `outputs/S7-Patch-Installer-Vorbereitung.zip` (49,827,595
+bytes), SHA-256 `628d6c6fd35ea31d9e2b32b0539135f75ce8c400d5688af5a2017f622bd24ac0`.
+Final unzipped build: `work/installer-package-final`. Real installation check:
+`work/installer-real-test` (never game-launched). Runtime source and licenses
+are in the package. Native adapter and C# service code are unchanged this step.
+
+### Display probe: delivered, but list remains empty
 
 `work/server-session-display` passes **4,373 service checks**, including an
 independent native-layout reader and encrypted create/leave/nonempty-search
@@ -43,11 +67,23 @@ passed a two-second startup/shutdown on ephemeral loopback ports. No game was
 launched by the agent and no loaded file was replaced. The original test game
 was still PID 48064, started at 13:48, before staging.
 
-User has been asked to fully close S7, start the **new display-test starter**,
-create a four-slot lobby, leave it and look for the labelled row in the session
-list. Leave the game open; do not join the diagnostic entry. **Await this result**
-and correlate a fresh run's fixed response reason/ACKs before further changes.
-Neither the row's display nor a live nonempty catalogue is verified yet.
+The user completed this test and reported an **empty session list**. Fresh
+run `20261026-151636-f088d28a-server.jsonl`, game PID 56896 (15:16 local), showed
+six nonempty display replies, 20 DATA sends/ACKs including fragmented replies,
+one create/update/leave and no rejection in the inspected sample. Delivery is
+verified; native parsing/callback completion and UI display are not.
+
+A guarded read-only snapshot showed connected=true, pending=false, helper
+0x109CB58, manager 0x10934EC, one pending manager item, NAT flag false and no
+Frida library. Helper+6C points to callback type 0x1093C4C, dispatcher CA8DB0,
+bound function C9E8E0 and the same manager. C9E8E0 rejects duplicate session
+descriptors and compares the connection descriptor's +54 byte-vector (getter
+CDC9D0) with manager+24..+28 before returning false at C9EBBB when equal. This
+is a candidate reason a same-owner preview is hidden, not proof that this
+branch actually ran. Pending request type 0x113FE90 has a session descriptor
+type 0x1140150. Do not call these functions or inject a diagnostic library.
+Private observer: `work/read_search_callback.py`; static evidence stays outside
+git. No new restart has been requested after this result.
 
 ### Prior verified state and research
 

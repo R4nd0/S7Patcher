@@ -10,6 +10,13 @@ A simple application for the game "The Settlers 7 - Paths to a Kingdom".
 ## History Edition diagnostics (this fork)
 
 **These additions do not yet implement a complete replacement server or playable LAN multiplayer.**
+
+A portable **preparation installer** is now available in `tools/installer/`.
+It makes a separate copy from each PC's own supported installation, includes
+its runtimes, and checks game/patch/content fingerprints before local startup.
+It does not yet enable second-PC join or hosting. See
+[two-PC delivery and synchronization acceptance](docs/TWO-PC-DELIVERY.md).
+
 The inspected Ubisoft Connect build contains a native LAN Join function that returns success without joining a peer. Native LAN Create also retains login and NAT checks. See [LAN research and remaining blockers](docs/LAN-RESEARCH.md).
 
 The separate [native local-start prototype](docs/NATIVE-LOCAL-START.md) reaches the main menu using its own platform adapter, without startup videos or the intro click gate. Its opt-in local-connect test completes encrypted Login/Register, keeps the native connection alive beyond three minutes, and makes the multiplayer menu selectable using the actual local connection state. Longer sessions, complete network isolation, lobby and playable LAN remain unfinished or unverified.

@@ -88,6 +88,14 @@ required fields/routes, response overflow and snapshot cleanup. Encrypted
 create -> leave -> search tests check ciphertext retry, ACK clearing and
 transport-teardown removal. CLI tests cover the opt-in switch and disclosure.
 
+The first live run delivered six nonempty responses, with all 20 emitted DATA
+packets acknowledged in the inspected sample. The user reported that the list
+remained empty. A read-only snapshot identified the active result callback as
+C9E8E0 (delegate type 1093C4C via CA8DB0). It has duplicate/connection-identity
+rejection paths; these need investigation before treating a same-owner row as
+a valid display test. No callback execution or successful deserialization has
+been established by the snapshot or transport ACKs.
+
 Live display, GetSession/join, a real nonempty catalogue, filter semantics and
 match startup remain unverified. Constructor defaults are not authorization to
 enable them in the ordinary service.
