@@ -1,6 +1,6 @@
 # S7 HE RPC framing: static findings
 
-Target: the original Ubisoft History Edition executable, SHA-256 `4ef51632a8a193050ebe8ef3f3fe38a9b240b4aa57ff62a4f381bc0f539df64f`. Addresses are x86 virtual addresses at preferred base 0x400000. This analysis used static code only, without reading real RPC arguments. The current service does not implement RPC parsing, reassembly or responses.
+Target: the original Ubisoft History Edition executable, SHA-256 `4ef51632a8a193050ebe8ef3f3fe38a9b240b4aa57ff62a4f381bc0f539df64f`. Addresses are x86 virtual addresses at preferred base 0x400000. The framing findings below were derived statically. The opt-in local Login probe now implements bounded reassembly, known Login/Register argument validation and encrypted responses; see [the experiment and live evidence](LOCAL-LOGIN-PROBE.md). Other RPC services remain unimplemented.
 
 ## Outer message and request header
 

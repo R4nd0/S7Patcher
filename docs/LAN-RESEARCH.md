@@ -1,10 +1,17 @@
 # History Edition local multiplayer research
 
-Status on 2026-10-25: **no working replacement multiplayer server or LAN play**.
+Status on 2026-10-26: **no working replacement multiplayer server or LAN play**.
 The tools provide build identification, a reproducible diagnostic archive,
 and a guarded local bootstrap experiment. A visible LAN menu, successful
 archive validation, or a native
 function returning success is not evidence of a working multiplayer session.
+
+The local server has now received Register after replying to Login, and the
+client acknowledged both responses. A [native local-start prototype](NATIVE-LOCAL-START.md)
+and separate fast-start UI archive now reach the main menu with the local
+platform adapter, without startup movies or a click gate. The SDK readiness
+gate still prevents this copy's local server login. Complete isolation of
+all game behavior and successful LAN have not been verified.
 
 ## Supported research target
 
@@ -83,7 +90,7 @@ advertised UDP port. By default it counts datagrams without replying.
 than the generic decoder and at most eight local sender cookies.
 `--connect-probe` additionally supports a narrowly validated empty CONNECT
 request after that SYN exchange, with a signed, separate ECDH agreement key.
-The latest controlled game start progressed through the local HTTP response,
+An earlier controlled game start progressed through the local HTTP response,
 SYN ACK and signed CONNECT ACK to 40 structurally valid DATA packets. This is
 evidence of transport progress, not a completed login or multiplayer session.
 `--data-ack-probe` adds bounded transport acknowledgements to that exchange;
@@ -91,9 +98,11 @@ its native [DATA ACK specification](DATA-ACK-PROTOCOL.md) is documented
 separately. `--data-crypto-probe` additionally checks the
 [DATA transformation](DATA-CRYPTO-PROTOCOL.md) and reports only fixed results,
 sizes and booleans. Its owned plaintext/key buffers are cleared after each
-check. [RPC framing and reliable assembly](RPC-FRAMING-PROTOCOL.md) have been
-partly derived statically but are not implemented. Login RPCs, matchmaking
-and game synchronization remain unimplemented.
+check. The opt-in `--local-login-probe` now adds bounded
+[RPC framing and reliable assembly](RPC-FRAMING-PROTOCOL.md) and the two known
+[Login/Register responses](LOCAL-LOGIN-PROBE.md). The client progressed from
+our Login response to Register and acknowledged both replies. Subsequent RPC
+services, sustained login, matchmaking and game synchronization are unfinished.
 
 The next transport stage has a separately documented
 [SYN/CONNECT wire format](HANDSHAKE-PROTOCOL.md), including byte ordering,

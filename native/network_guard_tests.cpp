@@ -1,0 +1,119 @@
+#define WIN32_LEAN_AND_MEAN
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <windows.h>
+#include <winhttp.h>
+#include <shellapi.h>
+#include <cstdio>
+#include <cstring>
+
+extern "C" __declspec(dllimport) bool __cdecl S7TestInstallGuard();
+extern "C" __declspec(dllimport) bool __cdecl S7TestEndpoint(const sockaddr*, int);
+static int checks = 0, failures = 0;
+static void Check(bool result, const char* label) {
+    ++checks; if (!result) { ++failures; std::printf("FAIL %s\n", label); }
+}
+static sockaddr_in Address(unsigned long number, unsigned short port = 0) {
+    sockaddr_in value{}; value.sin_family = AF_INET;
+    value.sin_addr.s_addr = htonl(number); value.sin_port = htons(port); return value;
+}
+static int Bound(SOCKET socket, sockaddr_in& address) {
+    int length = sizeof(address); return getsockname(socket, reinterpret_cast<sockaddr*>(&address), &length);
+}
+int main() {
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    WSADATA data{}; if (WSAStartup(MAKEWORD(2,2), &data) != 0) return 2;
+    auto loopback = Address(0x7f000001), remote = Address(0xc0000201, 443); // RFC5737 documentation address.
+    Check(!S7TestEndpoint(nullptr, 0), "null address rejected");
+    Check(!S7TestEndpoint(reinterpret_cast<sockaddr*>(&loopback), 2), "short address rejected");
+    Check(S7TestEndpoint(reinterpret_cast<sockaddr*>(&loopback), sizeof(loopback)), "IPv4 loopback");
+    Check(!S7TestEndpoint(reinterpret_cast<sockaddr*>(&remote), sizeof(remote)), "nonlocal address rejected");
+    sockaddr_in6 ipv6{}; ipv6.sin6_family = AF_INET6; ipv6.sin6_addr = in6addr_loopback;
+    Check(S7TestEndpoint(reinterpret_cast<sockaddr*>(&ipv6), sizeof(ipv6)), "IPv6 loopback");
+    InetPtonA(AF_INET6, "::ffff:127.0.0.1", &ipv6.sin6_addr);
+    Check(S7TestEndpoint(reinterpret_cast<sockaddr*>(&ipv6), sizeof(ipv6)), "IPv4 mapped loopback");
+    InetPtonA(AF_INET6, "2001:db8::1", &ipv6.sin6_addr);
+    Check(!S7TestEndpoint(reinterpret_cast<sockaddr*>(&ipv6), sizeof(ipv6)), "nonlocal IPv6 rejected");
+    if (!S7TestInstallGuard()) { std::puts("FAIL guard install"); return 1; }
+    Check(S7TestInstallGuard(), "install idempotent");
+    char preflight[32]{};
+    int preflight_result = gethostname(preflight, sizeof(preflight));
+    std::printf("Preflight result=%d local=%d\n", preflight_result, strcmp(preflight, "localhost") == 0);
+    if (preflight_result != 0 || strcmp(preflight, "localhost") != 0) return 3;
+    addrinfo* info = nullptr;
+    Check(getaddrinfo("example.invalid", "80", nullptr, &info) == EAI_NONAME && !info, "external DNS denied");
+    Check(getaddrinfo("localhost", "80", nullptr, &info) == 0 && info, "local name resolution");
+    if (info) freeaddrinfo(info);
+    Check(gethostbyname("example.invalid") == nullptr, "legacy external DNS denied");
+    Check(gethostbyname("localhost") != nullptr, "legacy local DNS");
+    char host[32]{};
+    Check(gethostname(host, sizeof(host)) == 0 && strcmp(host, "localhost") == 0, "local hostname");
+    Check(gethostbyaddr(reinterpret_cast<char*>(&remote.sin_addr), 4, AF_INET) == nullptr, "external reverse DNS denied");
+    Check(getnameinfo(reinterpret_cast<sockaddr*>(&remote), sizeof(remote), host, sizeof(host), nullptr, 0, 0) == EAI_NONAME,
+          "external nameinfo denied");
+    SOCKET server = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    SOCKET client = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    DWORD timeout = 1000; setsockopt(server, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeout), sizeof(timeout));
+    auto wildcard = Address(INADDR_ANY);
+    Check(bind(server, reinterpret_cast<sockaddr*>(&wildcard), sizeof(wildcard)) == 0, "wildcard bind accepted locally");
+    sockaddr_in bound{};
+    Check(Bound(server, bound) == 0 && bound.sin_addr.s_addr == loopback.sin_addr.s_addr, "wildcard rewritten to loopback");
+    Check(sendto(client, "abc", 3, 0, reinterpret_cast<sockaddr*>(&remote), sizeof(remote)) == SOCKET_ERROR && WSAGetLastError() == WSAEACCES,
+          "external UDP denied before transmission");
+    Check(sendto(client, "abc", 3, 0, reinterpret_cast<sockaddr*>(&bound), sizeof(bound)) == 3, "local UDP send");
+    sockaddr_in client_bound{};
+    Check(Bound(client, client_bound) == 0 && client_bound.sin_addr.s_addr == loopback.sin_addr.s_addr, "implicit UDP sender binds locally");
+    char buffer[16]{};
+    Check(recvfrom(server, buffer, sizeof(buffer), 0, nullptr, nullptr) == 3 && memcmp(buffer, "abc", 3) == 0, "local UDP roundtrip");
+    WSABUF packet{3, const_cast<char*>("xyz")}; DWORD sent = 0;
+    Check(WSASendTo(client, &packet, 1, &sent, 0, reinterpret_cast<sockaddr*>(&remote), sizeof(remote), nullptr, nullptr) == SOCKET_ERROR
+          && WSAGetLastError() == WSAEACCES, "overlapped external UDP denied");
+    Check(WSASendTo(client, &packet, 1, &sent, 0, reinterpret_cast<sockaddr*>(&bound), sizeof(bound), nullptr, nullptr) == 0 && sent == 3,
+          "WSASendTo local");
+    Check(recvfrom(server, buffer, sizeof(buffer), 0, nullptr, nullptr) == 3 && memcmp(buffer, "xyz", 3) == 0, "WSASendTo roundtrip");
+    DWORD returned = 0;
+    Check(WSAIoctl(client, SIO_GET_EXTENSION_FUNCTION_POINTER, nullptr, 0, nullptr, 0, &returned, nullptr, nullptr) == SOCKET_ERROR
+          && WSAGetLastError() == WSAEOPNOTSUPP, "unwrapped extension pointers denied");
+    closesocket(client); closesocket(server);
+    SOCKET listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    SOCKET tcp = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    Check(bind(listener, reinterpret_cast<sockaddr*>(&wildcard), sizeof(wildcard)) == 0 && listen(listener, 1) == 0 && Bound(listener, bound) == 0,
+          "local TCP listener");
+    Check(connect(tcp, reinterpret_cast<sockaddr*>(&remote), sizeof(remote)) == SOCKET_ERROR && WSAGetLastError() == WSAEACCES,
+          "external TCP denied");
+    bool connected = connect(tcp, reinterpret_cast<sockaddr*>(&bound), sizeof(bound)) == 0;
+    Check(connected, "local TCP connect");
+    if (connected) {
+        SOCKET accepted = accept(listener, nullptr, nullptr);
+        Check(accepted != INVALID_SOCKET, "local TCP accept");
+        if (accepted != INVALID_SOCKET) {
+            setsockopt(accepted, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeout), sizeof(timeout));
+            Check(send(tcp, "tcp", 3, 0) == 3 && recv(accepted, buffer, sizeof(buffer), 0) == 3 && memcmp(buffer, "tcp", 3) == 0,
+                  "local TCP send roundtrip");
+            closesocket(accepted);
+        }
+    }
+    closesocket(tcp); closesocket(listener);
+    HINTERNET session = WinHttpOpen(L"S7 synthetic test", WINHTTP_ACCESS_TYPE_NAMED_PROXY, L"example.invalid:8080", nullptr, 0);
+    Check(session != nullptr, "WinHTTP opens with forced no proxy");
+    Check(WinHttpConnect(session, L"example.invalid", 80, 0) == nullptr && GetLastError() == ERROR_ACCESS_DENIED, "external HTTP denied");
+    HINTERNET connection = WinHttpConnect(session, L"localhost", 1, 0);
+    Check(connection != nullptr, "local HTTP connection handle");
+    Check(WinHttpOpenRequest(connection, L"GET", L"http://example.invalid/", nullptr, nullptr, nullptr, 0) == nullptr,
+          "absolute external HTTP object denied");
+    HINTERNET request = WinHttpOpenRequest(connection, L"GET", L"/", nullptr, nullptr, nullptr, 0);
+    DWORD redirect = WINHTTP_OPTION_REDIRECT_POLICY_ALWAYS, length = sizeof(redirect);
+    Check(request && WinHttpSetOption(request, WINHTTP_OPTION_REDIRECT_POLICY, &redirect, sizeof(redirect)), "redirect setting intercepted");
+    Check(request && WinHttpQueryOption(request, WINHTTP_OPTION_REDIRECT_POLICY, &redirect, &length) && redirect == WINHTTP_OPTION_REDIRECT_POLICY_NEVER,
+          "redirect remains disabled");
+    if (request) WinHttpCloseHandle(request);
+    if (connection) WinHttpCloseHandle(connection);
+    if (session) WinHttpCloseHandle(session);
+    Check(reinterpret_cast<INT_PTR>(ShellExecuteA(nullptr, "open", "https://example.invalid/", nullptr, nullptr, SW_HIDE)) == SE_ERR_ACCESSDENIED,
+          "external shell ANSI denied");
+    Check(reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", L"https://example.invalid/", nullptr, nullptr, SW_HIDE)) == SE_ERR_ACCESSDENIED,
+          "external shell Unicode denied");
+    WSACleanup();
+    std::printf("%s %d network guard checks\n", failures ? "FAIL" : "PASS", checks);
+    return failures ? 1 : 0;
+}

@@ -27,3 +27,21 @@ Responses are limited to one fragment of at most 947 plaintext bytes, a conserva
 Retries reuse identical encoded bytes. Probe policy is one-second spacing, at most four transmissions and a two-minute peer lifetime. These are deliberately finite local limits, not recovered native adaptive timeout settings. A complete empty DATA ACK with matching peer context, sequence and part removes its pending response and zeroes the owned packet. Native acknowledgement lookup `EBADE0 → EC0EF0` uses sequence; part matching is an additional conservative restriction for this single-fragment probe. Unsent, malformed and mismatched ACKs cannot clear a pending response. Exhaustion closes and clears the experimental session.
 
 PING and DISCONNECT are classified passively and are not answered or consumed by the incoming reliable DATA assembler. A reliable control interleaved with DATA would therefore leave a sequence gap in this experiment. The decoder follows jump table `E84A98`: 3 DISCONNECT, 4 PING, 5 USER. Cookie comparison exceptions are SYN/USER, not PING (`EB4C98..EB4CA5`). These omissions may prevent a sustained connection even if Login/Register responses are accepted; that is a separate implementation step requiring observed evidence.
+
+## Live result, 2026-10-25
+
+The original HE client reassembled its Login request from four verified
+plaintext fragments (947/947/947/48 bytes). After the local encrypted 191-byte
+Login response it acknowledged DATA and sent `Register_V1`. This subsequent
+method is evidence of application progress beyond Login, not just transport
+delivery. The server then sent a 143-byte encrypted Register response, which
+the client also acknowledged. A further encrypted DATA request decoded to
+548 bytes, followed by repeated 14-byte PING packets. The probe deliberately
+did not answer the additional request because its two-response budget was
+exhausted. Its RPC method was not identified or logged.
+
+This establishes Login-to-Register progress. It does not establish completed
+game initialization, sustained connectivity, launcher independence, lobby
+discovery or playable LAN. The peer expired at the configured two-minute
+limit. Only fixed-category events and lengths were retained; no raw client
+arguments, account tokens or identities are included in this repository.

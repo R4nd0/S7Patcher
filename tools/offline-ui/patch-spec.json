@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "purpose": "offline-ui",
+  "files": [
+    {
+      "path": "Script/local/menu/panel/menu/sectionMenus/mainMenu.lua",
+      "source_sha256": "5c209609fec874dddc839f7c5007e265c81fa1e9b7b62ba71a7b87bbf079d27f",
+      "patched_sha256": "25ace1f2348b49609ae6a7e17c9d76e2a3e4b8ae432d3f3066ae14a8593e4c1a",
+      "edits": [
+        {
+          "offset": 25237,
+          "before_hex": "6966206c5b6e28323237295d28297468656e0a6c5b6e28323238295d286c5b6e28323239295d29656c73650a6c5b6e28323330295d2829656e64",
+          "after_utf8": "if l[n(227)]()then e[n(163)][n(266)]()end\nl[n(230)]()",
+          "reason": "Skip both startup movies; retain first-run profile initialization"
+        },
+        {
+          "offset": 29291,
+          "before_hex": "6c6f63616c206f3d66756e6374696f6e2829655b6e28313633295d5b6e28333135295d2829656e64",
+          "after_utf8": "local o=function()end",
+          "reason": "Disable external shop callback"
+        },
+        {
+          "offset": 29915,
+          "before_hex": "6c6f63616c20743d66756e6374696f6e2829655b6e28313633295d5b6e28313838295d2829656e64",
+          "after_utf8": "local t=function()end",
+          "reason": "Disable external DLC shop callback"
+        },
+        {
+          "offset": 31501,
+          "before_hex": "655b6e283938295d5b6e283630295d282969662064207468656e",
+          "after_utf8": "e[n(98)][n(60)]()if false then",
+          "reason": "Use normal menu camera without the timed intro/click blocker"
+        },
+        {
+          "offset": 31781,
+          "before_hex": "655b6e28323236295d5b6e283834295d28296966206e6f7420655b6e28313631295d5b6e28323035295d28297468656e",
+          "after_utf8": "e[n(226)][n(84)]()e[n(73)][n(82)](l[n(316)])e[n(73)][n(82)](l[n(321)])if d then e[n(50)][n(85)]()end\nif not e[n(161)][n(205)]()then",
+          "reason": "Hide shop promotions and preserve first-run missing-profile check"
+        },
+        {
+          "offset": 33563,
+          "before_hex": "6966206e6f7420655b6e283733295d5b6e28323434295d286c5b6e28333733295d297468656e20655b6e283733295d5b6e283437295d286c5b6e28333733295d29656e64",
+          "after_utf8": "if e[n(73)][n(244)](l[n(373)])then e[n(73)][n(82)](l[n(373)])end",
+          "reason": "Keep uplayPanel hidden when online state changes"
+        },
+        {
+          "offset": 33632,
+          "before_hex": "6966206e6f7420655b6e283733295d5b6e28323434295d286c5b6e28333231295d297468656e20655b6e283733295d5b6e283437295d286c5b6e28333231295d29656e64",
+          "after_utf8": "if e[n(73)][n(244)](l[n(321)])then e[n(73)][n(82)](l[n(321)])end",
+          "reason": "Keep fbPanel hidden when online state changes"
+        }
+      ]
+    }
+  ]
+}

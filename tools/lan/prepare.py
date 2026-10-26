@@ -48,7 +48,9 @@ def apply_edits(original, item):
     return bytes(result)
 
 
-def prepare(installation, output, specification):
+def prepare(installation, output, specification, *, profile="lan-diagnostic"):
+    if profile not in ("lan-diagnostic", "offline-ui"):
+        raise ValueError("Unsupported staging profile")
     root = Path(installation).resolve(strict=True)
     if not root.is_dir():
         raise ValueError("Supply the installation folder, not an executable")
@@ -75,6 +77,8 @@ def prepare(installation, output, specification):
     spec = json.loads(spec_bytes)
     if spec.get("schema_version") != 1 or not spec.get("files"):
         raise ValueError("Unsupported or empty patch specification")
+    if profile == "offline-ui" and spec.get("purpose") != "offline-ui":
+        raise ValueError("Offline UI specification required")
     archive = Archive(original)
     replacements = {}
     for item in spec["files"]:
@@ -120,6 +124,16 @@ def prepare(installation, output, specification):
                   "Original game files, user settings and system network settings were not modified.",
                   "The staged archive contains local game data. Do not publish it or commit it to source control."]
     }
+    if profile == "offline-ui":
+        manifest["status"] = "offline-ui-staged-not-installed"
+        manifest["runtime_verified"] = False
+        manifest["notes"] = [
+            "Skips startup movies and the menu intro/click gate; preserves first-run profile initialization.",
+            "Hides main-menu Uplay/shop promotions and disables the two external shop callbacks.",
+            "A missing-profile dialog can still appear when a profile must be created.",
+            "This archive change does not remove the native launcher dependency or implement LAN.",
+            "Original installation and user settings were not modified; runtime validation is still required.",
+            "The staged archive contains local game data. Do not publish or commit it."]
     destination.mkdir()  # Fails if a concurrent process created the directory.
     artifact = destination / artifact_relative
     artifact.parent.mkdir(parents=True)

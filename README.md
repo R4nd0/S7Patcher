@@ -12,7 +12,7 @@ A simple application for the game "The Settlers 7 - Paths to a Kingdom".
 **These additions do not yet implement a complete replacement server or playable LAN multiplayer.**
 The inspected Ubisoft Connect build contains a native LAN Join function that returns success without joining a peer. Native LAN Create also retains login and NAT checks. See [LAN research and remaining blockers](docs/LAN-RESEARCH.md).
 
-The latest controlled game start reached the local HTTP configuration, SYN/CONNECT exchange and four successfully decrypted DATA packets, each acknowledged locally. Login and multiplayer remain unverified; the detailed validation record separates this live observation from synthetic tests.
+The latest controlled original-client run progressed from a local encrypted Login response to Register and acknowledged both responses. Sustained login and multiplayer remain unverified. The separate [native local-start prototype](docs/NATIVE-LOCAL-START.md) now reaches the main menu using its own platform adapter, without startup videos or the intro click gate. Its server-login trigger and complete network isolation still require work.
 
 Build this fork with the .NET 10 SDK (`dotnet build -c Debug`). The original patching workflow below remains available; these explicit diagnostic commands return before that workflow starts.
 
