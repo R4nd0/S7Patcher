@@ -69,7 +69,16 @@ player ticket handling, B86770 -> C0A8B0 session lookup after metadata type
 validation, and the GameSessionHandler ED3070 full/in-game gate via its exact
 virtual slot 1140060. It changes no gate or result, logs no keys/identities.
 834 bootstrap checks and 17 original-callsite comparisons plus the virtual
-slot comparison pass. Live result pending.
+slot comparison pass. Live result: the host player-ticket handler runs, its
+metadata-qualified session lookup succeeds, and it returns positive. No
+GameSessionHandler full/in-game gate observation follows; join still fails.
+The outgoing JoinRequest is routed through B86886 -> CFA5E0, whose result was
+previously ignored by the player handler. Current candidate work/native-pair-host-route
+observes that result (including invalid destination/unavailable categories)
+and the CA285B -> C9A280 JoinRequest type match in SimpleSessionHandler.
+It reads no destination key and changes no native result. 870 bootstrap checks
+and 19 original callsite comparisons plus the gate slot comparison pass.
+Live result pending.
 Service remains work/server-pair-catalogue-route, unchanged in this milestone.
 Normal native behavior
 is isolated by S7_LOCAL_PAIR_LAB. No successful join or match is established.

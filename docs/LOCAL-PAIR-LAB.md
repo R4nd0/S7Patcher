@@ -144,7 +144,16 @@ The real games created separate Profiles.xml and replay files there.
     observes B7DA97 -> B86710, B86770 -> C0A8B0 session lookup (after the native
     metadata type check), and virtual slot 1140060 -> ED3070. Only presence,
     result and the known gate boolean are classified; nothing is overridden.
-    Current candidate work/native-pair-player-ticket; live result pending.
+    Live: player-ticket entered, metadata-qualified session found, positive
+    return. The game-specific full/in-game gate was not observed; join fails.
+17. B86710 routes its JoinRequest at B86886 -> CFA5E0, but ignores the returned
+    result. That route can reject an invalid destination or unavailable engine
+    context. The current candidate classifies its original result, without
+    reading the destination or payload. CA285B -> C9A280 additionally observes
+    a true original JoinRequest type match, covering base handlers as well as
+    the game override. This avoids interpreting absence of the game-specific
+    gate alone as absence of all application dispatch. Current candidate
+    work/native-pair-host-route; live result pending.
 
 Bounded external type/state inspection also found the main Echo implementation
 as the scheduler's only child, initialized state 3 on both slots. Its dispatcher
@@ -170,7 +179,7 @@ notification, match start and synchronization remain unverified.
 
 ## Verification
 
-Laboratory build: 834 bootstrap checks (including both exact hashes, per-byte
+Laboratory build: 870 bootstrap checks (including both exact hashes, per-byte
 digest mutation rejection, native ABI/result preservation, pump order,
 duplicate suppression, reentrancy and teardown); 69 network checks, including
 same-port distinct-address binding, UDP transfer and automatic source binding;

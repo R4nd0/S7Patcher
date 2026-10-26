@@ -516,6 +516,26 @@ void __fastcall ObserveLabHostJoinGate(void* self, void*, void* event) {
     using Original = void (__thiscall*)(void*, void*);
     Native<Original>(0xED3070)(self, event);
 }
+NativeResult* __fastcall ObserveLabHostEventRoute(void* self, void*, NativeResult* result,
+    uintptr_t context, void* event, uintptr_t destination) {
+    using Original = NativeResult* (__thiscall*)(void*, NativeResult*, uintptr_t, void*, uintptr_t);
+    auto* returned = Native<Original>(0xCFA5E0)(self, result, context, event, destination);
+    const DWORD error = GetLastError();
+    const char* label = "lab-native-host-event-route-result-unavailable";
+    if (returned == result && result)
+        label = result->code > 0 ? "lab-native-host-event-route-queued"
+            : result->code == -999996 ? "lab-native-host-event-route-invalid-destination"
+            : result->code == -1000000 ? "lab-native-host-event-route-unavailable"
+            : "lab-native-host-event-route-failed";
+    ReportLocalStatus(label); SetLastError(error); return returned;
+}
+bool __fastcall ObserveLabHostJoinEventType(void* event, void*, uintptr_t left, uintptr_t right) {
+    using Original = bool (__thiscall*)(void*, uintptr_t, uintptr_t);
+    const bool matched = Native<Original>(0xC9A280)(event, left, right);
+    const DWORD error = GetLastError();
+    if (matched) ReportLocalStatus("lab-native-host-join-event-dispatched");
+    SetLastError(error); return matched;
+}
 template<uintptr_t Target>
 NativeResult* __fastcall ObserveLabTicketSeven(void* self, void*, NativeResult* result,
     uintptr_t b, uintptr_t c, uintptr_t d, uintptr_t e, uintptr_t f, uintptr_t g) {
@@ -723,6 +743,8 @@ const Patch ConnectPatches[] = {
     {0xB7DA97, {0xe8,0x74,0x8c,0x00,0x00}, reinterpret_cast<const void*>(&ObserveLabPlayerTicket)},
     {0xB86770, {0xe8,0x3b,0x41,0x08,0x00}, reinterpret_cast<const void*>(&ObserveLabTicketSessionLookup)},
     {0x1140060, {0x70,0x30,0xed,0x00,0x00}, reinterpret_cast<const void*>(&ObserveLabHostJoinGate), true},
+    {0xB86886, {0xe8,0x55,0x3d,0x17,0x00}, reinterpret_cast<const void*>(&ObserveLabHostEventRoute)},
+    {0xCA285B, {0xe8,0x20,0x7a,0xff,0xff}, reinterpret_cast<const void*>(&ObserveLabHostJoinEventType)},
     {0xB7D92F, {0xe8,0xac,0x5a,0x00,0x00}, reinterpret_cast<const void*>(&ObserveLabPlayerRequest)},
     {0xB834AB, {0xe8,0xc0,0x49,0xad,0xff}, reinterpret_cast<const void*>(&ObserveLabPlayerReason)},
     {0xB8359E, {0xe8,0xcd,0x48,0xad,0xff}, reinterpret_cast<const void*>(&ObserveLabPlayerReason)},
