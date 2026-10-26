@@ -23,6 +23,27 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
+### Pending second-PC startup diagnosis
+
+User installed the two-peer package but reports the generic LAN-start error,
+with no Windows firewall prompt. Read-only host inspection at 17:08 local on
+2026-10-26 confirmed the newly user-started test process PID 12084, service PID
+57196 listening on selected LAN TCP 9110/UDP 9111, and host Login/Register/Create/
+Update acknowledged. Only its own configuration HTTP request was logged.
+This does not determine whether PC 2 fails file verification, local-address bind
+or TCP access; no second-PC cause is established yet.
+
+A read-only diagnostic supplement is delivered as outputs/S7-LAN-Fehlerdiagnose.zip
+(two files). Extract beside Test-LAN-Verbindung.cmd on PC 2 and run
+LAN-Fehler-pruefen.cmd. It imports the installed launcher but does not change
+fingerprinted files, launch a game, write runtime/identity files or alter firewall
+settings. It names the failed stage, maps Windows socket errors and never echoes
+raw server configuration/exception payloads. Nine synthetic tests pass. An actual
+Windows test with a deliberately unassigned local address correctly stopped at
+Eigene Adresse with code 10049; that is NOT a diagnosis of the remote PC.
+User has been asked for its final FEHLER line; response pending. The existing
+installer ZIP and live game's content fingerprint remain unchanged.
+
 ### Current LAN transport candidate
 
 See `TWO-PEER-LAN-TRANSPORT.md`. Explicit paired IPv4 service/native/launcher
