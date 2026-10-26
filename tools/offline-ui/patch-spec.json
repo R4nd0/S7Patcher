@@ -75,6 +75,19 @@
           "reason": "Refresh create-button state from actual login on every update; keep NAT rules for quickmatch and join"
         }
       ]
+    },
+    {
+      "path": "Script/local/menu/panel/menu/play/campaign.lua",
+      "source_sha256": "34308d7524ebd4d6434ee2dda96e1eb03c03528e620a4e84f33383914a01632e",
+      "patched_sha256": "f29770b08c145adf2ef341548a2025f3aac999fdcaaa09cfbcce8ed72b47e600",
+      "edits": [
+        {
+          "offset": 26885,
+          "before_hex": "655b6e28333138295d5b6e28333139295d2829",
+          "after_utf8": "e[n(318)][n(319)](true)",
+          "reason": "Use native all-campaign-map enumeration without changing saved progress"
+        }
+      ]
     }
   ]
 }

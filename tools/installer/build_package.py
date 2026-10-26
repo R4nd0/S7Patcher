@@ -13,8 +13,8 @@ import compatibility as content
 from install import write_json, FORMAT
 
 PYTHON_SHA256 = '90905e64a840557d8c1bc4f5b74db3d7ee85e3ffb217611cac1c7813acea4159'
-ADAPTER_SHA256 = '60c69359d603987bceae54e7709e6a7b72a2c6c22e9a3f3e8d8e8fa8501043ac'
-ARCHIVE_SHA256 = 'ee8c44b0bf356abfff94cd8e65c18347cb60aff25d6e646a1ed2396fcab63c26'
+ADAPTER_SHA256 = '17d86b1ebfe670a838ff89dbdddd8e477ef1abc128001eb301268930c9c3ed09'
+ARCHIVE_SHA256 = 'ebee0ff593cdb9c38442d03875041f8c1825c0fc3e2414291098e08f3517ced5'
 
 
 def build(adapter, service, dotnet, python_zip, output):
@@ -64,6 +64,8 @@ def build(adapter, service, dotnet, python_zip, output):
         'Den eigenen S7-History-Installationsordner und einen neuen Testordner eingeben.\n'
         'Eine separate Kopie benoetigt etwa 7 GB freien Speicher. Das Original bleibt erhalten.\n'
         'Python und .NET sind enthalten; keine Systeminstallation oder Administratorrechte erforderlich.\n\n'
+        'Enthalten: Entwicklungsmodus, bekannte Zusatzinhalte, volle Kampagnenauswahl, maximal vier physische CPU-Kerne ohne SMT.\n'
+        'Kampagnenauswahl und CPU-Zuordnung sind im Spiel bestaetigt; weitere Belohnungen noch nicht vollstaendig geprueft.\n'
         'Diese Version bereitet lokale Tests vor. Beitritt und Hosting zwischen PCs sind noch nicht freigegeben.\n'
         'Das gleiche Paket ist fuer beide PCs vorgesehen. Lokale Spielerkennungen entstehen auf jedem PC neu.\n'
         'Nur dieses Paket weitergeben, niemals die vorbereitete Spielkopie oder LocalData.\n'

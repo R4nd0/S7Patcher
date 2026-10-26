@@ -9,6 +9,7 @@
 #include "offline_bootstrap.h"
 #include "runtime_config.h"
 #include "local_connect_policy.h"
+#include "cpu_affinity.h"
 
 #pragma comment(lib, "bcrypt.lib")
 #pragma comment(lib, "crypt32.lib")
@@ -123,6 +124,7 @@ struct Patch {
     unsigned char original[5];
     const void* replacement;
     bool pointer_slot = false;
+    unsigned char raw_length = 0;
 };
 
 struct NativeResult { int32_t code; uint32_t detail; };
@@ -374,10 +376,19 @@ NativeSmallString* __fastcall GetLocalSearchSandbox(void* self, void*, NativeSma
     if (!reported) { reported = true; ReportLocalStatus("local-session-search-sandbox-ready"); }
     return output;
 }
+// ED0300 returns a *locked* boolean for a known privilege descriptor. Both
+// callers retain their original lookup/existence checks and cdecl cleanup.
+bool __cdecl LocalContentLocked(const void*) { return false; }
+// Exact upstream HE_UBI default delta: file 13D9FC, 95 -> 94. Guard the whole
+// SETcc instruction, and keep the on-disk executable pristine for validation.
+const unsigned char DevelopmentModeBytes[] = {0x0f,0x94,0xc0};
 const Patch Patches[] = {
     {0xD3C62D, {0xe8,0x1e,0x6f,0x10,0x00}, reinterpret_cast<const void*>(&ConstructLocalFacade)},
     {0xD4A083, {0xe8,0xc8,0x94,0x0f,0x00}, reinterpret_cast<const void*>(&ConstructLocalFacade)},
-    {0xD49CFD, {0xe8,0x8e,0x9f,0x0f,0x00}, reinterpret_cast<const void*>(&LoginLocalFacade)}
+    {0xD49CFD, {0xe8,0x8e,0x9f,0x0f,0x00}, reinterpret_cast<const void*>(&LoginLocalFacade)},
+    {0xED02EE, {0xe8,0x0d,0x00,0x00,0x00}, reinterpret_cast<const void*>(&LocalContentLocked)},
+    {0xED05DF, {0xe8,0x1c,0xfd,0xff,0xff}, reinterpret_cast<const void*>(&LocalContentLocked)},
+    {0x53E5FB, {0x0f,0x95,0xc0}, DevelopmentModeBytes, false, 3}
 };
 // Explicit opt-in substitutes complete connect operations at known callers,
 // instead of making a UbiServices session-readiness predicate return true.
@@ -473,9 +484,10 @@ uint32_t OriginalPointer(const Patch& patch) {
 }
 
 bool WritePatch(const Patch& patch, bool restore) {
+    if (patch.raw_length > sizeof(patch.original) || (patch.raw_length && patch.pointer_slot)) return false;
     unsigned char* at = PatchAddress(patch);
     DWORD old_protection = 0;
-    const size_t length = patch.pointer_slot ? 4 : 5;
+    const size_t length = patch.pointer_slot ? 4 : (patch.raw_length ? patch.raw_length : 5);
     if (!VirtualProtect(at, length, patch.pointer_slot ? PAGE_READWRITE : PAGE_EXECUTE_READWRITE, &old_protection)) return false;
     unsigned char bytes[5] = {0xe8,0,0,0,0};
     uint32_t relative = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(patch.replacement)) -
@@ -484,7 +496,7 @@ bool WritePatch(const Patch& patch, bool restore) {
     if (patch.pointer_slot) {
         uint32_t value = restore ? OriginalPointer(patch) : static_cast<uint32_t>(reinterpret_cast<uintptr_t>(patch.replacement));
         memcpy(at, &value, sizeof(value));
-    } else memcpy(at, restore ? patch.original : bytes, sizeof(bytes));
+    } else memcpy(at, restore ? patch.original : (patch.raw_length ? patch.replacement : bytes), length);
     bool flushed = FlushInstructionCache(GetCurrentProcess(), at, length) != FALSE;
     DWORD ignored = 0;
     if (!VirtualProtect(at, length, old_protection, &ignored)) Stop(RollbackFailure);
@@ -498,7 +510,7 @@ bool Install() {
     for (const auto* patch : selected) {
         const bool matches = patch->pointer_slot
             ? *reinterpret_cast<uint32_t*>(PatchAddress(*patch)) == OriginalPointer(*patch)
-            : memcmp(PatchAddress(*patch), patch->original, 5) == 0;
+            : memcmp(PatchAddress(*patch), patch->original, patch->raw_length ? patch->raw_length : 5) == 0;
         if (!matches) {
             SetError(ChangedCallsite); return false;
         }
@@ -539,6 +551,8 @@ bool InitializeOfflineBootstrap(const OfflineBootstrapConfig& config) {
         SecureZeroMemory(local_ticket, sizeof(local_ticket));
         return false;
     }
+    if (!ApplyLocalCpuAffinity()) Stop(PatchFailure);
+    ReportLocalStatus("local-cpu-four-physical-cores-no-smt");
     InterlockedExchange(&initialization, 2);
     SetError(None);
     return true;

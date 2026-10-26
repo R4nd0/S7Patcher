@@ -29,9 +29,10 @@ try {
     Compile-Native @((Join-Path $nativeSource 'network_guard_tests.cpp'), '/Fe:network_guard_tests.exe', '/link','network_guard_test.lib','ws2_32.lib','winhttp.lib','shell32.lib')
     Compile-Native @((Join-Path $nativeSource 'adapter_rejection_test.cpp'), '/Fe:adapter_rejection_test.exe', '/link','ws2_32.lib')
     Compile-Native @((Join-Path $nativeSource 'local_connect_tests.cpp'), '/Fe:local_connect_tests.exe')
-    Compile-Native @((Join-Path $nativeSource 'bootstrap_patch_tests.cpp'), '/Fe:bootstrap_patch_tests.exe')
+    Compile-Native @((Join-Path $nativeSource 'cpu_affinity.cpp'), (Join-Path $nativeSource 'cpu_affinity_tests.cpp'), '/Fe:cpu_affinity_tests.exe')
+    Compile-Native @((Join-Path $nativeSource 'bootstrap_patch_tests.cpp'), (Join-Path $nativeSource 'cpu_affinity.cpp'), '/Fe:bootstrap_patch_tests.exe')
     Compile-Native @('/LD', (Join-Path $nativeSource 'local_platform.cpp'), (Join-Path $nativeSource 'network_guard.cpp'),
-        (Join-Path $nativeSource 'offline_bootstrap.cpp'), (Join-Path $nativeSource 'runtime_config.cpp'), '/Fe:uplay_r1_loader.dll',
+        (Join-Path $nativeSource 'offline_bootstrap.cpp'), (Join-Path $nativeSource 'runtime_config.cpp'), (Join-Path $nativeSource 'cpu_affinity.cpp'), '/Fe:uplay_r1_loader.dll',
         '/link', "/DEF:$(Join-Path $nativeSource 'local_platform.def')", 'ws2_32.lib','winhttp.lib','shell32.lib','bcrypt.lib','crypt32.lib',
         '/DYNAMICBASE','/NXCOMPAT')
 } finally { Pop-Location }

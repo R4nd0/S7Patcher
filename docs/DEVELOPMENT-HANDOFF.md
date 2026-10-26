@@ -23,6 +23,24 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
+### Content / four physical cores milestone
+
+The user also requested all unlocks and the upstream patches, including four
+cores without SMT. See `CONTENT-CPU-PATCHES.md` for the variant-specific audit.
+The guarded adapter now includes the exact upstream HE development-mode edit,
+two native content-lock call replacements and topology-aware process/thread
+affinity. Campaign selection uses the native full-list argument. All 284 archive
+entries verify, three Lua files parse, 392 adapter/CPU/state checks and 38 network
+checks pass, plus 21 original-byte guards and ten installer tests.
+
+After confirmed closure, both files were deployed with backup in
+`LocalData/Before-content-cpu`; no-game preflight passed. User confirmed campaign
+missions selectable. Exact test process PID 60344 (15:58:55 local) has affinity
+0x55 on the 8-core/16-thread Ryzen: four physical cores, one thread each. Local
+connection completed. Original EXE unchanged. Other reward paths, LAN and desync
+behavior are not established by these checks. Current package source is
+`work/installer-package-unlocks`; adapter/archive hashes are in the audit.
+
 ### Current user target: transferable installer, both host directions, sync validation
 
 The user explicitly wants a patch installer for a second Windows PC, with either

@@ -68,7 +68,7 @@ int main() {
     for (const auto& patch : ConnectPatches) selected.push_back(&patch);
     for (const auto* patch : selected) {
         auto* at = PatchAddress(*patch);
-        const size_t length = patch->pointer_slot ? 4 : 5;
+        const size_t length = patch->pointer_slot ? 4 : (patch->raw_length ? patch->raw_length : 5);
         at[-1] = 0xa5; at[length] = 0x5a;
         if (patch->pointer_slot) {
             uint32_t original = OriginalPointer(*patch); memcpy(at, &original, 4);
@@ -79,12 +79,13 @@ int main() {
     check(Install());
     for (const auto* patch : selected) {
         auto* at = PatchAddress(*patch);
-        const size_t length = patch->pointer_slot ? 4 : 5;
+        const size_t length = patch->pointer_slot ? 4 : (patch->raw_length ? patch->raw_length : 5);
         check(at[-1] == 0xa5 && at[length] == 0x5a);
         uint32_t actual = 0;
-        if (patch->pointer_slot) memcpy(&actual, at, 4);
+        if (patch->raw_length) check(memcmp(at, patch->replacement, length) == 0);
+        else if (patch->pointer_slot) memcpy(&actual, at, 4);
         else { check(at[0] == 0xe8); memcpy(&actual, at + 1, 4); actual += static_cast<uint32_t>(reinterpret_cast<uintptr_t>(at) + 5); }
-        check(actual == reinterpret_cast<uintptr_t>(patch->replacement));
+        if (!patch->raw_length) check(actual == reinterpret_cast<uintptr_t>(patch->replacement));
         MEMORY_BASIC_INFORMATION info{};
         check(VirtualQuery(at, &info, sizeof(info)) && info.Protect == PAGE_READONLY);
         check(WritePatch(*patch, true));
@@ -99,8 +100,9 @@ int main() {
     uint32_t bad = 0; memcpy(at, &bad, 4);
     DWORD ignored = 0; VirtualProtect(at, 4, old, &ignored);
     check(!Install() && error_code == ChangedCallsite);
-    for (const auto& patch : Patches) check(memcmp(PatchAddress(patch), patch.original, 5) == 0);
-    // Baseline mode ignores the opt-in table and keeps its original three hooks.
+    for (const auto& patch : Patches) check(memcmp(PatchAddress(patch), patch.original, patch.raw_length ? patch.raw_length : 5) == 0);
+    check(!LocalContentLocked(nullptr));
+    // Baseline mode ignores the opt-in connection table.
     local_connect_probe = false;
     check(Install());
     memcpy(&bad, at, 4); check(bad == 0);
