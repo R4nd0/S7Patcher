@@ -92,7 +92,33 @@ The real games created separate Profiles.xml and replay files there.
    fallback dispatches the same Echo phase 3 operation when that gate skips it;
    BAF5D0 retains its own real SDK initialization check. It changes no readiness
    flags or result. A guarded observer at C98023 prevents duplicate dispatch,
-   with owner/core revalidation after callbacks. The live result is pending.
+   with owner/core revalidation after callbacks. The fallback and dispatcher
+   C33020 both ran, but the real join still failed.
+10. Network+30 is 1, so ED3BA0 omits its CB90C0 phase 1/2 boundaries. The lab
+    pump now supplies those around the master tick when the policy selects
+    external boundaries and the core is enabled, with teardown checks after
+    each call. Both fixed delivery labels were observed. Joining still failed.
+11. The request result is specifically 2 (pending). Static RTTI resolves its
+    B64190/1087F1C event to player::inEvent::RequestJoin, not
+    session::inEvent::RequestJoin. Therefore the absence of C24050/D3F928 is
+    not sufficient evidence of an unprocessed queue: those are later stages.
+    The correct player handler B833E0, called at B7D92F, was observed entered
+    and pending. Its Peer Conflict, Pending Request, Invalid GUID and missing
+    player-data branches were not observed in that run.
+12. The normal player path constructs B643C0/108737C:
+    session::inEvent::RequestTicketSessionId. C0BC30 initializes it; Session
+    dispatch C0E809 invokes C25610. That function looks up an existing native
+    session; the failed lookup branch C256DA constructs an empty diagnostic
+    before producing an asynchronous failure. The current candidate observes
+    entry and this exact branch without reading the key, GUID or ticket.
+    Its live test is pending.
+
+Bounded external type/state inspection also found the main Echo implementation
+as the scheduler's only child, initialized state 3 on both slots. Its dispatcher
+is C0CD90; PlayerManager_Main dispatch is B7D570. The observed active task-loop
+counts were 1 on the host and 0 on the guest. These are observations, not proof
+that the guest needs a fabricated loop or readiness value. Inspect only known
+typed state/counters; do not read local peer/profile identities.
 
 Diagnostic wrappers emit only fixed port/direction/result/branch categories,
 preserving original return values, arguments and error slots. They inspect no
@@ -103,15 +129,15 @@ A short attempt using the physical LAN address triggered a Windows firewall
 prompt. It was not acted upon; those owned processes were stopped and the
 laboratory remained loopback-only.
 
-The next real test is the Echo fallback with distinct slot addresses, then the
-reverse direction after a successful join. Read fixed classifications and
+The next real test is the ticket-reference diagnostic with distinct addresses,
+then the reverse direction after a successful join. Read fixed classifications and
 subsequent RPCs. Do not guess a
 success state or suppress the native failure. Membership completion, host
 notification, match start and synchronization remain unverified.
 
 ## Verification
 
-Laboratory build: 500 bootstrap checks (including both exact hashes, per-byte
+Laboratory build: 633 bootstrap checks (including both exact hashes, per-byte
 digest mutation rejection, native ABI/result preservation, pump order,
 duplicate suppression, reentrancy and teardown); 69 network checks, including
 same-port distinct-address binding, UDP transfer and automatic source binding;

@@ -8,6 +8,22 @@ namespace {
 uintptr_t lab_join_arguments[6]{};
 int lab_join_code = 1;
 const char* lab_rejection_literal = nullptr;
+void* lab_dispatch_arguments[3]{};
+void* lab_echo_self = nullptr;
+unsigned int lab_echo_phase = 0;
+int lab_echo_timeout = 0;
+unsigned int lab_reason_length = 0;
+void* __fastcall FakePlayerReason(void* output, void*, const char* text, unsigned int length) {
+    lab_rejection_literal = text; lab_reason_length = length; SetLastError(6789); return output;
+}
+NativeResult* __fastcall FakeEchoDispatcher(void* self, void*, NativeResult* result, unsigned int phase, int timeout) {
+    lab_echo_self = self; lab_echo_phase = phase; lab_echo_timeout = timeout;
+    result->code = 2; result->detail = 654; SetLastError(6789); return result;
+}
+NativeResult* __fastcall FakeSessionDispatch(void* self, void*, NativeResult* result, void* event) {
+    lab_dispatch_arguments[0] = self; lab_dispatch_arguments[1] = result; lab_dispatch_arguments[2] = event;
+    result->code = lab_join_code; result->detail = 987; SetLastError(6789); return result;
+}
 void* __fastcall FakeLabDiagnosticCtor(void* output, void*, const char* text) {
     lab_rejection_literal = text; SetLastError(6789); return output;
 }
@@ -29,6 +45,14 @@ unsigned char* pump_network = nullptr;
 unsigned char* pump_owner = nullptr;
 int pump_mode = 0;
 #ifdef S7_LOCAL_PAIR_LAB
+NativeResult* __fastcall FakeCoreBoundary(void*, void*, NativeResult* result, unsigned int phase) {
+    pump_trace.push_back(phase == 1 ? 'P' : phase == 2 ? 'Q' : '!');
+    PumpOfflineBootstrap();
+    if (pump_mode == 16 && phase == 1) *Native<unsigned char**>(0x1379E14) = nullptr;
+    if (pump_mode == 17 && phase == 2) *reinterpret_cast<void**>(pump_network + 0x2c) = nullptr;
+    if (pump_mode == 18 && phase == 1) pump_network[0x30] = 0;
+    result->code = 1; result->detail = 0; return result;
+}
 NativeResult* __cdecl FakeEchoUpdate(NativeResult* result, unsigned int phase, int timeout) {
     pump_trace.push_back(phase == 3 && timeout == -1 ? 'E' : '!');
     if (pump_active) PumpOfflineBootstrap();
@@ -134,14 +158,45 @@ int main() {
     image_base = reinterpret_cast<uintptr_t>(memory);
 #ifdef S7_LOCAL_PAIR_LAB
     check(FakeJump(0xD49B10, reinterpret_cast<const void*>(&FakeLabJoinRequest)));
+    check(FakeJump(0xC33020, reinterpret_cast<const void*>(&FakeEchoDispatcher)));
+    {
+        unsigned char dispatcher[4]{}; NativeResult result{};
+        check(ObserveLabEchoDispatcher(dispatcher, nullptr, &result, 3, -1) == &result);
+        check(lab_echo_self == dispatcher && lab_echo_phase == 3 && lab_echo_timeout == -1);
+        check(result.code == 2 && result.detail == 654 && GetLastError() == 6789);
+    }
+    check(FakeJump(0xC24050, reinterpret_cast<const void*>(&FakeSessionDispatch)));
+    check(FakeJump(0xB833E0, reinterpret_cast<const void*>(&FakeSessionDispatch)));
+    check(FakeJump(0xC25610, reinterpret_cast<const void*>(&FakeSessionDispatch)));
+    for (int code : {1, 2, 0, -1000000, -999912}) {
+        NativeResult result{}; unsigned char manager[4]{}, event[4]{}; lab_join_code = code;
+        check(ObserveLabSessionDispatch(manager, nullptr, &result, event) == &result);
+        check(result.code == code && result.detail == 987 && GetLastError() == 6789);
+        check(lab_dispatch_arguments[0] == manager && lab_dispatch_arguments[1] == &result && lab_dispatch_arguments[2] == event);
+        check(ObserveLabPlayerRequest(manager, nullptr, &result, event) == &result);
+        check(result.code == code && result.detail == 987 && GetLastError() == 6789);
+        check(lab_dispatch_arguments[0] == manager && lab_dispatch_arguments[1] == &result && lab_dispatch_arguments[2] == event);
+        check(ObserveLabTicketRequest(manager, nullptr, &result, event) == &result);
+        check(result.code == code && result.detail == 987 && GetLastError() == 6789);
+        check(lab_dispatch_arguments[0] == manager && lab_dispatch_arguments[1] == &result && lab_dispatch_arguments[2] == event);
+    }
+    lab_join_code = 1;
     check(FakeJump(0x6576D0, reinterpret_cast<const void*>(&FakeLabDiagnosticCtor)));
-    for (uintptr_t literal : {0x108DAD0u, 0x108DB10u, 0x108DC4Cu, 0x108DC78u, 0x108DCA4u, 0x108DCDCu, 0x108DD04u}) {
+    check(FakeJump(0x657E70, reinterpret_cast<const void*>(&FakePlayerReason)));
+    for (uintptr_t literal : {0x10888D8u, 0x10888E8u, 0x10888C8u}) {
+        unsigned char output[32]{}; const char* text = Native<const char*>(literal);
+        check(ObserveLabPlayerReason(output, nullptr, text, 13) == output);
+        check(lab_rejection_literal == text && lab_reason_length == 13 && GetLastError() == 6789 && output[0] == 0);
+        check(ObserveLabTicketReferenceMissing(output, nullptr, text, 0) == output);
+        check(lab_rejection_literal == text && lab_reason_length == 0 && GetLastError() == 6789 && output[0] == 0);
+    }
+    for (uintptr_t literal : {0x108DAD0u, 0x108DB10u, 0x108DC4Cu, 0x108DC78u, 0x108DCA4u, 0x108DCDCu, 0x108DD04u, 0x10888F8u}) {
         unsigned char owned_output[32]{};
         auto* text = Native<const char*>(literal);
         check(ObserveLabSessionRejection(owned_output, nullptr, text) == owned_output
             && lab_rejection_literal == text && owned_output[0] == 0 && GetLastError() == 6789);
     }
-    for (int result_code : {1, 0, -1000000, -999985, -999977, -999920, -123}) {
+    for (int result_code : {1, 2, 0, -1000000, -999985, -999977, -999920, -123}) {
         lab_join_code = result_code; NativeResult result{};
         check(ObserveLabJoinRequest(&result, reinterpret_cast<void*>(11), reinterpret_cast<void*>(22),
             reinterpret_cast<void*>(33), reinterpret_cast<void*>(44), reinterpret_cast<void*>(55), 66) == &result);
@@ -468,6 +523,19 @@ int main() {
     PumpOfflineBootstrap(); check(trace_is("MCJO"));
     network[0x5c + 0x4c7] = 0;
     *reinterpret_cast<unsigned int*>(network + 0x5c + 0x400) = 1;
+    check(FakeJump(0xCB90C0, reinterpret_cast<const void*>(&FakeCoreBoundary)));
+    for (int mode : {0, 16, 17, 18}) {
+        *Native<unsigned char**>(0x1379E14) = network;
+        *reinterpret_cast<void**>(network + 0x2c) = core;
+        network[0x30] = 1; network[0x5c + 0x4c7] = 1;
+        pump_mode = mode; pump_trace.clear();
+        PumpOfflineBootstrap();
+        check(trace_is(mode == 0 ? "PMQCEJO" : mode == 16 ? "P" : mode == 17 ? "PMQ" : "PMCEJO"));
+        check(!pump_active && !natural_updates_seen);
+    }
+    *Native<unsigned char**>(0x1379E14) = network;
+    *reinterpret_cast<void**>(network + 0x2c) = core;
+    network[0x30] = 0; network[0x5c + 0x4c7] = 0;
     pump_mode = 0; pump_trace.clear();
     UpdateLocalJoinWait(network, nullptr); check(trace_is("MCJO") && !pump_active);
     pump_mode = 11; pump_trace.clear();

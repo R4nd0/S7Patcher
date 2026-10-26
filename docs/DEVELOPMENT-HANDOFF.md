@@ -24,7 +24,31 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
-### Current: two-client laboratory; Echo dispatch candidate under test
+### Current: two-client laboratory; player join precedes ticket/session join
+
+All three pump experiments (manager, blocking wait, Echo fallback) ran in the
+real games but joining still fails. Added CB90C0 phase 1/2 boundaries for the
+external-frame policy; both delivery labels are live-observed, still no join.
+C33020 dispatch is active, and the queued join's immediate result is 2.
+
+Important correction: B64190/1087F1C is player::inEvent::RequestJoin. The
+previous C24050/D3F928 diagnostics observe later session work; their absence
+does not establish an idle command queue. The actual player handler B833E0
+(B7D92F caller) was observed entered and pending, with none of the four
+instrumented conflict/invalid-data branches. It normally constructs B643C0,
+which static RTTI identifies as RequestTicketSessionId, not RequestJoin.
+
+Current adapter: work/native-pair-ticket. Both private manifests select it;
+both games are started and authenticated. Added C0E809 -> C25610 ticket entry
+and the C256DA failed native-session-lookup branch as fixed observations.
+No lookup key, local identity or ticket is inspected. The user has been asked
+to host/join once with this candidate and leave both games open; result pending.
+Service remains work/server-pair-catalogue-route, unchanged in this milestone.
+633 lab bootstrap checks and 69 network checks pass. Normal native behavior
+is isolated by S7_LOCAL_PAIR_LAB. No successful join or match is established.
+Details and exact observations: LOCAL-PAIR-LAB.md.
+
+### Previous: catalogue projection and Echo dispatch candidate
 
 The user now asks the agent to launch both instances while they click host/join.
 The lab catalogue route projection was missing: after applying the same
@@ -40,7 +64,7 @@ four children on both clients. C97FE0 skips BAF5D0 Echo dispatch in that state.
 The current lab-only candidate supplies that phase 3 dispatch when skipped,
 retaining its native SDK initialization checks and readiness values. A guarded
 observer prevents duplicate calls; ownership is revalidated after callbacks.
-Its live result is pending. See LOCAL-PAIR-LAB.md for ABI, tests and details.
+Its live result was another Sitzungsfehler (0); see the current step above.
 
 Current lab build: work/native-pair-echo; service remains
 work/server-pair-catalogue-route. Both private lab manifests select this adapter.

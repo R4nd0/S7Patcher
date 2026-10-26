@@ -391,6 +391,76 @@ NativeSmallString* __fastcall GetLocalSearchSandbox(void* self, void*, NativeSma
     return output;
 }
 #ifdef S7_LOCAL_PAIR_LAB
+NativeResult* __fastcall ObserveLabEchoDispatcher(void* self, void*, NativeResult* result, unsigned int phase, int timeout) {
+    static bool entered = false;
+    const DWORD incoming_error = GetLastError();
+    if (!entered) { entered = true; ReportLocalStatus("lab-native-echo-dispatcher-entered"); }
+    SetLastError(incoming_error);
+    using Original = NativeResult* (__thiscall*)(void*, NativeResult*, unsigned int, int);
+    return Native<Original>(0xC33020)(self, result, phase, timeout);
+}
+NativeResult* __fastcall ObserveLabSessionDispatch(void* self, void*, NativeResult* result, void* event) {
+    const DWORD incoming_error = GetLastError();
+    ReportLocalStatus("lab-native-session-request-dispatched");
+    SetLastError(incoming_error);
+    using Original = NativeResult* (__thiscall*)(void*, NativeResult*, void*);
+    auto* returned = Native<Original>(0xC24050)(self, result, event);
+    const DWORD error = GetLastError();
+    ReportLocalStatus(returned != result || !result ? "lab-native-session-dispatch-result-unavailable"
+        : result->code > 0 ? "lab-native-session-dispatch-accepted"
+        : result->code == 0 ? "lab-native-session-dispatch-zero" : "lab-native-session-dispatch-failed");
+    SetLastError(error); return returned;
+}
+NativeResult* __fastcall ObserveLabPlayerRequest(void* self, void*, NativeResult* result, void* event) {
+    const DWORD incoming_error = GetLastError();
+    ReportLocalStatus("lab-native-player-request-entered"); SetLastError(incoming_error);
+    using Original = NativeResult* (__thiscall*)(void*, NativeResult*, void*);
+    auto* returned = Native<Original>(0xB833E0)(self, result, event);
+    const DWORD error = GetLastError();
+    ReportLocalStatus(returned != result || !result ? "lab-native-player-result-unavailable"
+        : result->code == 2 ? "lab-native-player-request-pending"
+        : result->code > 0 ? "lab-native-player-request-immediate" : "lab-native-player-request-failed");
+    SetLastError(error); return returned;
+}
+NativeResult* __fastcall ObserveLabTicketRequest(void* self, void*, NativeResult* result, void* event) {
+    const DWORD incoming_error = GetLastError();
+    ReportLocalStatus("lab-native-ticket-request-entered"); SetLastError(incoming_error);
+    using Original = NativeResult* (__thiscall*)(void*, NativeResult*, void*);
+    auto* returned = Native<Original>(0xC25610)(self, result, event);
+    const DWORD error = GetLastError();
+    ReportLocalStatus(returned == result && result && result->code == 2
+        ? "lab-native-ticket-request-pending" : "lab-native-ticket-request-returned");
+    SetLastError(error); return returned;
+}
+void* __fastcall ObserveLabTicketReferenceMissing(void* output, void*, const char* text, unsigned int length) {
+    using Original = void* (__thiscall*)(void*, const char*, unsigned int);
+    auto* returned = Native<Original>(0x657E70)(output, text, length);
+    const DWORD error = GetLastError();
+    // This callsite is reachable only after the original session lookup fails.
+    // Observe that native branch, never the lookup key or any ticket content.
+    ReportLocalStatus("lab-native-ticket-session-reference-missing");
+    SetLastError(error); return returned;
+}
+void* __fastcall ObserveLabPlayerReason(void* output, void*, const char* text, unsigned int length) {
+    using Original = void* (__thiscall*)(void*, const char*, unsigned int);
+    auto* returned = Native<Original>(0x657E70)(output, text, length);
+    const DWORD error = GetLastError();
+    ReportLocalStatus(text == Native<const char*>(0x10888D8) ? "lab-native-player-peer-conflict"
+        : text == Native<const char*>(0x10888E8) ? "lab-native-player-pending-conflict"
+        : text == Native<const char*>(0x10888C8) ? "lab-native-player-invalid-guid" : "lab-native-player-reason-other");
+    SetLastError(error); return returned;
+}
+void LabCoreBoundary(void* core, unsigned int phase) {
+    using Original = NativeResult* (__thiscall*)(void*, NativeResult*, unsigned int);
+    NativeResult result{};
+    Native<Original>(0xCB90C0)(core, &result, phase);
+    static bool begin_reported = false, end_reported = false;
+    bool& reported = phase == 1 ? begin_reported : end_reported;
+    if (!reported) {
+        reported = true;
+        ReportLocalStatus(phase == 1 ? "lab-native-core-begin-delivered" : "lab-native-core-end-delivered");
+    }
+}
 NativeResult* __cdecl UpdateLabEcho(NativeResult* result, unsigned int phase, int timeout) {
     if (GetCurrentThreadId() == bootstrap_thread) ++echo_update_count;
     using Original = NativeResult* (__cdecl*)(NativeResult*, unsigned int, int);
@@ -435,6 +505,7 @@ void* __fastcall ObserveLabSessionRejection(void* output, void*, const char* tex
     if (text == Native<const char*>(0x108DCA4)) label = "lab-native-session-self-join-rejected";
     if (text == Native<const char*>(0x108DCDC)) label = "lab-native-session-empty-peer-rejected";
     if (text == Native<const char*>(0x108DD04)) label = "lab-native-session-host-descriptor-rejected";
+    if (text == Native<const char*>(0x10888F8)) label = "lab-native-player-data-missing";
     using Original = void* (__thiscall*)(void*, const char*);
     auto* returned = Native<Original>(0x6576D0)(output, text);
     DWORD error = GetLastError(); ReportLocalStatus(label); SetLastError(error);
@@ -470,7 +541,11 @@ NativeResult* __stdcall ObserveLabJoinRequest(NativeResult* result, void* peer, 
     const DWORD error = GetLastError();
     const char* label = "lab-native-join-result-unavailable";
     if (result && returned == result) {
-        if (result->code > 0) label = "lab-native-join-request-accepted";
+        if (result->code > 0) {
+            label = "lab-native-join-request-accepted";
+            ReportLocalStatus(result->code == 2 ? "lab-native-join-request-pending"
+                : result->code == 1 ? "lab-native-join-request-immediate" : "lab-native-join-request-positive-other");
+        }
         else switch (result->code) {
         case 0: label = "lab-native-join-result-zero"; break;
         case -1000000: label = "lab-native-join-request-failed"; break;
@@ -525,6 +600,15 @@ const Patch ConnectPatches[] = {
     {0xED673B, {0xe8,0x30,0x0b,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalSessionJoin)},
     {0xC8DCC5, {0xe8,0x86,0x62,0x0b,0x00}, reinterpret_cast<const void*>(&GetLocalSearchSandbox)},
 #ifdef S7_LOCAL_PAIR_LAB
+    {0xC0E809, {0xe8,0x02,0x6e,0x01,0x00}, reinterpret_cast<const void*>(&ObserveLabTicketRequest)},
+    {0xC256DA, {0xe8,0x91,0x27,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketReferenceMissing)},
+    {0xB7D92F, {0xe8,0xac,0x5a,0x00,0x00}, reinterpret_cast<const void*>(&ObserveLabPlayerRequest)},
+    {0xB834AB, {0xe8,0xc0,0x49,0xad,0xff}, reinterpret_cast<const void*>(&ObserveLabPlayerReason)},
+    {0xB8359E, {0xe8,0xcd,0x48,0xad,0xff}, reinterpret_cast<const void*>(&ObserveLabPlayerReason)},
+    {0xB839E1, {0xe8,0x8a,0x44,0xad,0xff}, reinterpret_cast<const void*>(&ObserveLabPlayerReason)},
+    {0xB8377D, {0xe8,0x4e,0x3f,0xad,0xff}, reinterpret_cast<const void*>(&ObserveLabSessionRejection)},
+    {0xBAF5F8, {0xe8,0x23,0x3a,0x08,0x00}, reinterpret_cast<const void*>(&ObserveLabEchoDispatcher)},
+    {0xC0E931, {0xe8,0x1a,0x57,0x01,0x00}, reinterpret_cast<const void*>(&ObserveLabSessionDispatch)},
     {0xC98023, {0xe8,0xa8,0x75,0xf1,0xff}, reinterpret_cast<const void*>(&UpdateLabEcho)},
     {0xED68C4, {0xe8,0xd7,0xd2,0xff,0xff}, reinterpret_cast<const void*>(&UpdateLocalJoinWait)},
     {0x1093638, {0x80,0x63,0xca,0x00,0x00}, reinterpret_cast<const void*>(&UpdateLabManager), true},
@@ -738,6 +822,14 @@ void PumpOfflineBootstrap() {
         auto* manager = LocalLabManager(network);
         const unsigned int manager_before = manager_update_count;
         const unsigned int echo_before = echo_update_count;
+        // ED3BA0 omits CB90C0 phase 1/2 when Network+30 selects external
+        // frame boundaries. Supply those boundaries around the master update
+        // in the local bridge; never alter that policy or native result flags.
+        const bool supply_boundaries = network[0x30] && network[0x5c + 0x4c7];
+        if (supply_boundaries) {
+            LabCoreBoundary(core, 1);
+            if (LocalUpdateOwner(network) != owner || LocalUpdateCore(network) != core) return;
+        }
 #endif
         static bool core_reported = false;
         if (!core_reported) { core_reported = true; ReportLocalStatus("local-network-core-pump-active"); }
@@ -747,6 +839,12 @@ void PumpOfflineBootstrap() {
         Native<GameLogin>(0xED3BA0)(network);
         // The master update may destroy or replace native objects in callbacks.
         if (LocalUpdateOwner(network) != owner || LocalUpdateCore(network) != core) return;
+#ifdef S7_LOCAL_PAIR_LAB
+        if (supply_boundaries && network[0x30] && network[0x5c + 0x4c7]) {
+            LabCoreBoundary(core, 2);
+            if (LocalUpdateOwner(network) != owner || LocalUpdateCore(network) != core) return;
+        }
+#endif
         using CoreUpdate = NativeResult* (__thiscall*)(void*, NativeResult*, unsigned int);
         NativeResult result{};
         Native<CoreUpdate>(0xCBC710)(core, &result, 3);
