@@ -23,6 +23,24 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
+### Real catalogue candidate (not yet selected by the game launcher)
+
+`--local-catalogue-probe` enables public other-owner searches and GetSession
+against live registry entries. Default mode and the display-only probe remain
+separate. Search excludes self, applies space/limit and exact typed filters;
+search_score is explicitly a ranking hint under this local policy. Missing or
+true private metadata is hidden. GetSession requires the two versioned classes,
+space and live ID and returns one native-layout record. No join is implemented.
+The shared bounded writer preserves actual creation station URLs and member
+metadata. Route ownership still needs validation before LAN game admission.
+
+4,577 service checks passed, including encrypted independent participants in
+both host directions, acknowledged search/Get replies, non-owner update
+rejection and disappearance after owner leave. These are synthetic peers, not
+Windows game clients. Candidate build: work/server-live-catalogue. Existing
+launchers still select Server-Session-Leave. The confirmed campaign/CPU package
+is outputs/S7-Patch-Installer-Freischaltungen.zip (local preview, no LAN).
+
 ### Content / four physical cores milestone
 
 The user also requested all unlocks and the upstream patches, including four

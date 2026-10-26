@@ -540,6 +540,44 @@ internal static class LocalLoginSessionChecks
             Check(!registry.TryCopyDisplaySnapshot(fixture.Session, out _), "Transport teardown retained preview");
             CryptographicOperations.ZeroMemory(expected);
         }
+        // Two independently encrypted peers, in both host directions. This tests
+        // discovery/Get, not game membership, P2P gameplay or LAN routing.
+        for (int direction = 0; direction < 2; direction++)
+        {
+            using LocalSessionRegistry registry = new(catalogueProbe: true);
+            using Fixture first = new(keepAlive: true, sessions: registry);
+            using Fixture second = new(keepAlive: true, sessions: registry);
+            var host = direction == 0 ? first : second;
+            var visitor = direction == 0 ? second : first;
+            host.Register(); visitor.Register();
+            host.Session.ProcessData(host.Data(8, 0, LocalSessionCreationChecks.Request(body: LocalSessionCatalogueChecks.PublicBody())), host.Events.Add);
+            host.Session.TakeDue(200, host.Events.Add);
+            Check(registry.Count == 1 && host.Session.TryAcknowledge(Ack(ServerCookie, 3)), "Catalogue host create");
+            byte[] search = LocalSessionDisplayChecks.Search();
+            Check(LocalSessionCatalogueCodec.TrySearch(search, registry, visitor.Session, out var expected, out _), "Catalogue expected snapshot");
+            visitor.Session.ProcessData(visitor.Data(8, 0, search), visitor.Events.Add);
+            byte[] packet = visitor.Session.TakeDue(300, visitor.Events.Add).Single();
+            VerifySearchResponse(packet, visitor.Key, 0x12345678, visitor.ServerSession, expected); passed++;
+            Check(visitor.Session.TryAcknowledge(Ack(ServerCookie, 3)) && packet.All(b => b == 0), "Catalogue ACK cleanup");
+            CryptographicOperations.ZeroMemory(expected);
+            byte[] get = LocalSessionCatalogueChecks.Get();
+            Check(LocalSessionCatalogueCodec.TryGet(get, registry, visitor.Session, out expected, out _), "Get expected snapshot");
+            visitor.Session.ProcessData(visitor.Data(9, 0, get), visitor.Events.Add);
+            packet = visitor.Session.TakeDue(400, visitor.Events.Add).Single();
+            VerifySearchResponse(packet, visitor.Key, 0x12345678, visitor.ServerSession, expected); passed++;
+            Check(visitor.Session.TryAcknowledge(Ack(ServerCookie, 4)) && packet.All(b => b == 0), "Get ACK cleanup");
+            Check(visitor.Events.Any(e => e.Event == "local-session-get-response-queued"), "Get event missing");
+            CryptographicOperations.ZeroMemory(expected);
+            visitor.Session.ProcessData(visitor.Data(10, 0, LocalSessionUpdateChecks.Request()), visitor.Events.Add);
+            Check(visitor.Session.TakeDue(500, visitor.Events.Add).Count == 0 && registry.Count == 1, "Visitor changed host record");
+            host.Session.ProcessData(host.Data(9, 0, LocalSessionLeaveChecks.Request()), host.Events.Add);
+            host.Session.TakeDue(600, host.Events.Add);
+            Check(host.Session.TryAcknowledge(Ack(ServerCookie, 4)) && registry.Count == 0, "Host leave failed");
+            visitor.Session.ProcessData(visitor.Data(11, 0, search), visitor.Events.Add);
+            packet = visitor.Session.TakeDue(700, visitor.Events.Add).Single();
+            VerifySearchResponse(packet, visitor.Key, 0x12345678, visitor.ServerSession); passed++;
+            Check(visitor.Session.TryAcknowledge(Ack(ServerCookie, 5)), "Empty-after-leave ACK failed");
+        }
         foreach (bool keepAlive in new[] { false, true })
         {
             using LocalSessionRegistry registry = new();

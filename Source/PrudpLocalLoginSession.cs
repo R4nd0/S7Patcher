@@ -138,7 +138,9 @@ namespace S7Patcher.Source
                             : LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-update-session-v1"
                                 ? "local-session-update-response-queued"
                                 : LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-leave-session-v1"
-                                    ? "local-session-leave-response-queued" : "local-session-search-response-queued", Reason = reason,
+                                    ? "local-session-leave-response-queued"
+                                    : LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-get-session-v1"
+                                        ? "local-session-get-response-queued" : "local-session-search-response-queued", Reason = reason,
                         AuthenticationImplemented = false, UdpProtocolImplemented = false });
                 }
                 finally
@@ -162,12 +164,16 @@ namespace S7Patcher.Source
                 return LocalSessionUpdateCodec.TryReply(message, sessions, this, out response, out reason);
             if (operation == "matchmaking-leave-session-v1")
                 return LocalSessionLeaveCodec.TryReply(message, sessions, this, out response, out reason);
+            if (sessions.CatalogueProbe && operation == "matchmaking-get-session-v1")
+                return LocalSessionCatalogueCodec.TryGet(message, sessions, this, out response, out reason);
             if (operation != "matchmaking-search-sessions-v1")
             {
                 response = null;
                 reason = "unsupported-session-operation";
                 return false;
             }
+            if (sessions.CatalogueProbe)
+                return LocalSessionCatalogueCodec.TrySearch(message, sessions, this, out response, out reason);
             if (sessions.DisplayProbe)
                 return LocalSessionDisplayCodec.TryReply(message, sessions, this, out response, out reason);
             // Until a live catalogue is implemented, never claim

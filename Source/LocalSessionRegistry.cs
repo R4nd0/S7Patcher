@@ -12,10 +12,40 @@ namespace S7Patcher.Source
         private readonly List<Entry> entries = new();
         private readonly Dictionary<object, DisplaySnapshot> previews = new(ReferenceEqualityComparer.Instance);
         internal bool DisplayProbe { get; }
-        internal LocalSessionRegistry(bool displayProbe = false) { DisplayProbe = displayProbe; }
+        internal bool CatalogueProbe { get; }
+        internal LocalSessionRegistry(bool displayProbe = false, bool catalogueProbe = false)
+        {
+            if (displayProbe && catalogueProbe) throw new ArgumentException("Choose one catalogue mode.");
+            DisplayProbe = displayProbe; CatalogueProbe = catalogueProbe;
+        }
         private uint nextId = 1;
         private bool closed;
         internal int Count => entries.Count;
+
+        // Owned copies of real live records, never the retired display preview.
+        // The transport must require completed registration before calling this.
+        internal List<DisplaySnapshot> CopyCatalogue(object requester, ReadOnlySpan<byte> space)
+        {
+            List<DisplaySnapshot> result = new();
+            if (closed || requester == null) return result;
+            foreach (Entry entry in entries)
+                if (!ReferenceEquals(entry.Owner, requester) && space.SequenceEqual(entry.Space))
+                    result.Add(new(entry.Id, entry.Space, entry.Metadata.Clone(), entry.Host.Clone()));
+            return result;
+        }
+
+        internal bool TryCopyLiveSession(object requester, ReadOnlySpan<byte> space, uint id, out DisplaySnapshot snapshot)
+        {
+            snapshot = null;
+            if (closed || requester == null) return false;
+            foreach (Entry entry in entries)
+                if (entry.Id == id && space.SequenceEqual(entry.Space))
+                {
+                    snapshot = new(entry.Id, entry.Space, entry.Metadata.Clone(), entry.Host.Clone());
+                    return true;
+                }
+            return false;
+        }
 
         internal bool TryCreate(object owner, LocalLoginRpcEngine registration, ReadOnlySpan<byte> body, out uint id, out string reason)
         {
@@ -153,8 +183,8 @@ namespace S7Patcher.Source
             return true;
         }
 
-        // NOT a live session. Same-owner, explicitly enabled display experiment.
-        // Leave still removes the real record; this copy cannot be joined/updated.
+        // Owned immutable projection, not a mutable registry entry. Previews and
+        // live lookups are separate; retired previews cannot be fetched by ID.
         internal sealed class DisplaySnapshot(uint id, ReadOnlySpan<byte> space, LocalSessionMetadata metadata,
             LocalLoginRpcEngine.RegisteredPeer host) : IDisposable
         {

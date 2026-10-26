@@ -22,6 +22,7 @@
     <Compile Include="../../Source/LoginRpcCodec.cs" Link="LoginRpcCodec.cs" />
     <Compile Include="../../Source/LocalSessionSearchCodec.cs" Link="LocalSessionSearchCodec.cs" />
     <Compile Include="../../Source/LocalSessionDisplayCodec.cs" Link="LocalSessionDisplayCodec.cs" />
+    <Compile Include="../../Source/LocalSessionCatalogueCodec.cs" Link="LocalSessionCatalogueCodec.cs" />
     <Compile Include="../../Source/LocalSessionCreationCodec.cs" Link="LocalSessionCreationCodec.cs" />
     <Compile Include="../../Source/LocalSessionRegistry.cs" Link="LocalSessionRegistry.cs" />
     <Compile Include="../../Source/LocalSessionMetadata.cs" Link="LocalSessionMetadata.cs" />

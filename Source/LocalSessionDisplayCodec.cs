@@ -53,10 +53,7 @@ namespace S7Patcher.Source
         {
             response = null; reason = "display-probe-missing-native-attributes";
             var metadata = snapshot.Metadata;
-            if (!Has(metadata, "echo_session_guid", 4) || !Has(metadata, "session_descriptor_type", 6)
-                || !Has(metadata, "settlers_session_name", 4) || !Has(metadata, "settlers_map_name", 4)
-                || !HasInteger(metadata, "settlers_max_slots") || !HasInteger(metadata, "settlers_free_slots")
-                || !HasInteger(metadata, "settlers_extra_version_number")) return false;
+            if (!HasNativeAttributes(metadata)) return false;
             reason = "display-probe-missing-game-route";
             if (metadata.Creation == null || metadata.Creation.StationUrls.IsEmpty) return false;
             using Writer writer = new();
@@ -64,6 +61,23 @@ namespace S7Patcher.Source
             writer.Bytes([0, 1]); writer.Bytes(request.Slice(27, 4));
             writer.Text("MatchmakingProtocol::SearchSessions_V1*"u8);
             writer.U32(1); // Exactly one diagnostic session, independent of requested limit > 0.
+            WriteSession(writer, snapshot, Title);
+            writer.U32(1); writer.U32(snapshot.Id); writer.Text(metadata.Creation.StationUrls);
+            reason = "display-probe-response-too-large";
+            if (!writer.Finish(out response)) return false;
+            reason = "local-session-display-probe-response-created";
+            return true;
+        }
+
+        internal static bool HasNativeAttributes(LocalSessionMetadata metadata) =>
+            Has(metadata, "echo_session_guid", 4) && Has(metadata, "session_descriptor_type", 6)
+            && Has(metadata, "settlers_session_name", 4) && Has(metadata, "settlers_map_name", 4)
+            && HasInteger(metadata, "settlers_max_slots") && HasInteger(metadata, "settlers_free_slots")
+            && HasInteger(metadata, "settlers_extra_version_number");
+
+        internal static void WriteSession(Writer writer, LocalSessionRegistry.DisplaySnapshot snapshot, string title = null)
+        {
+            var metadata = snapshot.Metadata;
             writer.U32(snapshot.Id);
             // Known native constructor defaults (E4D5B0, 4C7B10). Local DISPLAY
             // policy only: these are not inferred Ubisoft server field meanings.
@@ -74,8 +88,8 @@ namespace S7Patcher.Source
             foreach (var pair in metadata.Attributes)
             {
                 writer.Text(Convert.FromHexString(pair.Key));
-                if (pair.Key == Key("settlers_session_name"))
-                { writer.Bytes([4]); writer.Text(Encoding.ASCII.GetBytes(Title)); }
+                if (title != null && pair.Key == Key("settlers_session_name"))
+                { writer.Bytes([4]); writer.Text(Encoding.ASCII.GetBytes(title)); }
                 else writer.Bytes(pair.Value);
             }
             writer.U32((uint)metadata.Members.Count);
@@ -85,18 +99,13 @@ namespace S7Patcher.Source
                 foreach (var pair in group.Value)
                 { writer.Bytes(Convert.FromHexString(pair.Key)); writer.Bytes(pair.Value); }
             }
-            writer.U32(1); writer.U32(snapshot.Id); writer.Text(metadata.Creation.StationUrls);
-            reason = "display-probe-response-too-large";
-            if (!writer.Finish(out response)) return false;
-            reason = "local-session-display-probe-response-created";
-            return true;
         }
 
         private static bool Has(LocalSessionMetadata metadata, string key, byte tag) =>
             metadata.Attributes.TryGetValue(Key(key), out var value) && value.Length > 0 && value[0] == tag;
         private static bool HasInteger(LocalSessionMetadata metadata, string key) => Has(metadata, key, 1) || Has(metadata, key, 6);
 
-        private sealed class Writer : IDisposable
+        internal sealed class Writer : IDisposable
         {
             private readonly byte[] bytes = new byte[ReliableResponseQueue.MaximumResponseLength];
             private int position;

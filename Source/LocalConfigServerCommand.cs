@@ -31,7 +31,7 @@ namespace S7Patcher.Source
             if (!TryParse(args, out LocalConfigServerOptions options))
             {
                 Emit(new() { Event = "configuration-server-error", Reason = "invalid-arguments",
-                    Message = "Usage: S7Patcher --local-config-server [--http-port 0..65535] [--udp-port 0..65535] [--seconds 1..86400] [--handshake-metadata] [--syn-probe] [--connect-probe] [--data-ack-probe] [--data-crypto-probe] [--local-login-probe] [--local-keepalive-probe] [--local-session-display-probe]" });
+                    Message = "Usage: S7Patcher --local-config-server [--http-port 0..65535] [--udp-port 0..65535] [--seconds 1..86400] [--handshake-metadata] [--syn-probe] [--connect-probe] [--data-ack-probe] [--data-crypto-probe] [--local-login-probe] [--local-keepalive-probe] [--local-session-display-probe] [--local-catalogue-probe]" });
                 exitCode = 2;
                 return true;
             }
@@ -92,11 +92,12 @@ namespace S7Patcher.Source
                     options.HandshakeMetadata = true;
                     continue;
                 }
-                if (name is "--data-crypto-probe" or "--local-login-probe" or "--local-keepalive-probe" or "--local-session-display-probe")
+                if (name is "--data-crypto-probe" or "--local-login-probe" or "--local-keepalive-probe" or "--local-session-display-probe" or "--local-catalogue-probe")
                 {
                     if (name != "--data-crypto-probe") options.LocalLoginProbe = true;
-                    if (name is "--local-keepalive-probe" or "--local-session-display-probe") options.LocalKeepAliveProbe = true;
+                    if (name is "--local-keepalive-probe" or "--local-session-display-probe" or "--local-catalogue-probe") options.LocalKeepAliveProbe = true;
                     if (name == "--local-session-display-probe") options.LocalSessionDisplayProbe = true;
+                    if (name == "--local-catalogue-probe") options.LocalCatalogueProbe = true;
                     options.DataCryptoProbe = true;
                     options.DataAckProbe = true;
                     options.ConnectProbe = true;
@@ -114,7 +115,7 @@ namespace S7Patcher.Source
                     default: return false;
                 }
             }
-            return true;
+            return !(options.LocalSessionDisplayProbe && options.LocalCatalogueProbe);
         }
     }
 
@@ -131,6 +132,7 @@ namespace S7Patcher.Source
         public bool LocalLoginProbe { get; set; }
         public bool LocalKeepAliveProbe { get; set; }
         public bool LocalSessionDisplayProbe { get; set; }
+        public bool LocalCatalogueProbe { get; set; }
     }
 
     internal static class LocalConfigurationServer
@@ -142,7 +144,7 @@ namespace S7Patcher.Source
 
         internal static async Task RunAsync(LocalConfigServerOptions options, Action<ConfigServerEvent> emit, CancellationToken cancellation)
         {
-            if (options.LocalSessionDisplayProbe) options.LocalKeepAliveProbe = true;
+            if (options.LocalSessionDisplayProbe || options.LocalCatalogueProbe) options.LocalKeepAliveProbe = true;
             if (options.LocalKeepAliveProbe) options.LocalLoginProbe = true;
             bool dataAckProbe = options.DataAckProbe || options.DataCryptoProbe || options.LocalLoginProbe;
             bool connectProbe = options.ConnectProbe || dataAckProbe;
@@ -159,7 +161,7 @@ namespace S7Patcher.Source
             // Sender endpoints and cookies are process-local, bounded and never logged.
             Dictionary<IPEndPoint, PrudpProbePeer> peers = new();
             Dictionary<IPEndPoint, PrudpLocalLoginSession> loginSessions = new();
-            using LocalSessionRegistry sessions = new(options.LocalSessionDisplayProbe);
+            using LocalSessionRegistry sessions = new(options.LocalSessionDisplayProbe, options.LocalCatalogueProbe);
             try
             {
                 udp.Client.Bind(new IPEndPoint(IPAddress.Loopback, options.UdpPort));
@@ -177,7 +179,9 @@ namespace S7Patcher.Source
                     Event = "configuration-server-ready", Address = "127.0.0.1", HttpPort = httpPort, UdpPort = udpPort,
                     ConfigurationPath = ConfigurationPath, AuthenticationImplemented = false, UdpProtocolImplemented = false,
                     SigningKeyPersistence = "memory-only",
-                    Message = options.LocalSessionDisplayProbe
+                    Message = options.LocalCatalogueProbe
+                        ? "Public catalogue candidate: real other-owner sessions and GetSession. Explicit local filtering policy; no joined clients or LAN."
+                        : options.LocalSessionDisplayProbe
                         ? "Display probe: a same-owner copy of the last left lobby is labelled as a test. No live catalogue/filtering, joining or LAN. Memory only."
                         : options.LocalKeepAliveProbe
                         ? "Experimental local Login/Register, empty searches and bounded session records enabled; no Ubisoft authentication, complete lobby, joining or playable LAN. Plaintext stays bounded in memory."

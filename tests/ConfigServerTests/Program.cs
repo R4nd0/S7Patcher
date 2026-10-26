@@ -332,6 +332,7 @@ string loginOutput = await Cli(0, "--local-config-server", "--http-port", "0", "
 Check(loginOutput.Contains("Experimental local Login/Register responses enabled"), "Local login boolean switch did not enable probe mode");
 passed += LocalSessionSearchChecks.Run();
 passed += LocalSessionDisplayChecks.Run();
+passed += LocalSessionCatalogueChecks.Run();
 passed += LocalSessionCreationChecks.Run();
 passed += RegisteredHostChecks.Run();
 passed += CreationFieldChecks.Run();
@@ -342,6 +343,10 @@ passed += LocalLoginSessionChecks.Run();
 await Cli(0, "--local-config-server", "--http-port", "0", "--local-keepalive-probe", "--seconds", "1");
 string displayOutput = await Cli(0, "--local-config-server", "--http-port", "0", "--local-session-display-probe", "--seconds", "1");
 Check(displayOutput.Contains("Display probe:", StringComparison.Ordinal), "Display mode not disclosed by CLI");
+await Cli(2, "--local-config-server", "--local-catalogue-probe", "--local-session-display-probe");
+await Cli(2, "--local-config-server", "--local-catalogue-probe", "--local-catalogue-probe");
+string catalogueOutput = await Cli(0, "--local-config-server", "--http-port", "0", "--local-catalogue-probe", "--seconds", "1");
+Check(catalogueOutput.Contains("Public catalogue candidate:", StringComparison.Ordinal), "Catalogue mode not disclosed by CLI");
 passed += await LocalLoginSessionChecks.RunNetworkAsync();
 Check(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(sentinel))) == originalHash && File.GetLastWriteTimeUtc(sentinel) == originalTime, "Server modified an existing file");
 Check(Directory.GetFileSystemEntries(scratch).SequenceEqual(new[] { sentinel }), "Server persisted a key, configuration or log file");
