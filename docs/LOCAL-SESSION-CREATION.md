@@ -85,8 +85,11 @@ capacity, independent owners, idempotence, exact reply bytes, encrypted transpor
 retransmission and ACK clearing, registration gates, shared-catalogue consistency,
 owner expiry and redacted events. These do not establish game compatibility.
 
-The candidate service and UI archive are staged separately. Before installing
-the archive, the user must close the game; check host process paths and obtain
-the launcher's lock. Retain the current archive and launcher for rollback.
-Then the user can check the first session-list visit, attempt creation once and
-leave S7 open. Inspect response acknowledgements and subsequent fixed RPC labels.
+The candidate from `d100dab` was deployed after the user closed S7 and a host
+process check confirmed it was no longer running. The launcher lock, expected
+previous archive hash, all staged service files and updated bundle fingerprints
+were checked. The previous archive and launcher are retained for rollback.
+The test launcher selects `Server-Create-Records`; the native adapter is unchanged.
+The no-game-launch preflight passed. The user has been asked to check the first
+session-list visit, attempt creation once and leave S7 open. Inspect response
+acknowledgements and subsequent fixed RPC labels before claiming live success.

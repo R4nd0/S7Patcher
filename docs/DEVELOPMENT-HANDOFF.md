@@ -16,7 +16,7 @@ current create-record candidate passes 2,498 service checks and 20,216 isolated
 RPC codec assertions. Its UI archive verifies all 284 entries and parses.
 These are separate results, not evidence of a playable LAN match.
 
-## Current blocker: deploy and verify create-record response / first-visit button
+## Current blocker: live verification of create-record response / first-visit button
 
 The SpaceId transfer and real `SearchSessions_V1` exchange are live-verified
 at transport level: 16 empty search replies, 18 acknowledgements including
@@ -24,7 +24,7 @@ Login/Register, no rejection or expiry in the recorded sample. The user
 opened game settings. The scoped create gate is now live-verified: two
 `CreateSession_V1` requests reached the service, which had no handler yet.
 A bounded shared session registry and native-shaped create response are now
-prepared; no game acceptance is claimed. `GetSession`, nonempty search results,
+deployed; no game acceptance is claimed. `GetSession`, nonempty search results,
 joining, match startup and LAN remain absent. See `LOCAL-SESSION-CREATION.md`.
 
 The user's first-visit disabled create button is a separate Lua transition bug:
@@ -33,9 +33,15 @@ retains that false state across screen recreation. The prepared archive refreshe
 create from actual login each update, retaining quickmatch/join NAT rules.
 The candidate is `work/offline-ui-create-ready`, with service build
 `work/server-create-records` staged as `Server-Create-Records` in the test bundle.
-The active launcher still selects `Server-Create-Diagnostic`; loaded files have
-not been replaced. Close S7 before applying `work/deploy_create_records.py`,
-then run the no-game-launch preflight and request one first-visit/create test.
+After the user closed S7, the host process check confirmed no remaining game.
+`work/deploy_create_records.py` installed the archive from commit `d100dab`
+under the launcher lock and switched the test launcher to `Server-Create-Records`.
+All staged service files and bundle fingerprints matched. The previous archive
+and launcher remain in `LocalData/Interface-before-create-ready.bba` and
+`LocalData/Test-Lokale-Anmeldung-before-create-records.cmd`. The native adapter
+is unchanged. The no-game-launch preflight passed. The user has been asked to
+check create on the first session-list visit, attempt one creation and leave S7
+open. Do not rerun the completed deployment transaction.
 
 Earlier observations established the following startup/readiness blockers,
 subsequently addressed by the scoped changes documented below.
