@@ -50,13 +50,15 @@ a118ba3639575c1db27ee3f63517154d0ade75840744f9faa9be805763b2872f.
 It requires the prior diagnostic service (067eb993...), current adapter/menu,
 and uses backup LocalData/Before-join-url-section-v1.
 
-User has been asked to close BOTH games and run Adress-Update.cmd on PC 2,
-without restarting. PC 1 is still on the diagnostic service pending closure.
-Then check host processes/ports, extract the verified ZIP beside the starter,
-run S7-Adress-Update/update_join_sections.py with bundled Python and the no-game
-LAN host preflight. Request one public four-slot join attempt with both games
-left open. Inspect whether further route checks fail or a reply is queued/ACKed;
-native membership/P2P/match start/synchronization remain unverified.
+User confirmed both games closed and Adress-Update.cmd installed on PC 2.
+PC 1 process/port checks found no running game or service. The verified ZIP was
+installed with bundled Python, and the installed service hash matches above.
+The no-game LAN host preflight passed. Updated content ID:
+14730d8906f15ec363c630347cfca90ad579eb87929b9a8b4e1801e763fd84e7.
+User has been asked to create a public four-slot lobby on PC 1, start PC 2,
+attempt exactly one join and leave both games open. Runtime result pending.
+Inspect whether further route checks fail or a reply is queued/ACKed; native
+membership/P2P/match start/synchronization remain unverified.
 
 ### Current: real join rejected by host-route validation
 
