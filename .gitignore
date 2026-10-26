@@ -366,3 +366,6 @@ FodyWeavers.xsd
 # Local diagnostic artifacts contain game data and must not be distributed.
 *.bba
 Settlers7R.exe
+
+# Rebuildable local TokenSave index (source only, never game data).
+.tokensave/
