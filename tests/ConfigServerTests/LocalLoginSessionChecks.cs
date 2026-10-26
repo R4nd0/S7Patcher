@@ -600,10 +600,18 @@ internal static class LocalLoginSessionChecks
             CryptographicOperations.ZeroMemory(expected);
             visitor.Session.ProcessData(visitor.Data(11, 0, LocalSessionUpdateChecks.Request()), visitor.Events.Add);
             Check(visitor.Session.TakeDue(500, visitor.Events.Add).Count == 0 && registry.Count == 1, "Visitor changed host record");
+            visitor.Session.ProcessData(visitor.Data(12, 0, LocalJoinFailureChecks.Request()), visitor.Events.Add);
+            visitor.Session.ProcessData(visitor.Data(13, 0, LocalJoinFailureChecks.Request()), visitor.Events.Add);
+            var failure = visitor.Events.Where(e => e.Event == "local-session-join-failure-observed").ToArray();
+            Check(failure.Length == 1 && failure[0].ReportedErrorCode == 0x80000001 && failure[0].ReportTextLength == 20
+                && failure[0].Reason == "local-join-failure-observed", "Encrypted failure report or diagnostic cap");
+            string failureJson = System.Text.Json.JsonSerializer.Serialize(failure[0], ConfigServerJsonContext.Default.ConfigServerEvent);
+            Check(!failureJson.Contains("private-fixture-text") && failureJson.Contains("reported_error_code"), "Failure report redaction");
+            Check(visitor.Session.TakeDue(550, visitor.Events.Add).Count == 0 && registry.Count == 1, "Diagnostic fabricated reply or removed session");
             host.Session.ProcessData(host.Data(9, 0, LocalSessionLeaveChecks.Request()), host.Events.Add);
             host.Session.TakeDue(600, host.Events.Add);
             Check(host.Session.TryAcknowledge(Ack(ServerCookie, 4)) && registry.Count == 0, "Host leave failed");
-            visitor.Session.ProcessData(visitor.Data(12, 0, search), visitor.Events.Add);
+            visitor.Session.ProcessData(visitor.Data(14, 0, search), visitor.Events.Add);
             packet = visitor.Session.TakeDue(700, visitor.Events.Add).Single();
             VerifySearchResponse(packet, visitor.Key, 0x12345678, visitor.ServerSession); passed++;
             Check(visitor.Session.TryAcknowledge(Ack(ServerCookie, 6)), "Empty-after-leave ACK failed");

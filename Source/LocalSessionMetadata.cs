@@ -39,6 +39,20 @@ namespace S7Patcher.Source
             }
         }
 
+        // E530AB..E530DF: empty class map, Space, session ID, u32 result, text.
+        // Diagnostic only; no raw text or claimed identities leave this parser.
+        internal static bool TryReadJoinFailureBody(ReadOnlySpan<byte> body,
+            out ReadOnlySpan<byte> space, out uint sessionId, out uint code, out int textLength)
+        {
+            space = default; sessionId = code = 0; textLength = 0;
+            if (body.Length > 8192) return false;
+            Reader reader = new(body);
+            if (!reader.Number(out uint classes) || classes != 0 || !reader.Text(out space)
+                || space.Length > 1024 || !reader.Number(out sessionId) || sessionId is 0 or uint.MaxValue
+                || !reader.Number(out code) || !reader.Text(out var text) || text.Length > 4096 || !reader.AtEnd) return false;
+            textLength = text.Length; return true;
+        }
+
         internal static bool TryReadLeaveBody(ReadOnlySpan<byte> body,
             out ReadOnlySpan<byte> space, out uint sessionId)
         {

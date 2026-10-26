@@ -31,6 +31,7 @@ namespace S7Patcher.Source
         private readonly HashSet<string> observedOperations = new(StringComparer.Ordinal);
         private int postLoginResponseCount;
         private bool registrationAcknowledged;
+        private bool joinFailureObserved;
         private bool closed;
 
         internal PrudpLocalLoginSession(PrudpProbePeer peer, IPEndPoint endpoint, string authUrl, long now, bool keepAlive = false,
@@ -111,6 +112,19 @@ namespace S7Patcher.Source
                         if (!keepAlive || !registrationAcknowledged || postLoginResponseCount >= MaximumPostLoginResponses || pending.Count >= ReliableResponseQueue.MaximumResponses)
                         {
                             emit(new() { Event = "local-login-message-rejected", Reason = "response-budget-exhausted" });
+                            continue;
+                        }
+                        if (LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-report-join-failure-v1")
+                        {
+                            // One redacted observation per registered transport. No
+                            // success response, membership transition or text logging.
+                            if (!joinFailureObserved)
+                            {
+                                joinFailureObserved = true;
+                                bool valid = sessions.TryObserveJoinFailure(this, rpc, message, out uint code, out int length, out reason);
+                                emit(new() { Event = "local-session-join-failure-observed", Reason = reason,
+                                    ReportedErrorCode = valid ? code : null, ReportTextLength = valid ? length : null });
+                            }
                             continue;
                         }
                         if (!TryReplyToSessionRequest(message, out response, out reason))

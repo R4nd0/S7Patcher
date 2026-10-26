@@ -271,3 +271,26 @@ bc73ef4e21c4056f591d0fd210081be2cf73d0374f00671dde69a9eb9f29a297.
 S7-LAN-Gateway-Update.zip requires Profilfeld-Update and changes only the service
 and manifests via the existing transactional updater.
 Full service suite: 5,546 checks pass; real-client acceptance pending deployment.
+
+## First native reply followed by ReportJoinFailure
+
+Run 19:41:59 passes route and reservation checks, queues a join response and
+sends DATA. Transport acknowledgements follow; the client then sends
+ReportJoinFailure_V1. UI reports session error 0. This establishes progress
+beyond our previous validation rejections, not completed native join/P2P.
+
+Static serializer E530A6 writes class map, E530AB..B2 Space qString,
+E530BA..C4 session ID u32, E530C9..D3 report code u32, E530D8..DF auxiliary
+qString. A bounded parser and read-only observer now record just the numeric
+code and text length for an owned pending caller matching registration and
+space/session. No raw text, claimed identity or route is emitted; one event per
+registered transport. Observation neither replies to this RPC nor changes
+membership/reservations. Unknown reports remain unacknowledged at RPC level;
+existing reliable transport ACKs are unaffected. Exact code semantics still
+need evidence from the next real report and its native caller.
+
+5,649 tests pass, including encrypted reports, redaction, observation cap,
+truncations, ownership/registration isolation and absence of state mutation or
+fabricated response. Build server-join-failure-diagnostic; update package
+S7-LAN-Beitrittsbericht.zip requires Gateway-Update. This diagnostic is not
+presented as a fix for the remaining native connection failure.

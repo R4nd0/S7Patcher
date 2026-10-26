@@ -34,6 +34,28 @@ namespace S7Patcher.Source
 
     internal sealed partial class LocalSessionRegistry
     {
+        internal bool TryObserveJoinFailure(object owner, LocalLoginRpcEngine registration,
+            ReadOnlySpan<byte> message, out uint code, out int textLength, out string reason)
+        {
+            code = 0; textLength = 0; reason = "local-join-failure-shape";
+            if (closed || !CatalogueProbe || owner == null || registration == null
+                || LoginRpcCodec.ClassifyPostLoginRequest(message) != "matchmaking-report-join-failure-v1") return false;
+            int offset = 31 + 3 + "MatchmakingProtocol::ReportJoinFailure_V1".Length;
+            if (!LocalSessionMetadata.TryReadJoinFailureBody(message[offset..], out var space, out uint id,
+                out uint reported, out int length)) return false;
+            reason = "local-join-failure-not-pending-caller";
+            if (!registration.TryCopyRegisteredPeer(out var peer)) return false;
+            using (peer)
+                foreach (var entry in entries)
+                    if (entry.Id == id && space.SequenceEqual(entry.Space)
+                        && entry.Pending.TryGetValue(owner, out var pending) && pending.Peer.Matches(peer))
+                    {
+                        code = reported; textLength = length;
+                        reason = "local-join-failure-observed"; return true;
+                    }
+            return false;
+        }
+
         private sealed class PendingMember(LocalLoginRpcEngine.RegisteredPeer peer,
             LocalSessionMetadata metadata, ReadOnlySpan<byte> body) : IDisposable
         {

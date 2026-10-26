@@ -23,6 +23,41 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
+### Current: real join reply sent; client reports failure, diagnostic candidate ready
+
+Run 20261026-194159-fb0b0eb4 finally records local-session-join-response-queued /
+local-join-reservation-created, response DATA sends and subsequent transport ACKs.
+It then receives MatchmakingProtocol::ReportJoinFailure_V1, previously rejected
+unsupported-session-operation. User sees "Sitzungsfehler 0 ... kann der gewaehlten
+Sitzung nicht beitreten". Timing not supplied. This is progress past host route
+validation, not proof of completed membership, native response correctness or P2P.
+
+Original-hash-checked serializer E530A6 emits class map; E530AB..B2 Space qString,
+E530BA..C4 session u32, E530C9..D3 result u32, E530D8..DF auxiliary qString.
+Added bounded read-only parser (8192 body / 1024 space / 4096 text limits).
+Observer requires catalogue opt-in, completed acknowledged registration, existing
+pending membership owned by this transport, matching registration/space/session.
+One observation per transport: fixed reason, reported_error_code and
+report_text_length only. No raw text/identity logging, no report RPC success reply,
+no reservation deletion or membership mutation. Packet ACK behavior unchanged.
+Diagnostic only; the numeric report field's precise meaning remains to be mapped.
+
+5,649 checks pass, including truncation/bounds, registration/owner/session checks,
+unchanged reservation and encrypted reports with redaction/cap/no synthetic reply.
+Build work/server-join-failure-diagnostic; tests join-failure-diagnostic-tests.
+Service SHA256:
+badb6591ffcdcfcc1b6efef128383c7aafbffc62dc78278f45bf671f24ebca2c.
+outputs/S7-LAN-Beitrittsbericht.zip (nine files) SHA256:
+3bc586c6d4ee26a09a98fe6d6c51c10617eb2453c966d909ab58f929ace7f9a8.
+ZIP CRC, exact updater/source, old/new service hashes and wrong-source rejection
+pass. Requires Gateway service bc73ef4e...; backup Before-join-failure-diagnostic-v1.
+Both copies still on Gateway-Update. User asked to close both games, apply
+Beitrittsbericht-Update.cmd plus full S7-Beitrittsbericht folder on PC 2, no restart.
+Upon confirmation check processes/ports, extract verified ZIP to PC 1 test root,
+run bundled Python S7-Beitrittsbericht/update_join_failure_diagnostic.py --bundle
+<root>, host check-only, then one public four-slot join; inspect the failure event.
+Real successful join, reverse hosting, match startup and synchronization unverified.
+
 ### Current: second native gateway sentinel; deployed, real join pending
 
 User confirms both games closed and Gateway-Update installed on PC 2.
