@@ -25,6 +25,18 @@ These are separate results, not evidence of a playable LAN match.
 
 ### Current: embedded Storm endpoint identified; candidate projection ready
 
+Deployment completed: user confirms successful Spieladresse update on PC 2
+and both games closed. Host inspection found no Settlers7R; the remaining old
+test service PID 55396 was identified by exact executable/command line and
+stopped. Ports 9110/9111 were then free. Verified revised ZIP extracted to PC 1
+with exclusive writes; transactional update succeeded. Installed service SHA256
+044931d88c501a11a792067af97935ba1a3920cb85c54fbf140f0c4948c2f787;
+content ID 1b925c935b7d06c102aaa0bbb7aa354d4b5af0754fc00c9e0995c9ad354f7516.
+LAN host --check-only passed for .125 / .85; no game launched by the agent.
+User asked to launch PC 1 public four-slot lobby and PC 2 role 2, attempt one
+join and leave both games open. Await actual result/logs; successful native
+join, match start, reverse hosting and synchronization remain unverified.
+
 PC 2 update attempt failed before Python could open
 C:\Spiele\Settlers\S7LANTest\S7-Spieladresse-Update\update_storm_route.py
 (Errno 2). This establishes a missing expected extracted script, not a parser
@@ -37,8 +49,8 @@ exit 2; a fixture script receives the correct bundle path and exit 17 propagates
 No installed updater or game was launched. Same service/updater bytes; revised
 ZIP SHA256: 648c5ad23f1dba4c83b501db22f4f1a796877ed01f57555828ffe182f0c049f3.
 User instructed to copy BOTH the CMD and complete S7-Spieladresse-Update folder
-into S7LANTest and report completion with both games closed. Installation on
-PC 2 and closure remain unconfirmed; PC 1 is not yet updated.
+into S7LANTest and report completion with both games closed. That confirmation
+has now arrived and PC 1 deployment is recorded above.
 
 User reports another error. Run 18:40:40 (20261026-184040-1bd3bcc7-lan-server.jsonl)
 records one JoinSession_V1 rejected as local-join-host-route-section-invalid.
@@ -80,11 +92,8 @@ Deliverable outputs/S7-LAN-Spieladresse-Update.zip (nine entries), SHA256:
 (repackaged with extraction checks; service and updater unchanged).
 Requires preceding service f199c8da..., backup Before-storm-route-v1.
 
-User has been asked to close BOTH games and apply Spieladresse-Update.cmd on
-PC 2 without restarting. PC 1 remains on f199c8da pending closure. Check host
-processes/ports, extract verified ZIP beside the starter, run bundled Python
-S7-Spieladresse-Update/update_storm_route.py --bundle <test-root>, then no-game
-LAN host preflight. Request exactly one public four-slot join attempt; inspect
+Both updates and PC 1 no-game preflight are now complete as recorded above.
+The requested next run is exactly one public four-slot join attempt; inspect
 fixed reason/queued reply/ACK and follow-ups. Real join/P2P/match/sync unverified.
 
 ### Current: native URL custom section identified and supported
