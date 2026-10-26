@@ -13,6 +13,26 @@ namespace S7Patcher.Source
         internal readonly Dictionary<string, byte[]> Attributes = new(StringComparer.Ordinal);
         internal readonly Dictionary<string, Dictionary<string, byte[]>> Members = new(StringComparer.Ordinal);
 
+        // Creation-only inputs. StationURLs belong to the game connection, not
+        // the login transport. Remaining field semantics stay opaque.
+        internal CreationFields Creation { get; private set; }
+        internal sealed class CreationFields : IDisposable
+        {
+            private readonly byte[] stationUrls, identifiers;
+            internal ReadOnlySpan<byte> StationUrls => stationUrls;
+            internal ReadOnlySpan<byte> Identifiers => identifiers;
+            internal uint Scalar { get; private set; }
+            internal byte Flag { get; private set; }
+            internal CreationFields(ReadOnlySpan<byte> urls, ReadOnlySpan<byte> ids, uint scalar, byte flag)
+            { stationUrls = urls.ToArray(); identifiers = ids.ToArray(); Scalar = scalar; Flag = flag; }
+            internal CreationFields Clone() => new(stationUrls, identifiers, Scalar, Flag);
+            public void Dispose()
+            {
+                CryptographicOperations.ZeroMemory(stationUrls); CryptographicOperations.ZeroMemory(identifiers);
+                Scalar = 0; Flag = 0;
+            }
+        }
+
         internal static bool TryReadLeaveBody(ReadOnlySpan<byte> body,
             out ReadOnlySpan<byte> space, out uint sessionId)
         {
@@ -36,9 +56,11 @@ namespace S7Patcher.Source
                 if (!reader.Number(out uint classes) || classes != 0 || !reader.Text(out space)) return false;
                 if (!creation && !reader.Number(out sessionId)) return false;
                 if (!reader.Map(value.Attributes, false, LocalSessionCreationCodec.MaximumMapEntries)) return false;
-                if (creation && (!reader.Text(out _) || !reader.Number(out uint count)
-                    || count > LocalSessionCreationCodec.MaximumMembers || !reader.Skip((int)count * 16)
-                    || !reader.Number(out _))) return false;
+                ReadOnlySpan<byte> urls = default, ids = default;
+                uint scalar = 0; byte flag = 0;
+                if (creation && (!reader.Text(out urls) || !reader.Number(out uint count)
+                    || count > LocalSessionCreationCodec.MaximumMembers || !reader.Bytes((int)count * 16, out ids)
+                    || !reader.Number(out scalar))) return false;
                 if (!reader.Number(out uint groups) || groups > LocalSessionCreationCodec.MaximumMapEntries) return false;
                 for (uint i = 0; i < groups; ++i)
                 {
@@ -47,8 +69,9 @@ namespace S7Patcher.Source
                     if (!value.Members.TryAdd(Convert.ToHexString(name), members)) return false;
                     if (!reader.Map(members, true, LocalSessionCreationCodec.MaximumMembers)) return false;
                 }
-                if (creation && (!reader.Byte(out byte flag) || flag > 1)) return false;
+                if (creation && (!reader.Byte(out flag) || flag > 1)) return false;
                 if (!reader.AtEnd || !value.WithinBounds()) return false;
+                if (creation) value.Creation = new(urls, ids, scalar, flag);
                 result = value;
                 return true;
             }
@@ -73,7 +96,7 @@ namespace S7Patcher.Source
 
         internal LocalSessionMetadata Clone()
         {
-            LocalSessionMetadata copy = new();
+            LocalSessionMetadata copy = new() { Creation = Creation?.Clone() };
             ReplaceValues(copy.Attributes, Attributes);
             foreach (var group in Members)
             {
@@ -118,6 +141,7 @@ namespace S7Patcher.Source
                 group.Clear();
             }
             Members.Clear();
+            Creation?.Dispose(); Creation = null;
         }
 
         private ref struct Reader
@@ -130,6 +154,13 @@ namespace S7Patcher.Source
             {
                 if (count > input.Length - offset) return false;
                 offset += count; return true;
+            }
+            internal bool Bytes(int count, out ReadOnlySpan<byte> value)
+            {
+                value = default;
+                int start = offset;
+                if (!Skip(count)) return false;
+                value = input.Slice(start, count); return true;
             }
             internal bool Byte(out byte value)
             {

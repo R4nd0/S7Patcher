@@ -43,14 +43,21 @@ three searches, two creates, six updates and one leave, with zero rejections.
 Leave/recreate and AI selection are now live-verified. A second Windows PC with
 HE is available for a later LAN test; no changes were requested there yet.
 
-A new host-binding candidate is built at `work/server-registered-host` but is not
-selected in the launcher. It binds create records to the completed registration's
-owned profile/connection ID/observed endpoint and rejects a different registration
-on replay. It passes 3,100 service checks and 477 isolated login-engine checks;
-these are synthetic. The active live-verified service remains `48f7b2a`.
-The second search output is now proven to map session IDs to pipe-separated
-StationURLs, and the session date's packed u64 encoding is known. Other scalar
-semantics remain unresolved; see `LOCAL-SESSION-CATALOGUE.md`.
+The host-binding milestone `1c014a5` binds create records to the completed
+registration's owned profile/connection ID/observed endpoint and rejects a
+different registration on replay. Its 3,100 service checks and 477 isolated
+login-engine checks pass. The follow-up candidate `work/server-session-routing`
+passes 3,142 service checks and additionally preserves creation-only game
+StationURLs, identifier bytes, opaque scalar and flag through update/snapshot
+and cleanup. Neither candidate is selected in the launcher; the active
+live-verified service remains `48f7b2a`.
+
+The second search output is proven to map session IDs to pipe-separated
+StationURLs. Create's second qString supplies the game's serialized StationURL
+list with Storm routing data; it must not be replaced by the login transport's
+observed endpoint. The packed session DateTime encoding is known, but its event
+meaning and other scalar semantics remain unresolved. See `LOCAL-SESSION-CATALOGUE.md`
+for anchors, implementation and next requirements. No restart is pending.
 
 Full match startup, `GetSession`, nonempty search serialization and joining remain
 outstanding. The next step is mapping the session-record fields to real registry

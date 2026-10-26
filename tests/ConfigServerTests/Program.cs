@@ -331,6 +331,7 @@ Check(loginOutput.Contains("Experimental local Login/Register responses enabled"
 passed += LocalSessionSearchChecks.Run();
 passed += LocalSessionCreationChecks.Run();
 passed += RegisteredHostChecks.Run();
+passed += CreationFieldChecks.Run();
 passed += LocalSessionUpdateChecks.Run();
 passed += LocalSessionLeaveChecks.Run();
 passed += LocalLoginSessionChecks.Run();

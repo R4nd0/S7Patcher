@@ -29,7 +29,7 @@ emits the following fields:
 | Class-version map | u32 count zero | `E51A63..E51A76`, `EB0D00` |
 | First string | qString: u16 byte length including trailing zero; zero is null | `E51A82`, `EAFCB0` |
 | Attributes | u32 count; qString key and Variant value | `E51A8E`, `E4EAD0` |
-| Second string | qString | `E51A9A`, `EAFCB0` |
+| Game StationURL list | qString; pipe-separated StationURLs | `E51A9A`, `EAFCB0` |
 | Identifier list | u32 count, 16 bytes each | `E51AA6`, `E51480` |
 | Scalar | u32 | `E51AB8`, `E673B0` |
 | Nested maps | u32 count; qString key; u32 count; 16-byte key and Variant | `E51AC4`, `E4EA40`, `E4E9B0` |
@@ -41,8 +41,12 @@ The original response dispatcher matches the method with a literal `*` suffix
 at `E54AE9` and decodes exactly one four-byte output at `E54B24..E54B34`.
 The reply uses response=0, success=1 and the original call ID.
 
-Field contents remain opaque; names, claimed identities and speculative field
-semantics do not grant ownership. `CreateSession2_V1` remains unsupported.
+The second string is proven to originate from the game's StationURL serializer;
+see `LOCAL-SESSION-CATALOGUE.md` for its producer/consumer chain. It is now
+preserved separately from the login transport URL, alongside the still-opaque
+identifier list, scalar and flag. These values do not grant ownership; ownership
+uses the registered transport's generated identity. `CreateSession2_V1` remains
+unsupported.
 
 ## Bounded state and cleanup
 

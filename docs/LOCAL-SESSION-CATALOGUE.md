@@ -95,8 +95,9 @@ leave the host unchanged; leave, owner teardown and shutdown dispose it.
 Caller-owned snapshots survive registry removal and must be disposed separately.
 Profile buffers are zeroed; managed URL references are released (immutable
 strings cannot be guaranteed overwritten). No identity or address is logged.
-This does not establish that the observed auth transport endpoint will suffice
-for a peer-to-peer game connection; the real client must verify that later.
+The observed authentication transport endpoint is NOT a replacement for the
+game StationURLs. The game's Create second string supplies those separately;
+see the verified producer chain below.
 
 The candidate builds without warnings/errors and passes 3,100 service checks,
 including 31 new host-binding checks across direct and encrypted transport
@@ -106,11 +107,45 @@ URL separator rejection, mismatched registration on replay, unchanged host on
 update, independent snapshot lifetime, zeroing and removal. These are synthetic
 results, not a live nonempty-catalogue or LAN result.
 
+## Creation StationURL producer and retained inputs
+
+The Create second qString is a serialized StationURL list, not a session title.
+At D3E9CF, D433D0 builds the list; E4DE00 serializes it at D3E9E5, the text is
+stored in request state +1c at D3E9F4/D3E9FB, and D3EA80/D3EA83 passes that
+string to Create via E4DD10 at D3EA92. Its scalar comes from an internal object
++7c (D3EA1C), and its flag is literal true (D3EA5E). The second create path also
+serializes the list at D3F460 and passes it at D3F4EC/D3F4EF, but uses scalar
+32 at D3F4C7. This does not yet prove the scalar's semantic name.
+
+D433D0 constructs `prudp:/` at D43413/D4341B, sets a connection value through
+E5EAE0 at D43437 (that routine references `RVCID` at E5EB02), and adds the
+`Storm` field at D434E3/D43505. Its content includes the game's `RoutingOption{`
+serialization (D4344A). E4DE00 joins multiple URLs with `|` at E4DE7D..E4DE88.
+The consumer uses the same format (E4DD30). Merely advertising the authentication
+socket's observed endpoint would therefore lose the game's routing information.
+
+Creation-only fields are now preserved in LocalSessionMetadata.Creation:
+the original StationURL bytes, raw identifier-list bytes, the still-opaque u32
+scalar and boolean flag. The parser copies them only after full validation;
+updates preserve them, snapshots clone them and disposal clears their buffers.
+The existing 65,536-byte input and 256-identifier limits apply. These bytes do
+not authorize a host or trigger outbound traffic. No StationURL routing/filter
+policy is implemented by their preservation, and no claim is made that the
+login URL parser accepts the game's separate Storm format.
+
+Build `work/server-session-routing` passes 3,142 service checks, including 42
+new checks for creation-field retention, input/snapshot isolation, empty/null
+inputs, maximum identifier count, update/replay and cleanup. It is not selected
+in the launcher. The active live-verified service remains the leave/recreate
+build; neither native adapter nor UI archive changed.
+
 ## Next implementation requirements
 
 1. Trace the unresolved scalar fields to their state sources; distinguish native facts from an explicit local server policy.
-2. Use the implemented registered host snapshot when projecting member records.
-   Never infer ownership from supplied metadata GUIDs.
+2. Use the registered host snapshot for member identity and the creation
+   StationURL list for game routing. Validate route ownership and supported local
+   routing separately before advertising it. Never infer ownership from metadata
+   GUIDs or substitute the authentication socket for the game route.
 3. Serialize a bounded registry snapshot with the latest attributes and member
    metadata. Respect Space, the request's selector/filter semantics and result
    limit. The current empty-only parser deliberately does not implement filtering.
@@ -120,6 +155,7 @@ results, not a live nonempty-catalogue or LAN result.
    join/status transitions and broadening loopback-only binding to a deliberate
    LAN configuration. A second Windows PC with HE is available for that later test.
 
-The host-binding candidate is built but not selected in the game launcher. The active tested
+The host-binding and game-routing-storage candidates are built but not selected
+in the game launcher. The active tested
 service remains `48f7b2a`, with successful lobby lifecycle and AI selection but
 without a nonempty catalogue, second-client join or verified match startup.
