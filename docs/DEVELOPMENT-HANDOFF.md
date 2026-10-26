@@ -96,7 +96,7 @@ Owner interface-present is 1 and its result is success (1), but readiness
 `+0x3A` remains 0. No session search RPC reached the service yet. This change is
 committed/pushed as `fafb4c2`; the earlier core bridge is `23123b5`.
 
-### Prepared local session-search policy
+### Local session-search policy: deployed, live verification pending
 
 The new candidate replaces only `ED6C3A` (the readiness check within session
 search). It requires the real local connected/not-pending facade, current owned
@@ -110,8 +110,12 @@ that it specifically denotes Internet reachability.
 
 Build: `work/native-search-build`. Validation: 185 bootstrap, 88 platform,
 18 connection-state, 38 network-guard checks, 16 original-byte checks and real
-configuration/fingerprint validation pass. Not deployed yet; user was asked to
-close S7. Next verify that the real search reaches the local service. Its
+configuration/fingerprint validation pass. Candidate `ebd75de` was deployed after
+the user closed S7 and the host process check confirmed it was stopped. The
+previous adapter is retained as `LocalData/adapter-fafb4c2.dll`. Bundle hashes
+and the no-game-launch preflight pass. A bounded passive observer is prepared
+for the user's next launch and counts search entry/dispatch without recording
+request payloads. Next verify that the real search reaches the local service. Its
 existing two-response RPC budget still only supports Login/Register; a new
 search RPC is expected to need protocol identification and implementation.
 
