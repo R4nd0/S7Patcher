@@ -23,6 +23,48 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
+### Two real PCs: catalogue confirmed; join menu update
+
+The user confirmed PC 2 sees PC 1's public lobby. The host log records two
+Login/Register peers and acknowledged catalogue replies. The earlier standalone
+diagnostic reported no error; its original startup failure cause remains unknown.
+The selected lobby still has a disabled join button, explicitly confirmed by
+the user after selecting its row. No actual JoinSession RPC has been observed.
+
+Original sessionList.lua gates the join button on Network.IsNATReady even when
+the row is selected. The guarded incremental delta in
+`tools/offline-ui/join-menu-update.json` changes only that condition to actual
+IsLoggedIn; row count/selection and the native SessionJoin result remain intact.
+Quickmatch NAT checks and the global native NAT state are unchanged.
+
+`tools/installer/update_join_menu.py` applies this to the known two-peer test
+copy, updates exactly the archive hash in both manifests, holds the launcher's
+session lock, checks for running S7, and retains a recovery journal/backup.
+An interrupted partial commit is restored on the next invocation; unexpected
+external changes are rejected. Ten tests cover success/idempotence, manifest
+and content mismatches, running-game/launcher rejection, rollback, interruption,
+and backup tampering. Real archive validation checked all 284 files and parsed
+the changed Lua. The never-launched full installer fixture passed the update,
+complete inventory validation and an idempotent second run.
+
+Portable supplement: `outputs/S7-LAN-Menue-Update.zip`, eight files, contains
+only our updater, a bounded delta, MIT archive tooling and instructions. Extract
+beside Test-LAN-Verbindung.cmd in BOTH installed copies, close S7, and run
+Menue-Update.cmd. No reinstall/new test directory is needed. Backup directory:
+LocalData/Before-join-menu-v1. The embedded Python requires explicit script
+directory insertion; the updater includes it. The original installer stays at
+the previous archive version, so new installations need this supplement too.
+
+Old archive: `ebee0ff593cdb9c38442d03875041f8c1825c0fc3e2414291098e08f3517ced5`.
+New archive: `2b1ad77ab1afda98e9d9aab8bbc91279607e1bbbac506d2b52de675550de08ad`.
+Expected updated content ID:
+`0e92dd7136170171d31f361c86c2c825862cf0fc97588617ae25cb6ae9047674`.
+PC 1 deployment completed with the bundled Python; the no-game LAN preflight
+passed. User has been asked to close PC 2 and apply the supplement, without
+starting either game yet. This only
+unblocks testing the native join path: membership/reply and match behavior are
+still incomplete, so a subsequent join error is possible and must be diagnosed.
+
 ### Pending second-PC startup diagnosis
 
 User installed the two-peer package but reports the generic LAN-start error,

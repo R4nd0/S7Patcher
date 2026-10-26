@@ -1,0 +1,19 @@
+{
+  "format": "s7-join-menu-update-v1",
+  "source_archive_sha256": "ebee0ff593cdb9c38442d03875041f8c1825c0fc3e2414291098e08f3517ced5",
+  "patched_archive_sha256": "2b1ad77ab1afda98e9d9aab8bbc91279607e1bbbac506d2b52de675550de08ad",
+  "files": [
+    {
+      "path": "Script/local/menu/panel/menu/play/multiplayer/sessionList.lua",
+      "source_sha256": "09c82acb19aea58bf32218b18569c28c0a1749cb93e4b656920f25bf8e53a3ce",
+      "patched_sha256": "c7b4659796a08843f7b973d2b42e3c82476482f2c2ac9cfd3bc7c7fe2356f822",
+      "edits": [
+        {
+          "offset": 25298,
+          "before_hex": "696628655b6e283434295d5b6e28323933295d28293d3d66616c7365297468656e",
+          "after_utf8": "if not e[n(44)][n(287)]()then"
+        }
+      ]
+    }
+  ]
+}
