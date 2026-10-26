@@ -25,6 +25,21 @@ These are separate results, not evidence of a playable LAN match.
 
 ### Current: embedded Storm endpoint identified; candidate projection ready
 
+PC 2 update attempt failed before Python could open
+C:\Spiele\Settlers\S7LANTest\S7-Spieladresse-Update\update_storm_route.py
+(Errno 2). This establishes a missing expected extracted script, not a parser
+or service failure; repeated backslashes in the error representation are not
+the cause. The original nine-entry ZIP contains that script and passes CRC.
+The revised tracked tools/installer/Spieladresse-Update.cmd checks the runtime
+and every payload sibling before invoking Python and explains full extraction.
+Verified in an isolated directory with spaces: missing runtime/script both
+exit 2; a fixture script receives the correct bundle path and exit 17 propagates.
+No installed updater or game was launched. Same service/updater bytes; revised
+ZIP SHA256: 648c5ad23f1dba4c83b501db22f4f1a796877ed01f57555828ffe182f0c049f3.
+User instructed to copy BOTH the CMD and complete S7-Spieladresse-Update folder
+into S7LANTest and report completion with both games closed. Installation on
+PC 2 and closure remain unconfirmed; PC 1 is not yet updated.
+
 User reports another error. Run 18:40:40 (20261026-184040-1bd3bcc7-lan-server.jsonl)
 records one JoinSession_V1 rejected as local-join-host-route-section-invalid.
 The previous section support still required address/port in the URL prefix.
@@ -61,7 +76,8 @@ transaction engine unchanged. Build work/server-storm-route; tests storm-route-t
 Service SHA256:
 044931d88c501a11a792067af97935ba1a3920cb85c54fbf140f0c4948c2f787.
 Deliverable outputs/S7-LAN-Spieladresse-Update.zip (nine entries), SHA256:
-802bcd4834ed709cc550232ee3f2cfa8ff1c60fbcfdc6d3d3c60d731ea4d1296.
+648c5ad23f1dba4c83b501db22f4f1a796877ed01f57555828ffe182f0c049f3
+(repackaged with extraction checks; service and updater unchanged).
 Requires preceding service f199c8da..., backup Before-storm-route-v1.
 
 User has been asked to close BOTH games and apply Spieladresse-Update.cmd on
