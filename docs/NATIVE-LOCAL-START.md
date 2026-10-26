@@ -259,7 +259,10 @@ revalidated. No credentials or raw identifiers are logged.
 This candidate passes 229 bootstrap, 88 platform, 18 connection-state and
 38 network-guard checks, 17 original-byte comparisons and real configuration
 validation. It is deployed with backup and passing no-game-launch preflight;
-the SpaceId transfer and actual search RPC still need live verification.
+the user's following session-list test confirmed the transfer (native helper
+length 36, capacity 47, fixed ready event, actual connection still active).
+Additional encrypted messages now reach the server's two-response budget
+rejection. Their method and an actual search response remain unverified.
 
 The additional Frida observer caused a separate `frida-agent.dll` fail-fast
 crash (`0xC0000409`). Subsequent game restart without it succeeded. Use only

@@ -15,12 +15,13 @@ and 17 original-byte comparisons, plus configuration validation. The
 unchanged keepalive service previously passed 612 checks.
 These are separate results, not evidence of a playable LAN match.
 
-## Current blocker: discovery does not reach the server
+## Current blocker: post-login request identification and handling
 
-The current blocker is an empty matchmaking SpaceId in the search helper,
-despite the established local connection already holding the public SpaceId.
-A guarded transfer using the game's native setter is built, tested and
-deployed; live verification is pending. See the latest section below.
+The SpaceId transfer is now live-verified. After opening the session list,
+additional encrypted messages reach the service but are rejected by its
+two-response budget before their RPC type is identified. A bounded header
+classifier is the next service change; search response handling is not yet
+implemented. Packet arrival alone does not establish which RPC was sent.
 
 Earlier observations established the following startup/readiness blockers,
 subsequently addressed by the scoped changes documented below.
@@ -140,7 +141,7 @@ preflight passed. The user opened the session list and repeated native search
 dispatch returned without the previous configuration access violation.
 The correction is committed as `bb7a733`.
 
-### Search SpaceId: deployed, awaiting live verification
+### Search SpaceId: live verified
 
 The native search job remained pending on four observations over 20 seconds;
 no search RPC reached the service. Static inspection established that the
@@ -171,8 +172,31 @@ checks; 17 original-byte comparisons; real configuration and wrong-executable
 fingerprint rejection all pass. Build: `work/native-search-space-build`.
 After the user closed S7, the candidate was deployed with the previous adapter
 retained as `LocalData/adapter-bb7a733.dll`. All bundle hashes and the
-no-game-launch preflight passed. The user must launch the test copy and open
-the session list; neither a real search response nor multiplayer is verified.
+no-game-launch preflight passed. Committed and pushed as `8d3bc91`.
+
+The user subsequently opened the session list and left the test copy running.
+The read-only snapshot confirmed connected=true, pending=false, helper SpaceId
+length 36 and capacity 47, owner attached, and no injected diagnostic library.
+The adapter logged `local-session-search-space-ready`. New encrypted DATA
+messages decoded successfully (231-byte messages in the observed tail), but
+were rejected as `response-budget-exhausted`. Their protocol/method is still
+unknown; no real search response or multiplayer has been verified.
+
+The next service candidate classifies at most eight complete post-budget
+messages per peer into fixed labels, including the statically identified
+`MatchmakingProtocol::SearchSessions_V1`. It validates bounded RPC header
+structure without decoding arguments or emitting IDs or unknown wire strings.
+It does not increase the response budget or change keepalive/transport policy.
+
+Validation: 617 full configuration-server checks and 20,214 codec assertions
+(including 10,000 random inputs exercised by both header readers) pass.
+The service builds without warnings. The separate bundle now retains the old
+service and selects a hash-verified copy in `Server-Search-Diagnostic` through
+`Test-Lokale-Anmeldung.cmd`; its prior launcher is backed up in LocalData.
+The deployed service passed a two-second loopback startup/shutdown check on
+ephemeral ports. The game EXE, adapter and UI hashes remain unchanged. A new
+user-started game run is needed because the running launcher owns the old
+service instance. The classifier has not yet been observed on real requests.
 
 Next verify that the real search reaches the local service. Its
 existing two-response RPC budget still only supports Login/Register; a new

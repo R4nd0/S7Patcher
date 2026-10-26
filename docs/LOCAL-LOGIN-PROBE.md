@@ -65,6 +65,18 @@ stability beyond the twenty-minute test cap or successful lobby/gameplay.
 The full configuration-server regression suite passes 612 checks, including
 88 isolated session checks and 21 actual loopback login/keepalive checks.
 
+## Bounded post-login header observation
+
+Once the existing two-response budget is exhausted, at most eight complete
+messages per peer are classified into fixed labels. The classifier checks
+message length, bounded ASCII DDL headers and the request discriminator, then
+compares known protocol/method names. `matchmaking-search-sessions-v1` denotes
+an exact `MatchmakingProtocol::SearchSessions_V1` header, not validated arguments
+or a successfully handled search. Unknown names, call IDs and arguments are
+never emitted. Retransmitted fragments do not consume another observation.
+Plaintext is still cleared in the existing finally block. The classifier
+neither creates replies nor enlarges response, lifetime or transport limits.
+
 ## Live result, 2026-10-25
 
 The original HE client reassembled its Login request from four verified

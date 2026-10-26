@@ -95,12 +95,40 @@ Check(LoginRpcCodec.TryWriteLoginSuccess(0, new(profile, new string('x', maximum
 Check(!LoginRpcCodec.TryWriteLoginSuccess(0, new(profile, new string('x', maximumLoginUrl + 1), false), out _, out failure)
     && failure == LoginRpcFailure.LimitExceeded, "Response exceeded total message cap");
 
+byte[] DiagnosticRequest(string protocol, string method, byte[] body)
+{
+    byte[] Ddl(string value) => [(byte)(value.Length + 1), 0, .. System.Text.Encoding.ASCII.GetBytes(value), 0];
+    byte[] request = [0, 0, 0, 0, .. Ddl(protocol), 1, 0xff, 0xff, 0xff, 0xff, .. Ddl(method), .. body];
+    Length(request); return request;
+}
+byte[] search = DiagnosticRequest("MatchmakingProtocol", "MatchmakingProtocol::SearchSessions_V1", [0, 255, 128]);
+Check(LoginRpcCodec.ClassifyPostLoginRequest(search) == "matchmaking-search-sessions-v1", "Known search header not classified");
+Check(LoginRpcCodec.ClassifyPostLoginRequest(login) == "login-with-token-v1"
+    && LoginRpcCodec.ClassifyPostLoginRequest(register) == "login-register-v1", "Repeated login header classification differs");
+Check(LoginRpcCodec.ClassifyPostLoginRequest(DiagnosticRequest("MatchmakingProtocol", "private-invented-text", [])) == "matchmaking-other-method"
+    && LoginRpcCodec.ClassifyPostLoginRequest(DiagnosticRequest("private-invented-text", "MatchmakingProtocol::SearchSessions_V1", [])) == "other-protocol",
+    "Unknown wire text escaped classifier or method matched wrong protocol");
+for (int length = 0; length < search.Length - 3; length++)
+{
+    byte[] partial = search[..length]; Length(partial);
+    Check(LoginRpcCodec.ClassifyPostLoginRequest(partial) == "invalid-rpc-envelope", "Partial search header accepted");
+}
+byte[] altered = (byte[])search.Clone(); altered[4] = 0;
+Check(LoginRpcCodec.ClassifyPostLoginRequest(altered) == "invalid-rpc-envelope", "Zero-length protocol accepted");
+altered = (byte[])search.Clone(); altered[4 + "MatchmakingProtocol".Length + 3] = 0;
+Check(LoginRpcCodec.ClassifyPostLoginRequest(altered) == "invalid-rpc-envelope", "Response flag accepted by request classifier");
+altered = (byte[])search.Clone(); altered[6] = 0xff;
+Check(LoginRpcCodec.ClassifyPostLoginRequest(altered) == "invalid-rpc-envelope", "Non-ASCII protocol accepted");
+Check(LoginRpcCodec.ClassifyPostLoginRequest([.. search, 0]) == "invalid-rpc-envelope"
+    && LoginRpcCodec.ClassifyPostLoginRequest(new byte[65537]) == "invalid-rpc-envelope", "Diagnostic message bounds failed");
+
 Random random = new(20261025);
 for (int iteration = 0; iteration < 10000; iteration++)
 {
     byte[] sample = new byte[random.Next(0, 500)]; random.NextBytes(sample);
     if ((iteration & 1) == 0) Length(sample);
     bool accepted = LoginRpcCodec.TryReadRequest(sample, out var header, out _);
+    Check(LoginRpcCodec.ClassifyPostLoginRequest(sample) is "invalid-rpc-envelope" or "other-protocol", "Random input produced known diagnostic label");
     Check(!accepted || (header.BodyOffset >= 4 && header.BodyLength >= 0 && header.BodyOffset + header.BodyLength == sample.Length), "Random input escaped bounds");
 }
 Console.WriteLine($"PASS: {passed} isolated RPC codec checks; fixed vectors, bounds, malformed headers, opaque bodies, response types and 10000 random inputs. No network or game integration.");

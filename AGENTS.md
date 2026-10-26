@@ -6,8 +6,9 @@ Read `docs/NATIVE-LOCAL-START.md` before changing the native adapter.
 ## Source navigation
 
 TokenSave is initialized locally. Use its MCP status/context/search/read tools
-with this repository's absolute path as `graph_root`; the shared MCP server
-has no default project. Check freshness before trusting graph relationships.
+with this repository's absolute path as `graph_root` when the MCP server serves
+another directory. If it already serves this repository, omit `graph_root`.
+Check freshness before trusting graph relationships.
 Run `tokensave sync` after source changes. On a fresh checkout, run
 `tokensave init --no-git-hook` once. The rebuildable `.tokensave/` directory
 is ignored. Do not index the game installation or the separate test copy.

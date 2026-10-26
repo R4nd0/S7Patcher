@@ -25,6 +25,7 @@ namespace S7Patcher.Source
         private readonly Dictionary<ushort, Pending> pending = new();
         private ushort nextOutgoing = 1;
         private int responseCount;
+        private int postLoginObservations;
         private bool closed;
 
         internal PrudpLocalLoginSession(PrudpProbePeer peer, IPEndPoint endpoint, string authUrl, long now, bool keepAlive = false)
@@ -90,6 +91,12 @@ namespace S7Patcher.Source
                     // DATA fragment. Unknown subsequent services are observed only.
                     if (responseCount >= 2 || pending.Count >= 2)
                     {
+                        if (postLoginObservations < 8)
+                        {
+                            postLoginObservations++;
+                            emit(new() { Event = "local-post-login-request-observed",
+                                Reason = LoginRpcCodec.ClassifyPostLoginRequest(message) });
+                        }
                         emit(new() { Event = "local-login-message-rejected", Reason = "response-budget-exhausted" });
                         continue;
                     }

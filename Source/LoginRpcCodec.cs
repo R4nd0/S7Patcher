@@ -42,6 +42,29 @@ namespace S7Patcher.Source
             return true;
         }
 
+        // Diagnostic classification only: fixed labels, no IDs, arguments or
+        // unrecognized wire text leave this method. It never authorizes a reply.
+        internal static string ClassifyPostLoginRequest(ReadOnlySpan<byte> message)
+        {
+            if (message.Length < 4 || message.Length > MaximumMessageLength
+                || BinaryPrimitives.ReadUInt32LittleEndian(message) != (uint)(message.Length - 4))
+                return "invalid-rpc-envelope";
+            int offset = 4;
+            if (!ReadString(message, ref offset, out ReadOnlySpan<byte> protocol, out _)
+                || message.Length - offset < 5 || message[offset] != 1)
+                return "invalid-rpc-envelope";
+            offset += 5; // Request flag and opaque call ID; neither is retained.
+            if (!ReadString(message, ref offset, out ReadOnlySpan<byte> method, out _))
+                return "invalid-rpc-envelope";
+            if (protocol.SequenceEqual("MatchmakingProtocol"u8))
+                return method.SequenceEqual("MatchmakingProtocol::SearchSessions_V1"u8)
+                    ? "matchmaking-search-sessions-v1" : "matchmaking-other-method";
+            if (protocol.SequenceEqual(ProtocolBytes))
+                return method.SequenceEqual(LoginMethodBytes) ? "login-with-token-v1"
+                    : method.SequenceEqual(RegisterMethodBytes) ? "login-register-v1" : "login-other-method";
+            return "other-protocol";
+        }
+
         private static bool ReadString(ReadOnlySpan<byte> message, ref int offset,
             out ReadOnlySpan<byte> text, out LoginRpcFailure failure)
         {

@@ -278,6 +278,27 @@ internal static class LocalLoginSessionChecks
                 Check(PrudpDataCryptoProbe.Inspect(invalid, fixture.Peer, _ => callbacks++).SequenceMatches != true && callbacks == 1, "Failed crypto/context invoked plaintext callback");
             Check(PrudpDataCryptoProbe.InspectBody(new byte[31], 6, fixture.Key, _ => callbacks++).SequenceMatches != true && callbacks == 1, "Invalid CBC length invoked callback");
         }
+        using (Fixture fixture = new(keepAlive: true))
+        {
+            fixture.Register();
+            Check(!fixture.Events.Any(e => e.Event == "local-post-login-request-observed"), "Classifier ran before response budget");
+            byte[] search = [0, 0, 0, 0, .. Ddl("MatchmakingProtocol"), 1, 7, 0, 0, 0,
+                .. Ddl("MatchmakingProtocol::SearchSessions_V1"), .. Ddl("invented-private-body")];
+            BinaryPrimitives.WriteUInt32LittleEndian(search, (uint)(search.Length - 4));
+            for (ushort sequence = 8; sequence < 18; sequence++)
+            {
+                byte[] packet = fixture.Data(sequence, 0, search);
+                fixture.Session.ProcessData(packet, fixture.Events.Add);
+                fixture.Session.ProcessData(packet, fixture.Events.Add); // Retransmission is not a new observation.
+            }
+            var observations = fixture.Events.Where(e => e.Event == "local-post-login-request-observed").ToArray();
+            Check(observations.Length == 8 && observations.All(e => e.Reason == "matchmaking-search-sessions-v1"), "Diagnostic cap or decrypted request classification failed");
+            Check(fixture.Session.PendingCount == 0 && fixture.Session.TakeDue(200, fixture.Events.Add).Count == 0,
+                "Observation enlarged response budget");
+            Check(fixture.Session.TryReplyToPing(Ping(), 200, fixture.Events.Add, out _), "Observation disrupted keepalive");
+            Check(fixture.Events.All(e => !JsonSerializer.Serialize(e, ConfigServerJsonContext.Default.ConfigServerEvent).Contains("invented-private-body")),
+                "Diagnostic event leaked argument bytes");
+        }
         foreach (bool lifetime in new[] { false, true })
         {
             using Fixture fixture = new(); fixture.Login();
