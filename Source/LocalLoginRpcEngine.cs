@@ -158,7 +158,7 @@ namespace S7Patcher.Source
         // Supported subset: prudp:/key=value pairs, semicolon separated, unique
         // case-insensitive keys, no '#' section/escaping/empty segments. Preserve
         // accepted original pairs and ordering; replace only requested fields.
-        private sealed class PrudpUrl
+        internal sealed class PrudpUrl
         {
             private readonly string[] pairs;
             private readonly Dictionary<string, int> positions;

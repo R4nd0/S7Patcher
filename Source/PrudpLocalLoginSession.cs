@@ -140,7 +140,9 @@ namespace S7Patcher.Source
                                 : LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-leave-session-v1"
                                     ? "local-session-leave-response-queued"
                                     : LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-get-session-v1"
-                                        ? "local-session-get-response-queued" : "local-session-search-response-queued", Reason = reason,
+                                        ? "local-session-get-response-queued"
+                                        : LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-join-session-v1"
+                                            ? "local-session-join-response-queued" : "local-session-search-response-queued", Reason = reason,
                         AuthenticationImplemented = false, UdpProtocolImplemented = false });
                 }
                 finally
@@ -166,6 +168,8 @@ namespace S7Patcher.Source
                 return LocalSessionLeaveCodec.TryReply(message, sessions, this, out response, out reason);
             if (sessions.CatalogueProbe && operation == "matchmaking-get-session-v1")
                 return LocalSessionCatalogueCodec.TryGet(message, sessions, this, out response, out reason);
+            if (sessions.CatalogueProbe && operation == "matchmaking-join-session-v1")
+                return LocalSessionJoinCodec.TryReply(message, sessions, this, rpc, out response, out reason);
             if (operation != "matchmaking-search-sessions-v1")
             {
                 response = null;

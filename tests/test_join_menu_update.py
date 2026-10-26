@@ -156,5 +156,26 @@ class MenuUpdateTests(unittest.TestCase):
         self.assertEqual((self.root / plan.target).read_bytes(), b'new adapter')
         self.assertEqual((self.root / update.ARCHIVE).read_bytes(), self.before[update.ARCHIVE])
 
+    def test_service_update_keeps_three_file_start_manifest(self):
+        (self.root / 'Server/S7Patcher.dll').write_bytes(b'old service')
+        (self.root / 'compatibility.json').write_bytes(update.encoded(content.create(self.root)))
+        fixed = json.loads(self.before['local-bundle.json'])['files']
+        plan = update.UpdatePlan('Server/S7Patcher.dll', update.sha256(b'old service'),
+            update.sha256(b'new service'), 'Before-service-fixture', fixed, lambda original, spec: b'new service')
+        update.run(self.root, {}, plan)
+        self.assertEqual(json.loads((self.root / 'local-bundle.json').read_bytes())['files'], fixed)
+        self.assertEqual((self.root / plan.target).read_bytes(), b'new service')
+        content.verify(self.root)
+        self.assertIn('bereits', update.run(self.root, {}, plan))
+
+    def test_service_update_rejects_wrong_existing_binary(self):
+        (self.root / 'Server/S7Patcher.dll').write_bytes(b'other service')
+        (self.root / 'compatibility.json').write_bytes(update.encoded(content.create(self.root)))
+        plan = update.UpdatePlan('Server/S7Patcher.dll', update.sha256(b'old service'),
+            update.sha256(b'new service'), 'Before-service-fixture',
+            json.loads(self.before['local-bundle.json'])['files'], lambda original, spec: b'new service')
+        with self.assertRaises(ValueError): update.run(self.root, {}, plan)
+        self.assertEqual((self.root / plan.target).read_bytes(), b'other service')
+
 
 if __name__ == '__main__': unittest.main()

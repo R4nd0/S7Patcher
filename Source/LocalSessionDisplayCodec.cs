@@ -83,7 +83,10 @@ namespace S7Patcher.Source
             // policy only: these are not inferred Ubisoft server field meanings.
             writer.U32(0); writer.Text([]); writer.Bytes(new byte[8]);
             writer.U32(0); writer.U32(0); writer.Bytes([0, 0]);
-            writer.U32(1); writer.Bytes(snapshot.Host.ProfileId); writer.U32(2);
+            writer.U32((uint)(1 + snapshot.PendingProfiles.Count)); writer.Bytes(snapshot.Host.ProfileId); writer.U32(2);
+            // Local pending policy: constructor-default state 0, not confirmed
+            // peer state 3. ReportJoinSuccess/host notification remains separate.
+            foreach (var profile in snapshot.PendingProfiles) { writer.Bytes(profile); writer.U32(0); }
             writer.U32((uint)metadata.Attributes.Count);
             foreach (var pair in metadata.Attributes)
             {

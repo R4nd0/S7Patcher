@@ -142,7 +142,7 @@ def build_archive(original, spec):
 
 def apply_locked(root, spec, plan=None):
     plan = plan or menu_plan()
-    if plan.target not in ('Base/BBA/Interface.bba', 'Base/Bin/uplay_r1_loader.dll'):
+    if plan.target not in ('Base/BBA/Interface.bba', 'Base/Bin/uplay_r1_loader.dll', 'Server/S7Patcher.dll'):
         raise ValueError('Unbekanntes Updateziel.')
     if Path(plan.backup).name != plan.backup or plan.backup in ('', '.', '..'):
         raise ValueError('Ungueltiger Sicherungsordner.')
@@ -156,19 +156,22 @@ def apply_locked(root, spec, plan=None):
     manifest = json.loads(old_bytes['local-bundle.json'])
     hashes = manifest.get('files', {})
     allowed = dict(plan.fixed_hashes)
-    allowed[plan.target] = sha256(old_bytes[plan.target])
+    current_hash = sha256(old_bytes[plan.target])
+    if plan.target.startswith('Base/'):
+        allowed[plan.target] = current_hash
     if manifest.get('format') != 's7-local-experimental-v1' or hashes != allowed:
         raise ValueError('Dieses Update braucht die bekannte LAN-Testkopie.')
     if any(expected['files'].get(name.lower()) != value for name, value in allowed.items()):
         raise ValueError('Startmanifest und Dateivergleich widersprechen sich.')
-    if allowed[plan.target] == plan.new_hash:
+    if current_hash == plan.new_hash:
         return 'Das Update ist bereits installiert.'
-    if allowed[plan.target] != plan.old_hash:
+    if current_hash != plan.old_hash:
         raise ValueError('Dieses Update passt nicht zum vorhandenen Dateistand.')
     patched = plan.build(old_bytes[plan.target], spec)
     if sha256(patched) != plan.new_hash:
         raise ValueError('Die neue Datei hat eine falsche Pruefsumme.')
-    manifest['files'][plan.target] = plan.new_hash
+    if plan.target.startswith('Base/'):
+        manifest['files'][plan.target] = plan.new_hash
     expected['files'][plan.target.lower()] = plan.new_hash
     expected['content_id'] = content.fingerprint(expected['files'])
     new_bytes = {plan.target: patched, 'local-bundle.json': encoded(manifest), 'compatibility.json': encoded(expected)}

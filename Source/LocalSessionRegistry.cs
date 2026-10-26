@@ -6,7 +6,7 @@ namespace S7Patcher.Source
 {
     // Run-local records only. Called by the single UDP processing loop. Ownership
     // is the registered transport session, never a claimed identity from a body.
-    internal sealed class LocalSessionRegistry : IDisposable
+    internal sealed partial class LocalSessionRegistry : IDisposable
     {
         internal const int MaximumSessions = 8;
         private readonly List<Entry> entries = new();
@@ -30,7 +30,7 @@ namespace S7Patcher.Source
             if (closed || requester == null) return result;
             foreach (Entry entry in entries)
                 if (!ReferenceEquals(entry.Owner, requester) && space.SequenceEqual(entry.Space))
-                    result.Add(new(entry.Id, entry.Space, entry.Metadata.Clone(), entry.Host.Clone()));
+                    result.Add(Snapshot(entry));
             return result;
         }
 
@@ -41,7 +41,7 @@ namespace S7Patcher.Source
             foreach (Entry entry in entries)
                 if (entry.Id == id && space.SequenceEqual(entry.Space))
                 {
-                    snapshot = new(entry.Id, entry.Space, entry.Metadata.Clone(), entry.Host.Clone());
+                    snapshot = Snapshot(entry);
                     return true;
                 }
             return false;
@@ -59,6 +59,8 @@ namespace S7Patcher.Source
                 if (registration == null || !registration.TryCopyRegisteredPeer(out host)) return false;
                 foreach (Entry entry in entries)
                 {
+                    if (entry.Pending.ContainsKey(owner))
+                    { reason = "local-session-owner-has-pending-join"; return false; }
                     if (!ReferenceEquals(entry.Owner, owner)) continue;
                     reason = "local-session-owner-registration-mismatch";
                     if (!entry.Host.Matches(host)) return false;
@@ -92,6 +94,8 @@ namespace S7Patcher.Source
                     if (entry.Id != id || !ReferenceEquals(entry.Owner, owner) || !space.SequenceEqual(entry.Space)) continue;
                     reason = "local-session-metadata-limit";
                     if (!entry.Metadata.TryMerge(patch, out var merged)) return false;
+                    using var projection = Snapshot(entry, replacement: merged);
+                    if (projection == null) { merged.Dispose(); return false; }
                     entry.Metadata.Dispose(); entry.Metadata = merged;
                     reason = "local-session-metadata-updated";
                     return true;
@@ -100,8 +104,8 @@ namespace S7Patcher.Source
             }
         }
 
-        // Host-only prototype: no joined clients exist yet. Never remove another
-        // transport's record using a claimed ID, flag or trailing string.
+        // Hosts remove their record; pending clients remove only their own
+        // reservation, never another transport's session or membership.
         internal bool TryLeave(object owner, ReadOnlySpan<byte> body, out string reason)
         {
             reason = "unsupported-leave-arguments";
@@ -110,7 +114,12 @@ namespace S7Patcher.Source
             for (int i = 0; i < entries.Count; ++i)
             {
                 Entry entry = entries[i];
-                if (entry.Id != id || !ReferenceEquals(entry.Owner, owner) || !space.SequenceEqual(entry.Space)) continue;
+                if (entry.Id != id || !space.SequenceEqual(entry.Space)) continue;
+                if (!ReferenceEquals(entry.Owner, owner))
+                {
+                    if (!entry.Pending.Remove(owner, out var pending)) continue;
+                    pending.Dispose(); reason = "local-session-pending-member-left"; return true;
+                }
                 if (DisplayProbe && (previews.ContainsKey(owner) || previews.Count < MaximumSessions))
                 {
                     RemovePreview(owner);
@@ -152,6 +161,8 @@ namespace S7Patcher.Source
         internal void RemoveOwner(object owner)
         {
             RemovePreview(owner);
+            foreach (Entry entry in entries)
+                if (entry.Pending.Remove(owner, out var member)) member.Dispose();
             for (int i = entries.Count - 1; i >= 0; --i)
                 if (ReferenceEquals(entries[i].Owner, owner))
                 {
@@ -192,8 +203,13 @@ namespace S7Patcher.Source
             internal byte[] Space { get; } = space.ToArray();
             internal LocalSessionMetadata Metadata { get; } = metadata;
             internal LocalLoginRpcEngine.RegisteredPeer Host { get; } = host;
+            internal List<byte[]> PendingProfiles { get; } = new();
             public void Dispose()
-            { CryptographicOperations.ZeroMemory(Space); Metadata.Dispose(); Host.Dispose(); }
+            {
+                CryptographicOperations.ZeroMemory(Space); Metadata.Dispose(); Host.Dispose();
+                foreach (var profile in PendingProfiles) CryptographicOperations.ZeroMemory(profile);
+                PendingProfiles.Clear();
+            }
         }
 
         private sealed class Entry(object owner, uint id, byte[] body, byte[] space, LocalSessionMetadata metadata, LocalLoginRpcEngine.RegisteredPeer host) : IDisposable
@@ -203,10 +219,13 @@ namespace S7Patcher.Source
             internal readonly byte[] Body = body, Space = space;
             internal LocalSessionMetadata Metadata = metadata;
             internal readonly LocalLoginRpcEngine.RegisteredPeer Host = host;
+            internal readonly Dictionary<object, PendingMember> Pending = new(ReferenceEqualityComparer.Instance);
             public void Dispose()
             {
                 CryptographicOperations.ZeroMemory(Body); CryptographicOperations.ZeroMemory(Space);
                 Metadata.Dispose(); Host.Dispose();
+                foreach (var pending in Pending.Values) pending.Dispose();
+                Pending.Clear();
             }
         }
     }

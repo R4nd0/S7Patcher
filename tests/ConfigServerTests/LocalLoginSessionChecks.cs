@@ -568,15 +568,29 @@ internal static class LocalLoginSessionChecks
             Check(visitor.Session.TryAcknowledge(Ack(ServerCookie, 4)) && packet.All(b => b == 0), "Get ACK cleanup");
             Check(visitor.Events.Any(e => e.Event == "local-session-get-response-queued"), "Get event missing");
             CryptographicOperations.ZeroMemory(expected);
-            visitor.Session.ProcessData(visitor.Data(10, 0, LocalSessionUpdateChecks.Request()), visitor.Events.Add);
+            byte[] joinPacket = visitor.Data(10, 0, LocalSessionJoinChecks.Request());
+            visitor.Session.ProcessData(joinPacket, visitor.Events.Add);
+            Check(registry.TryCopyLiveSession(visitor.Session, "invented-space"u8, 1, out var pendingJoin), "Join snapshot missing");
+            using (pendingJoin)
+            {
+                Check(pendingJoin.PendingProfiles.Count == 1, "Join did not reserve one member");
+                expected = LocalSessionJoinCodec.Encode(0x12345678, pendingJoin);
+            }
+            packet = visitor.Session.TakeDue(450, visitor.Events.Add).Single();
+            VerifySearchResponse(packet, visitor.Key, 0x12345678, visitor.ServerSession, expected); passed++;
+            visitor.Session.ProcessData(joinPacket, visitor.Events.Add);
+            Check(visitor.Session.TryAcknowledge(Ack(ServerCookie, 5)) && packet.All(b => b == 0), "Join ACK cleanup");
+            Check(visitor.Events.Count(e => e.Event == "local-session-join-response-queued") == 1, "Duplicate join dispatched twice");
+            CryptographicOperations.ZeroMemory(expected);
+            visitor.Session.ProcessData(visitor.Data(11, 0, LocalSessionUpdateChecks.Request()), visitor.Events.Add);
             Check(visitor.Session.TakeDue(500, visitor.Events.Add).Count == 0 && registry.Count == 1, "Visitor changed host record");
             host.Session.ProcessData(host.Data(9, 0, LocalSessionLeaveChecks.Request()), host.Events.Add);
             host.Session.TakeDue(600, host.Events.Add);
             Check(host.Session.TryAcknowledge(Ack(ServerCookie, 4)) && registry.Count == 0, "Host leave failed");
-            visitor.Session.ProcessData(visitor.Data(11, 0, search), visitor.Events.Add);
+            visitor.Session.ProcessData(visitor.Data(12, 0, search), visitor.Events.Add);
             packet = visitor.Session.TakeDue(700, visitor.Events.Add).Single();
             VerifySearchResponse(packet, visitor.Key, 0x12345678, visitor.ServerSession); passed++;
-            Check(visitor.Session.TryAcknowledge(Ack(ServerCookie, 5)), "Empty-after-leave ACK failed");
+            Check(visitor.Session.TryAcknowledge(Ack(ServerCookie, 6)), "Empty-after-leave ACK failed");
         }
         foreach (bool keepAlive in new[] { false, true })
         {

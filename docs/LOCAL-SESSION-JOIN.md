@@ -55,15 +55,61 @@ GetSession body unmodified. Field meaning/valid route serialization and member
 status must be established from callers and a real client exchange before a
 successful join is reported.
 
-TryReadJoinBody now validates this request shape with bounded copied metadata,
+TryReadJoinBody validates this request shape with bounded copied metadata,
 class/version uniqueness, duplicate-map rejection, exact end and ID policy.
-It is deliberately not wired to a successful reply or registry mutation yet.
 Tests cover both class orders, every truncation, copies surviving input disposal,
 empty metadata, duplicate classes/groups/members, invalid version/ID/count,
 trailing data and aggregate size. No host/guest identity is logged.
 
-Still needed: bind claimed member keys to the registered caller, public-session
-and capacity/space rules, atomic pending member lifecycle, disconnect/leave and
-replays, host-route ownership validation, observed JoinSuccess/HostSuccess
-semantics, native notifications and real two-PC match startup. JoinSession2_V1
-is a distinct named method; this parser must not be used for it by assumption.
+## First actual request and pending-response candidate
+
+After both PCs applied the native adapter update, user reports a join error.
+Host run 17:52:43 logs exactly one matchmaking-join-session-v1 followed by
+unsupported-session-operation. Two real peers are registered; search and host
+create/update still succeed. Native request dispatch is now runtime-confirmed.
+
+LocalSessionJoinCodec is enabled only by the live catalogue probe and the
+existing registered/ACKed transport gate. It binds all claimed member GUIDs to
+the caller's registered profile, rejects self-join/other hosting/another pending
+session and identity collisions, requires a public live record in the same
+space, and reserves only a free slot (local policy: at most four total). A
+byte-identical repeat reuses the reservation; a changed repeat is rejected.
+Each advertised PRUDP game URL must have the registered host's observed IPv4
+address and a valid port; URL lists are bounded to four. Auth port substitution,
+external addresses and redirected routes are not accepted.
+
+The candidate reply writes the original host game URL list as the first qString
+and the current session plus a pending caller as the second output. Member state
+0 is the native E4E520 constructor default, used as explicit LOCAL pending policy;
+2 is the existing host and 3 remains unasserted. Neither this policy nor the first
+string's precise semantic use is runtime-confirmed yet. Static D3FBFD passes
+session data +1C as the string output; D48A1C initializes that same field before
+RequestRendezVousSessionJoin. The candidate route interpretation must be checked
+in the next real exchange, not presented as established Ubisoft server semantics.
+
+Serialization completes before reservation publication. Projections merge only
+owned pending metadata and reduce displayed free slots. Leave/disconnect removes
+the caller's reservation; host teardown disposes the entire record. Guests still
+cannot modify host settings. A pending caller cannot host concurrently. Existing
+reliable ACK/retry/fragment/lifetime caps remain in effect. No success reports,
+host notifications, match start or persistent state are fabricated.
+
+Validation: 4,934 service checks, including independent wire parsing, every
+truncation, identity/space/private/route/capacity rejection, rollback on failed
+serialization, repeated requests, leave/disconnect/rejoin, and encrypted peers
+in both host directions. Sixteen updater tests pass. The full installation
+fixture passes update, idempotence, complete content verification and no-game
+service preflight. Build: work/server-join-reservation. DLL SHA256:
+8ccac3f143a3a205cb2bc0cc877cea9085fd255c0cef37822d1c666c8c56fc20.
+
+outputs/S7-LAN-Dienst-Update.zip updates only Server/S7Patcher.dll and manifests,
+retaining a backup under LocalData/Before-join-service-v1. It requires both
+preceding menu and native adapter updates. Updated content ID:
+5ca87dd0e322d9666bc001d680440a3e2896ad1133a1009a1f628f5c54cf014f.
+Live deployment is pending both games closing; user was asked to apply the
+service update on PC 2 and not restart yet. Original game files remain untouched.
+
+Still needed: real client acceptance of the candidate reply, observed
+JoinSuccess/HostSuccess semantics, native notifications, P2P connection and
+real two-PC match startup/synchronization. JoinSession2_V1 is a distinct named
+method; this parser must not be used for it by assumption.

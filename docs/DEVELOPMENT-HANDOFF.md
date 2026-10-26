@@ -23,6 +23,31 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
+### Current: real JoinSession received; first pending reply prepared
+
+Run 17:52:43 confirms an actual JoinSession_V1 from PC 2, rejected by the old
+service as unsupported-session-operation. User saw a join error. Native
+dispatch is now confirmed; both games were left open. The next candidate
+implements a bounded pending reservation and qString + session reply with
+registered identity, ownership, public/space, route and capacity checks.
+See LOCAL-SESSION-JOIN.md for deliberately unconfirmed native semantics.
+
+4,934 service checks and 16 updater tests pass, including encrypted requests
+in both host directions. The never-launched full installation fixture was
+updated, independently inventoried and passed the no-game service preflight.
+Build work/server-join-reservation; package work/join-service-update-package.
+Deliverable outputs/S7-LAN-Dienst-Update.zip (nine entries), SHA256:
+6a0818d2d90dbd7791b800cad8a1d921245540d6c015175af7dd3bc9ed834be4.
+Expected content ID after updating:
+5ca87dd0e322d9666bc001d680440a3e2896ad1133a1009a1f628f5c54cf014f.
+
+User has been asked to close BOTH games and run Dienst-Update.cmd on PC 2,
+without restarting. PC 1 deployment is pending confirmed closure. Do not
+overwrite the running service; check for an orphan from its last launcher
+before the next preflight. The active copies still use the old service until
+this update. No completed membership, host notification, match startup or
+desync-free gameplay has been established. Continue after the paired update.
+
 ### Current: menu gate confirmed, native join dispatch update ready
 
 Both PCs applied the menu update. The user confirms the join button is active,
