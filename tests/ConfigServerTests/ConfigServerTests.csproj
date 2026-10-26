@@ -17,6 +17,7 @@
     <Compile Include="../../Source/PrudpControlPacketDecoder.cs" Link="PrudpControlPacketDecoder.cs" />
     <Compile Include="../../Source/PrudpPingAckCodec.cs" Link="PrudpPingAckCodec.cs" />
     <Compile Include="../../Source/PrudpLocalLoginSession.cs" Link="PrudpLocalLoginSession.cs" />
+    <Compile Include="../../Source/ReliableResponseQueue.cs" Link="ReliableResponseQueue.cs" />
     <Compile Include="../../Source/ReliableMessageAssembler.cs" Link="ReliableMessageAssembler.cs" />
     <Compile Include="../../Source/LoginRpcCodec.cs" Link="LoginRpcCodec.cs" />
     <Compile Include="../../Source/LocalSessionSearchCodec.cs" Link="LocalSessionSearchCodec.cs" />

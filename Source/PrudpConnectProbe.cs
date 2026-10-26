@@ -102,8 +102,8 @@ namespace S7Patcher.Source
 
         internal ushort InitialClientDataSequence => unchecked((ushort)(sequence + 1));
 
-        internal byte[] CreateDataPacket(ushort dataSequence, ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> key) =>
-            PrudpDataPacketEncoder.Encode(reply[0], reply[1], reply[3], clientCookie, dataSequence, 0, plaintext, key);
+        internal byte[] CreateDataPacket(ushort dataSequence, ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> key, byte part = 0) =>
+            PrudpDataPacketEncoder.Encode(reply[0], reply[1], reply[3], clientCookie, dataSequence, part, plaintext, key);
 
         internal byte[] CreateDataAck(ReadOnlySpan<byte> request) =>
             PrudpDataAckProbeCodec.CreateReply(request, reply[3], clientCookie);

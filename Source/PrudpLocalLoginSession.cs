@@ -11,8 +11,8 @@ namespace S7Patcher.Source
     // live in the bounded registry until owner teardown. Timers are probe policy.
     internal sealed class PrudpLocalLoginSession : IDisposable
     {
-        internal const int RetryMilliseconds = 1000;
-        internal const int MaximumTransmissions = 4;
+        internal const int RetryMilliseconds = ReliableResponseQueue.RetryMilliseconds;
+        internal const int MaximumTransmissions = ReliableResponseQueue.MaximumTransmissions;
         internal const int LifetimeMilliseconds = 120000;
         internal const int KeepAliveMaximumMilliseconds = 1200000;
         internal const int PingReplyIntervalMilliseconds = 100;
@@ -26,8 +26,7 @@ namespace S7Patcher.Source
         private readonly LocalSessionRegistry sessions;
         private readonly bool ownsRegistry;
         private long lastPingAt, nextPingReplyAt;
-        private readonly Dictionary<ushort, Pending> pending = new();
-        private ushort nextOutgoing = 1;
+        private readonly ReliableResponseQueue pending = new();
         private int responseCount;
         private readonly HashSet<string> observedOperations = new(StringComparer.Ordinal);
         private int postLoginResponseCount;
@@ -109,7 +108,7 @@ namespace S7Patcher.Source
                             if (observedOperations.Add(operation))
                                 emit(new() { Event = "local-post-login-request-observed", Reason = operation });
                         }
-                        if (!keepAlive || !registrationAcknowledged || postLoginResponseCount >= MaximumPostLoginResponses || pending.Count >= 2)
+                        if (!keepAlive || !registrationAcknowledged || postLoginResponseCount >= MaximumPostLoginResponses || pending.Count >= ReliableResponseQueue.MaximumResponses)
                         {
                             emit(new() { Event = "local-login-message-rejected", Reason = "response-budget-exhausted" });
                             continue;
@@ -125,15 +124,13 @@ namespace S7Patcher.Source
                         emit(new() { Event = "local-login-message-rejected", Reason = reason });
                         continue;
                     }
-                    if (response.Length > PrudpDataPacketEncoder.PlaintextLimit)
+                    if (!pending.TryEnqueue(response,
+                        (sequence, part, bytes) => peer.Connect.CreateDataPacket(sequence, bytes, key, part)))
                     {
                         emit(new() { Event = "local-login-message-rejected", Reason = "response-fragment-limit" });
                         Dispose();
                         break;
                     }
-                    byte[] encoded = peer.Connect.CreateDataPacket(nextOutgoing, response, key);
-                    pending.Add(nextOutgoing, new(encoded));
-                    nextOutgoing = unchecked((ushort)(nextOutgoing + 1));
                     if (search) postLoginResponseCount++; else responseCount++;
                     emit(new() { Event = !search ? "local-login-response-queued"
                         : LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-create-session-v1"
@@ -186,21 +183,14 @@ namespace S7Patcher.Source
         {
             if (closed || packet.Length < 15 || (packet[2] & 0xf8) is not (0x08 or 0x48)
                 || !PrudpDataPacketDecoder.TryDecode(packet, out var data, out _, 0)
-                || data.BytesConsumed != packet.Length || data.PayloadLength != 0 || packet[10] != 0)
+                || data.BytesConsumed != packet.Length || data.PayloadLength != 0)
                 return false;
             PrudpDataContext context = PrudpDataAckProbeCodec.GetContext(packet, peer);
             if (!context.KnownPeer || !context.ConnectReplySent || context.RoutingMatches != true
                 || context.ClientSessionMatches != true || context.HeaderCookieMatches != true) return false;
             ushort sequence = BinaryPrimitives.ReadUInt16LittleEndian(packet[8..]);
-            if (!pending.Remove(sequence, out Pending sent) || sent.Transmissions == 0)
-            {
-                // An ACK cannot acknowledge a packet which has not been offered
-                // for sending. Preserve it if a guessed ACK arrived early.
-                if (sent != null) pending.Add(sequence, sent);
-                return false;
-            }
-            CryptographicOperations.ZeroMemory(sent.Packet);
-            if (responseCount == 2 && !pending.ContainsKey(1) && !pending.ContainsKey(2)) registrationAcknowledged = true;
+            if (!pending.TryAcknowledge(sequence, packet[10])) return false;
+            if (responseCount == 2 && pending.CompletedResponses >= 2) registrationAcknowledged = true;
             return true;
         }
 
@@ -211,22 +201,13 @@ namespace S7Patcher.Source
             List<byte[]> due = new();
             if (closed) return due;
             if (ExpireIfDue(now, emit)) return due;
-            // Expiry precedes collecting references, so disposal cannot invalidate
-            // already collected packets when another outstanding entry expires.
-            foreach (Pending sent in pending.Values)
-                if (sent.Transmissions >= MaximumTransmissions && now >= sent.NextSend)
-                {
-                    emit(new() { Event = "local-login-session-expired", Reason = "response-ack-timeout" });
-                    Dispose(); return due;
-                }
-            foreach (Pending sent in pending.Values)
+            var packets = pending.TakeDue(now, out bool timedOut);
+            if (timedOut)
             {
-                if (sent.Transmissions != 0 && now < sent.NextSend) continue;
-                sent.Transmissions++;
-                sent.NextSend = now + RetryMilliseconds;
-                due.Add(sent.Packet);
+                emit(new() { Event = "local-login-session-expired", Reason = "response-ack-timeout" });
+                Dispose();
             }
-            return due;
+            return packets;
         }
 
         public void Dispose()
@@ -236,15 +217,7 @@ namespace S7Patcher.Source
             observedOperations.Clear();
             sessions.RemoveOwner(this);
             if (ownsRegistry) sessions.Dispose();
-            foreach (Pending sent in pending.Values) CryptographicOperations.ZeroMemory(sent.Packet);
-            pending.Clear(); assembler.Dispose(); rpc.Dispose(); CryptographicOperations.ZeroMemory(key);
-        }
-        private sealed class Pending
-        {
-            internal Pending(byte[] packet) => Packet = packet;
-            internal byte[] Packet { get; }
-            internal int Transmissions { get; set; }
-            internal long NextSend { get; set; }
+            pending.Dispose(); assembler.Dispose(); rpc.Dispose(); CryptographicOperations.ZeroMemory(key);
         }
     }
 }

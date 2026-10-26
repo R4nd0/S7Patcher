@@ -22,9 +22,23 @@ This preservation policy follows the inspected native path: `E782A0..E782EC` cre
 
 ## Response transport and expiry
 
-Responses are limited to one fragment of at most 947 plaintext bytes, a conservative bound based on the observed client fragments rather than a claimed protocol MTU. The encoder appends u16LE sequence, optionally compresses only when smaller, encrypts with AES-128-CBC/PKCS7 and a fresh IV, then emits DATA/reliable/ACK-request with server session and client cookie. The first reliable server sequence is 1: native window constructor `EBF890` initializes it at `EBF8E1..EBF8E6`, and `EC15E1..EC15E8` assigns/increments it. Nonreliable SYN/CONNECT/DATA ACKs do not consume it.
+Responses now use the bounded multipart queue described in
+[response fragmentation](LOCAL-RESPONSE-FRAGMENTATION.md): up to 64 KiB per
+logical response, at most two outstanding logical responses and a two-slot
+sequence window. Each plaintext fragment remains at most 947 bytes. The encoder
+appends its u16LE sequence, optionally compresses only when smaller, encrypts
+with AES-128-CBC/PKCS7 and a fresh IV, then emits DATA/reliable/ACK-request with
+server session and client cookie. Nonfinal parts are 1, 2, ...; final part is 0.
+The first reliable server sequence remains 1, following native EBF8E1..EBF8E6
+and EC15E1..EC15E8. Nonreliable ACKs do not consume it.
 
-Retries reuse identical encoded bytes. Probe policy is one-second spacing, at most four transmissions and a two-minute peer lifetime. These are deliberately finite local limits, not recovered native adaptive timeout settings. A complete empty DATA ACK with matching peer context, sequence and part removes its pending response and zeroes the owned packet. Native acknowledgement lookup `EBADE0 → EC0EF0` uses sequence; part matching is an additional conservative restriction for this single-fragment probe. Unsent, malformed and mismatched ACKs cannot clear a pending response. Exhaustion closes and clears the experimental session.
+Retries reuse identical encoded bytes. Local policy remains one-second spacing,
+at most four transmissions and a two-minute baseline peer lifetime. Empty DATA
+ACKs must match the existing peer context, sequence and echoed part. A later ACK
+cannot advance the sequence window past a missing earlier ACK. Native lookup
+EBADE0 -> EC0EF0 uses sequence; matching the echoed part remains an additional
+conservative restriction. Unsent or malformed ACKs cannot clear stored packets.
+Timeout closes the session and clears sent/unsent ciphertext and owned state.
 
 PING and DISCONNECT are classified passively and are not answered or consumed by the incoming reliable DATA assembler. A reliable control interleaved with DATA would therefore leave a sequence gap in this experiment. The decoder follows jump table `E84A98`: 3 DISCONNECT, 4 PING, 5 USER. Cookie comparison exceptions are SYN/USER, not PING (`EB4C98..EB4CA5`). These omissions may prevent a sustained connection even if Login/Register responses are accepted; that is a separate implementation step requiring observed evidence.
 

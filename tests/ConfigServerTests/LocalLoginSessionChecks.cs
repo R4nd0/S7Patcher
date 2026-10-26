@@ -377,6 +377,45 @@ internal static class LocalLoginSessionChecks
             Check(fixture.Session.PendingCount == 2 && fixture.Events.Count(e => e.Event == "local-session-search-response-queued") == 2,
                 "Search pending window exceeded");
         }
+        // Inject an invented large response into the managed test fixture's
+        // queue to exercise the real session ACK/context layer. No new RPC or
+        // production debug endpoint is exposed by this transport test.
+        using (Fixture fixture = new(keepAlive: true))
+        {
+            fixture.Register();
+            var queue = (ReliableResponseQueue)typeof(PrudpLocalLoginSession)
+                .GetField("pending", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(fixture.Session)!;
+            Check(queue.TryEnqueue(new byte[1900],
+                (seq, part, bytes) => fixture.Peer.Connect.CreateDataPacket(seq, bytes, fixture.Key, part)),
+                "Large response fixture failed");
+            byte[] FragmentAck(ushort seq, byte part, bool explicitLength = false)
+            { byte[] ack = Ack(ServerCookie, seq, explicitLength); ack[10] = part; Sum(ack); return ack; }
+            Check(!fixture.Session.TryAcknowledge(FragmentAck(3, 1)), "Session accepted unsent fragment ACK");
+            var first = fixture.Session.TakeDue(200, fixture.Events.Add);
+            Check(first.Count == 2 && first[0][10] == 1 && first[1][10] == 2
+                && first.All(p => p[3] == fixture.ServerSession
+                    && BinaryPrimitives.ReadUInt32LittleEndian(p.AsSpan(4)) == ClientCookie),
+                "Session discarded fragment parts or CONNECT context");
+            foreach (int field in new[] { 0, 1, 3, 4 })
+            {
+                byte[] wrong = FragmentAck(3, 1); wrong[field] ^= 1; Sum(wrong);
+                Check(!fixture.Session.TryAcknowledge(wrong), "Fragment ACK bypassed peer/session/cookie guard");
+            }
+            byte[] corrupt = FragmentAck(3, 1); corrupt[^1] ^= 1;
+            Check(!fixture.Session.TryAcknowledge(corrupt) && !fixture.Session.TryAcknowledge(FragmentAck(3, 0)),
+                "Fragment ACK bypassed checksum/part guard");
+            Check(fixture.Session.TryAcknowledge(FragmentAck(4, 2, true)) && first[1].All(b => b == 0)
+                && fixture.Session.PendingCount == 1, "Later fragment ACK completed entire response");
+            Check(fixture.Session.TakeDue(201, fixture.Events.Add).Count == 0
+                && !fixture.Session.TryAcknowledge(FragmentAck(5, 0)), "Session advanced past missing fragment ACK");
+            Check(fixture.Session.TryAcknowledge(FragmentAck(3, 1)), "Matching nonzero part ACK rejected");
+            byte[] final = fixture.Session.TakeDue(201, fixture.Events.Add).Single();
+            Check(final[10] == 0 && BinaryPrimitives.ReadUInt16LittleEndian(final.AsSpan(8)) == 5,
+                "Final fragment did not use next sequence and part zero");
+            Check(fixture.Session.TryAcknowledge(FragmentAck(5, 0)) && final.All(b => b == 0)
+                && fixture.Session.PendingCount == 0 && fixture.Session.TryReplyToPing(Ping(), 202, fixture.Events.Add, out _),
+                "Completed multipart response retained storage or broke keepalive");
+        }
         using (LocalSessionRegistry registry = new())
         using (Fixture host = new(keepAlive: true, sessions: registry))
         using (Fixture visitor = new(keepAlive: true, sessions: registry))

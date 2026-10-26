@@ -149,8 +149,9 @@ build; neither native adapter nor UI archive changed.
 3. Serialize a bounded registry snapshot with the latest attributes and member
    metadata. Respect Space, the request's selector/filter semantics and result
    limit. The current empty-only parser deliberately does not implement filtering.
-4. Check response size against the existing single-packet transport limit; do
-   not truncate records or claim successful catalogue delivery on overflow.
+4. Enforce the implemented 64 KiB complete-response limit; the outgoing queue
+   now fragments it into bounded packets. Do not truncate records or claim
+   successful catalogue delivery on overflow. See LOCAL-RESPONSE-FRAGMENTATION.md.
 5. Validate the actual client consuming a nonempty response before implementing
    join/status transitions and broadening loopback-only binding to a deliberate
    LAN configuration. A second Windows PC with HE is available for that later test.

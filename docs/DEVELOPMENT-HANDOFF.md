@@ -52,6 +52,14 @@ StationURLs, identifier bytes, opaque scalar and flag through update/snapshot
 and cleanup. Neither candidate is selected in the launcher; the active
 live-verified service remains `48f7b2a`.
 
+The outgoing-response candidate `work/server-response-fragments` builds cleanly
+and passes 4,152 service checks. It supports 64 KiB logical responses using
+947-byte fragments, a two-slot sequence window that cannot slide past an ACK
+gap, exact ciphertext retries, native echoed-part ACK matching and bounded
+cleanup. Login/Register ACK gating now counts completed logical responses.
+See `LOCAL-RESPONSE-FRAGMENTATION.md`. This is synthetic transport validation;
+no nonempty catalogue handler or new game-facing behavior is deployed.
+
 The second search output is proven to map session IDs to pipe-separated
 StationURLs. Create's second qString supplies the game's serialized StationURL
 list with Storm routing data; it must not be replaced by the login transport's
