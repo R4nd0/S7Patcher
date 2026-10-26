@@ -24,12 +24,18 @@ namespace S7Patcher.Source
         internal const int MaximumPostLoginResponses = 32;
 #endif
         internal const int PingReplyIntervalMilliseconds = 100;
+        internal const int LanIdleMilliseconds = 900000;
+        internal const int LanMaximumMilliseconds = 86400000;
+        internal const int LanResponseWindowMilliseconds = 60000;
+        internal const int LanResponsesPerWindow = 512;
         private readonly PrudpProbePeer peer;
         private readonly ReliableMessageAssembler assembler;
         private readonly LocalLoginRpcEngine rpc;
         private readonly byte[] key;
         private readonly long createdAt;
         private readonly bool keepAlive;
+        private readonly bool lanKeepAlive;
+        private readonly int idleMilliseconds, maximumMilliseconds;
         private readonly LocalSessionRegistry sessions;
         private readonly bool ownsRegistry;
         private long lastActivityAt, nextPingReplyAt;
@@ -37,6 +43,7 @@ namespace S7Patcher.Source
         private int responseCount;
         private readonly HashSet<string> observedOperations = new(StringComparer.Ordinal);
         private int postLoginResponseCount;
+        private long responseWindowAt;
         private bool registrationAcknowledged;
         private bool joinFailureObserved;
         private bool closed;
@@ -54,6 +61,10 @@ namespace S7Patcher.Source
             createdAt = now;
             lastActivityAt = now;
             this.keepAlive = keepAlive;
+            lanKeepAlive = keepAlive && network?.IsLan == true;
+            idleMilliseconds = lanKeepAlive ? LanIdleMilliseconds : KeepAliveIdleMilliseconds;
+            maximumMilliseconds = lanKeepAlive ? LanMaximumMilliseconds : KeepAliveMaximumMilliseconds;
+            responseWindowAt = now;
             this.sessions = sessions ?? new();
             ownsRegistry = sessions == null;
         }
@@ -76,11 +87,11 @@ namespace S7Patcher.Source
         private bool ExpireIfDue(long now, Action<ConfigServerEvent> emit)
         {
             bool expired = keepAlive
-                ? now - createdAt >= KeepAliveMaximumMilliseconds || now - lastActivityAt >= KeepAliveIdleMilliseconds
+                ? now - createdAt >= maximumMilliseconds || now - lastActivityAt >= idleMilliseconds
                 : now - createdAt >= LifetimeMilliseconds;
             if (!expired) return false;
             emit(new() { Event = "local-login-session-expired", Reason = !keepAlive ? "probe-lifetime-ended"
-                : now - createdAt >= KeepAliveMaximumMilliseconds ? "keepalive-maximum-ended" : "keepalive-idle-timeout" });
+                : now - createdAt >= maximumMilliseconds ? "keepalive-maximum-ended" : "keepalive-idle-timeout" });
             Dispose(); return true;
         }
 
@@ -113,13 +124,19 @@ namespace S7Patcher.Source
                     // and create/update/leave requests, sharing the same post-login budget.
                     if (search)
                     {
+                        // Only an explicitly configured two-address LAN uses
+                        // renewable fixed-window budgets. Pending ciphertext,
+                        // retries, peer allowlisting and idle expiry stay bounded.
+                        if (lanKeepAlive && now.HasValue && now.Value - responseWindowAt >= LanResponseWindowMilliseconds)
+                        { responseWindowAt = now.Value; postLoginResponseCount = 0; }
                         if (observedOperations.Count < 8)
                         {
                             string operation = LoginRpcCodec.ClassifyPostLoginRequest(message);
                             if (observedOperations.Add(operation))
                                 emit(new() { Event = "local-post-login-request-observed", Reason = operation });
                         }
-                        if (!keepAlive || !registrationAcknowledged || postLoginResponseCount >= MaximumPostLoginResponses || pending.Count >= ReliableResponseQueue.MaximumResponses)
+                        int responseLimit = lanKeepAlive ? LanResponsesPerWindow : MaximumPostLoginResponses;
+                        if (!keepAlive || !registrationAcknowledged || postLoginResponseCount >= responseLimit || pending.Count >= ReliableResponseQueue.MaximumResponses)
                         {
                             emit(new() { Event = "local-login-message-rejected", Reason = "response-budget-exhausted" });
                             continue;

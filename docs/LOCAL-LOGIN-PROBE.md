@@ -59,7 +59,7 @@ sets bit `0x08`. The resulting 14-byte reply has type/flags `0x0c`, the unchange
 server session and the client's cookie. Repeated requests produce identical
 bytes; no DATA sequence is consumed. Replies are limited to ten per second.
 
-The optional session expires after two minutes without an accepted PING or
+The loopback optional session expires after two minutes without an accepted PING or
 after twenty minutes total, whichever comes first. Expiry clears session keys
 and pending ciphertext; traffic cannot revive a closed session. The existing
 four-transmission response timeout and two-RPC login budget remain. The opt-in
@@ -82,6 +82,23 @@ responses per peer. Normal builds retain two minutes idle, twenty minutes
 total and 32 post-login responses. The baseline non-keepalive probe retains
 its two-minute absolute lifetime. This policy is bounded laboratory support,
 not a claim of reconnect handling or game-session stability.
+
+### Explicit LAN lifetime
+
+Keepalive sessions constructed with an explicit LocalNetworkPolicy.IsLan now
+use a separate policy: fifteen minutes idle, twenty-four hours absolute, and
+512 answered post-login RPCs per fixed sixty-second window. A new window
+renews the response allowance, not registration, membership or an expired
+connection. The receive loop supplies monotonic time. Rejected/duplicate DATA
+does not refresh activity; pending response limits and ACK/retry cleanup remain.
+Non-keepalive probes and non-LAN loopback/laboratory limits are unchanged.
+
+The LAN launcher starts its own service with the matching 86,400-second cap
+and still terminates that child when its host game ends. No subnet or additional
+peer is enabled. Tests use encrypted synthetic peers in both address directions,
+exhaust/reopen a response window, advance a virtual clock past two hours and
+to the final cap, and verify idle cleanup and baseline isolation. This is
+not evidence of a real twenty-four-hour game or two-PC synchronization.
 
 Synthetic Windows checks cover reply encoding with an independent checksum,
 peer/flag/payload rejection, rate limiting, activity beyond the old absolute

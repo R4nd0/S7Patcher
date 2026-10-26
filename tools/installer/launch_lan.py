@@ -15,6 +15,7 @@ import compatibility
 import launch_local
 
 HTTP_PORT, UDP_PORT = 9110, 9111
+SERVICE_SECONDS = 86400
 
 
 def check_content(configuration, expected):
@@ -74,7 +75,7 @@ def run(args):
                 with log.open('xb') as output, errors.open('xb') as error:
                     service = subprocess.Popen([str(root / 'Runtime/dotnet/dotnet.exe'), str(root / 'Server/S7Patcher.dll'),
                         '--local-config-server', '--local-catalogue-probe', '--lan-address', local, '--lan-peer', peer,
-                        '--content-id', expected, '--http-port', str(HTTP_PORT), '--udp-port', str(UDP_PORT), '--seconds', '7200'],
+                        '--content-id', expected, '--http-port', str(HTTP_PORT), '--udp-port', str(UDP_PORT), '--seconds', str(SERVICE_SECONDS)],
                         stdout=output, stderr=error, creationflags=subprocess.CREATE_NO_WINDOW)
                     configuration, port = launch_local.service_ready(service, log, address)
                 if port != UDP_PORT:

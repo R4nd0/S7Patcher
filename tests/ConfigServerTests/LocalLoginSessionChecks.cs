@@ -164,7 +164,7 @@ internal static class LocalLoginSessionChecks
         internal readonly byte[] Key;
         internal readonly byte ServerSession;
         internal readonly List<ConfigServerEvent> Events = new();
-        internal Fixture(long now = 100, bool keepAlive = false, LocalSessionRegistry sessions = null)
+        internal Fixture(long now = 100, bool keepAlive = false, LocalSessionRegistry sessions = null, LocalNetworkPolicy network = null)
         {
             using ECDiffieHellman client = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
             using ECDsa signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
@@ -175,7 +175,9 @@ internal static class LocalLoginSessionChecks
             Peer.Connect.TryGetReply(packet, request, out byte[] reply);
             ServerSession = reply[3];
             Key = NativeCngFixtures.Derive(client, reply.AsSpan(82, 72).ToArray());
-            Session = new(Peer, new(IPAddress.Loopback, 40000), "prudp:/address=127.0.0.1;port=9111;sid=1;stream=3;type=2", now, keepAlive, sessions);
+            Session = new(Peer, new(network?.PeerAddress ?? IPAddress.Loopback, 40000),
+                "prudp:/address=" + (network?.BindAddress ?? IPAddress.Loopback) + ";port=9111;sid=1;stream=3;type=2",
+                now, keepAlive, sessions, network);
         }
         internal byte[] Data(ushort sequence, byte part, ReadOnlySpan<byte> content) => LocalLoginSessionChecks.Data(ServerCookie, Key, sequence, part, content);
         internal void Login() => Session.ProcessData(Data(6, 0, Request(false)), Events.Add);
@@ -188,10 +190,62 @@ internal static class LocalLoginSessionChecks
         public void Dispose() { Session.Dispose(); Peer.Dispose(); CryptographicOperations.ZeroMemory(Key); }
     }
 
+    private static int RunLanLifetimeChecks()
+    {
+        int passed = 0;
+        void Check(bool ok, string why) { if(!ok) throw new Exception(why); passed++; }
+        foreach(bool reversed in new[]{false,true})
+        {
+            string left = reversed ? "192.168.10.20" : "192.168.10.10";
+            string right = reversed ? "192.168.10.10" : "192.168.10.20";
+            Check(LocalNetworkPolicy.TryCreate(left,right,out var policy), "LAN lifetime policy fixture");
+            using var fixture = new Fixture(keepAlive:true,network:policy);
+            fixture.Register();
+            Check(fixture.Events.Count(e=>e.Event=="local-login-response-queued")==2 && fixture.Session.PendingCount==0,
+                "LAN lifetime registration fixture");
+            ushort requestSequence=8, replySequence=3;
+            for(int i=0;i<PrudpLocalLoginSession.LanResponsesPerWindow;i++)
+            {
+                long now=1000+i;
+                fixture.Session.ProcessData(fixture.Data(requestSequence++,0,LocalSessionSearchChecks.Request()),fixture.Events.Add,now);
+                byte[] response=fixture.Session.TakeDue(now,fixture.Events.Add).Single();
+                VerifySearchResponse(response,fixture.Key,0x12345678,fixture.ServerSession); passed++;
+                Check(fixture.Session.TryAcknowledge(Ack(ServerCookie,replySequence++)), "LAN window reply ACK");
+            }
+            fixture.Session.ProcessData(fixture.Data(requestSequence++,0,LocalSessionSearchChecks.Request()),fixture.Events.Add,2000);
+            Check(fixture.Session.TakeDue(2000,fixture.Events.Add).Count==0
+                && fixture.Events.Any(e=>e.Reason=="response-budget-exhausted"), "LAN reply rate limit missing");
+            long reopened=100+PrudpLocalLoginSession.LanResponseWindowMilliseconds;
+            fixture.Session.ProcessData(fixture.Data(requestSequence++,0,LocalSessionSearchChecks.Request()),fixture.Events.Add,reopened);
+            Check(fixture.Session.TakeDue(reopened,fixture.Events.Add).Count==1
+                && fixture.Session.TryAcknowledge(Ack(ServerCookie,replySequence++)), "LAN reply window never reopened");
+            long beyondOldCap=100+2*60*60*1000;
+            for(long now=reopened+60000;now<beyondOldCap;now+=60000)
+                Check(fixture.Session.TryReplyToPing(Ping(),now,fixture.Events.Add,out _), "Active LAN expired at probe cap");
+            fixture.Session.ProcessData(fixture.Data(requestSequence++,0,LocalSessionSearchChecks.Request()),fixture.Events.Add,beyondOldCap);
+            Check(fixture.Session.TakeDue(beyondOldCap,fixture.Events.Add).Count==1
+                && fixture.Session.TryAcknowledge(Ack(ServerCookie,replySequence++)), "LAN RPC failed after old lifetime");
+            long hardEnd=100+PrudpLocalLoginSession.LanMaximumMilliseconds;
+            for(long now=beyondOldCap+600000;now<hardEnd;now+=600000)
+                Check(fixture.Session.TryReplyToPing(Ping(),now,fixture.Events.Add,out _), "LAN expired before declared maximum");
+            Check(!fixture.Session.TryReplyToPing(Ping(),hardEnd,fixture.Events.Add,out _) && fixture.Session.Closed,
+                "LAN absolute lifetime removed");
+            Check(fixture.Events.Last(e=>e.Event=="local-login-session-expired").Reason=="keepalive-maximum-ended",
+                "Wrong LAN maximum expiry reason");
+            using var idle = new Fixture(keepAlive:true,network:policy);
+            idle.Register(); idle.Session.TakeDue(100+PrudpLocalLoginSession.LanIdleMilliseconds,idle.Events.Add);
+            Check(idle.Session.Closed, "Idle LAN registration never expired");
+            using var baseline = new Fixture(network:policy);
+            baseline.Register(); baseline.Session.TakeDue(100+PrudpLocalLoginSession.LifetimeMilliseconds,baseline.Events.Add);
+            Check(baseline.Session.Closed, "LAN addresses expanded baseline non-keepalive probe");
+        }
+        return passed;
+    }
+
     internal static int Run()
     {
         if (!OperatingSystem.IsWindows()) { Console.WriteLine("SKIP: native BCrypt local-login session checks require Windows."); return 0; }
-        int passed = 0;
+        int passed = RunLanLifetimeChecks();
         void Check(bool value, string label) { if (!value) throw new Exception(label); passed++; }
         // A busy browser may send RPCs instead of PINGs. Advancing receive
         // timestamps must extend only successfully handled registered activity.

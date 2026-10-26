@@ -78,7 +78,7 @@ def build(adapter, service, dotnet, python_zip, output):
         'Beitritt und gemeinsamer Partiestart sind mit zwei Instanzen auf einem PC bestaetigt.\n'
         'Dieses Paket uebertraegt die Netzwerkkorrektur auf die originale History-EXE.\n'
         'Beitritt, Hosting in beiden Richtungen und laengere Partien zwischen getrennten PCs muessen noch geprueft werden.\n'
-        'Dieser LAN-Testlauf ist derzeit auf 20 Minuten je Anmeldung begrenzt.\n'
+        'Der LAN-Dienst endet mit dem Hostspiel, spaetestens nach 24 Stunden.\n'
         'Gleiche Dateien verhindern nicht alle Synchronisationsfehler der Spielsimulation.\n', encoding='utf-8')
     (output / 'RUNTIME-SOURCES.txt').write_text(
         'CPython 3.14.10 Windows embeddable x64\n'

@@ -1,6 +1,6 @@
 # Local S7 development handoff
 
-Updated 2026-10-26. Baseline implementation commit: `b94c978`.
+Updated 2026-10-27. Baseline implementation commit: `b94c978`.
 
 ## Verified
 
@@ -17,11 +17,13 @@ two-PC join is still unverified. The one-PC two-client laboratory now completes
 native admission and the service success report, and the user confirmed both
 players visibly occupy the same lobby. The user subsequently confirmed both
 instances load the map and the match runs, then confirmed five minutes of play
-with inputs on both sides and no reported desync/disconnection. Longer synchronization remains
+with inputs on both sides and no reported desync/disconnection. The reverse
+direction (A hosts, B joins) also reached a running match, confirmed by the user.
+Longer synchronization remains
 unverified. Current deployed service: work/server-pair-activity;
-adapter: work/native-pair-core-resume. Host was slot B, joining guest slot A.
+adapter: work/native-pair-core-resume. Current host is A, joining guest B.
 
-The current native candidate passed 354 adapter checks, 38 network-guard checks
+The historical baseline passed 354 adapter checks, 38 network-guard checks
 and 18 original-byte comparisons, plus configuration validation. The
 current session-leave candidate passes 3,069 service checks; the unchanged
 RPC codec previously passed 20,288 isolated assertions. Its UI archive verifies
@@ -39,8 +41,10 @@ match startup, not checksum equality or long-run desync freedom. The user also
 confirmed five minutes with actions on both sides, without an error. The user
 then closed both windows before the requested role reversal. The first match's
 host was B, guest A. Restarting with A first, so its lobby can be established
-unambiguously before B is launched. Reverse direction and same-process
-leave/recreate behavior remain pending. Prior match log archived as
+unambiguously before B was launched. A's native host gate opened, B's native
+completion succeeded, and the service confirmed ReportJoinSuccess. The user
+confirmed reverse-direction joining and match start work. Same-process
+leave/recreate behavior remains pending. Prior match log archived as
 work/pair-before-after-first-running-match.jsonl.
 
 The independent native -LocalNetworkPump build selects the same proven
@@ -66,10 +70,26 @@ the bundled Python/.NET launcher passed its service/configuration preflight
 without launching another game. ZIP integrity passed for all 249 files; it
 contains no original game binaries/archives, identities or LocalData. Artifact:
 outputs/S7-LAN-Multiplayer-Testpaket-2026-10-27.zip (49,858,126 bytes).
-No candidate has replaced normal PC1 or PC2 files. The LAN
-capability flags stay false pending real two-PC qualification. Normal service
-limits are still 2 minutes idle/20 minutes total/32 post-login responses; that
-bounded candidate is not qualified for long LAN games.
+The first ZIP is superseded by outputs/S7-LAN-Multiplayer-Testpaket-v2-2026-10-27.zip
+(49,858,329 bytes, 249 files; integrity checked). Its input package is
+work/installer-lan-duration and service build work/server-lan-lifetime.
+Explicit LAN keepalive now uses 15-minute idle, 24-hour maximum and 512 replies
+per renewable fixed 60-second window. The matching host service process cap is
+24 hours, with launcher cleanup on game exit. Non-LAN probe/lab limits remain
+unchanged. 8,526 default and 10,987 lab service checks pass, including virtual
+long-duration encrypted peers, window exhaustion/renewal and expiry/isolation.
+
+The fully installed work/installer-network-pump-realtest-v2 was updated only
+with the new three Server files and Launcher/launch_lan.py after verifying its
+previous inventory. Complete inventory verification and a subsequent portable
+LAN-host preflight on the actual local address passed; no game was launched.
+Its game/adapter/menu/runtime files are unchanged from the full install test.
+Both old outputs/S7-Local-Test and original installation remain untouched.
+No PC2 files have been changed by the agent. The LAN capability flags stay false
+pending real two-PC qualification, firewall behavior and longer actual play.
+When PC2 has installed the new ZIP in a fresh test folder, the unused prepared
+copy above can host on PC1 via its bundled Launcher/launch_lan.py. Gracefully
+stop the two owned lab games first; retain exact process/service ownership checks.
 
 ### Current: two-client laboratory; player join precedes ticket/session join
 

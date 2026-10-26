@@ -204,10 +204,14 @@ The user subsequently confirmed both instances loaded the map and the match
 is running. Both stored game processes remain responsive; the service accepted
 further host metadata updates and continues answering PINGs, with no recorded
 rejection/expiry in the observed run. The user then confirmed five minutes of
-play with actions on both sides and no desync/disconnection message. A role
-reversal test (A hosts, B joins and starts, without restarting) is now pending.
-This establishes initial match startup; it does not establish checksum equality,
-long-run stability, reverse hosting or a working two-PC LAN build.
+play with actions on both sides and no desync/disconnection message. The user
+then closed both games; A was launched alone to establish the reverse-direction
+host lobby before B started. Host A logged its original gate open, guest B
+logged positive completion, and the service confirmed ReportJoinSuccess. The
+user confirmed joining and match startup work in this reverse direction too.
+This establishes initial match startup in both one-PC host directions; it does
+not establish checksum equality, long-run stability, same-process leave/recreate
+behavior or a working two-PC LAN build.
 
 ## Verification
 
