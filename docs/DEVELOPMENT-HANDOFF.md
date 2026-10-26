@@ -75,7 +75,7 @@ The platform object at `13789D0` has table `112BE3C`; its `+0x28` method
 predicate and `ED4815..ED482C` skips the whole Startup ECHO sequence. This is
 separate from actual transport readiness.
 
-### Prepared local-start policy candidate
+### Local-start policy: live verification
 
 The next adapter replaces only the five-byte `MOV EAX,[EDX+28]; CALL EAX`
 sequence at `ED480A` with a guarded local-start decision. With the probe enabled,
@@ -88,9 +88,32 @@ Validation: 161 bootstrap, 88 platform, 18 connection-state and 38 network-guard
 checks; 15 byte guards; real configuration/fingerprint rejection test all pass.
 Build: `work/native-startup-build`. Deployed after the user closed S7, retaining
 `LocalData/adapter-23123b5.dll`; bundle hash validation and no-game-launch preflight
-passed. A bounded, passive early-start observer is waiting for the user's next
-launch. Actual startup completion is still unverified. The preceding core-only
-milestone is committed/pushed as `23123b5`.
+passed. The user opened the session list. A three-minute early observer recorded
+one master start request/completion with success (1), 5 network-result events,
+2,886 command queue ticks and 5,812 core ticks. Network skip is 0, master started
+and owner attached are 1. The actual local Login/Register connection persists.
+Owner interface-present is 1 and its result is success (1), but readiness
+`+0x3A` remains 0. No session search RPC reached the service yet. This change is
+committed/pushed as `fafb4c2`; the earlier core bridge is `23123b5`.
+
+### Prepared local session-search policy
+
+The new candidate replaces only `ED6C3A` (the readiness check within session
+search). It requires the real local connected/not-pending facade, current owned
+network/core objects, bootstrap thread, configured UDP port, started master,
+attached owner, interface presence, a successful network result and no optional
+`+0x249` dependency. This is an explicit policy for the loopback search request,
+not a claim that the native NAT status is ready. It changes no readiness flags,
+other `ED7270` callers, hosting or joining. The exact underlying reason for
+native readiness remaining false is still unresolved; it is not established
+that it specifically denotes Internet reachability.
+
+Build: `work/native-search-build`. Validation: 185 bootstrap, 88 platform,
+18 connection-state, 38 network-guard checks, 16 original-byte checks and real
+configuration/fingerprint validation pass. Not deployed yet; user was asked to
+close S7. Next verify that the real search reaches the local service. Its
+existing two-response RPC budget still only supports Login/Register; a new
+search RPC is expected to need protocol identification and implementation.
 
 ## Local workspace (not portable paths)
 
@@ -102,7 +125,7 @@ Do not assume an old game process still has a usable service session.
 
 The chat workspace's `work/` contains the private static analysis scripts,
 bounded observers, SDK and compiler outputs. It is outside this repository.
-Latest adapter with live core-update verification: `work/native-core-build`.
+Latest adapter with live startup verification: `work/native-startup-build`.
 Previous menu-only bridge build: `work/native-menu-build`.
 The original installation is `C:/Spiele/thesettlers7` and must remain unchanged.
 

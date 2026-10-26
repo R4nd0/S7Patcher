@@ -196,6 +196,31 @@ int main() {
     check(!LocalUpdateCore(network)); // Missing scheduler.
     *reinterpret_cast<void**>(implementation + 4) = implementation;
     check(LocalUpdateCore(network) == core);
+    udp_port = 10001;
+    check(!LocalSessionSearchReady(network)); // No successful native startup.
+    network[0x5c + 0x4c4] = 1;
+    owner[0x18] = 1; owner[0x38] = 1;
+    *reinterpret_cast<int32_t*>(owner + 0x28) = 1;
+    check(LocalSessionSearchReady(network) && owner[0x3a] == 0);
+    for (auto* flag : {network + 0x5c + 0x4c4, owner + 0x18, owner + 0x38, owner + 0x88}) {
+        *flag = 0; check(!LocalSessionSearchReady(network)); *flag = 1;
+    }
+    for (int32_t result : {-1, 0, 2}) {
+        *reinterpret_cast<int32_t*>(owner + 0x28) = result;
+        check(!LocalSessionSearchReady(network));
+    }
+    *reinterpret_cast<int32_t*>(owner + 0x28) = 1;
+    owner[0x249] = 1; check(!LocalSessionSearchReady(network)); owner[0x249] = 0;
+    owner[0x98] = 1; check(!LocalSessionSearchReady(network)); owner[0x98] = 0;
+    udp_port = 0; check(!LocalSessionSearchReady(network)); udp_port = 10001;
+    local_connect_probe = false; check(!LocalSessionSearchReady(network)); local_connect_probe = true;
+    bootstrap_thread = 0; check(!LocalSessionSearchReady(network)); bootstrap_thread = GetCurrentThreadId();
+    *reinterpret_cast<void**>(network + 0x2c) = nullptr;
+    check(!LocalSessionSearchReady(network)); *reinterpret_cast<void**>(network + 0x2c) = core;
+    *reinterpret_cast<void**>(facade + 0x0c) = owner;
+    check(!LocalSessionSearchReady(network)); *reinterpret_cast<void**>(facade + 0x0c) = nullptr;
+    check(!LocalSessionSearchReady(nullptr) && !LocalSessionSearchReady(owner));
+    check(LocalSessionSearchReady(network) && owner[0x3a] == 0);
     for (int mode = 0; mode <= 8; ++mode) {
         pump_mode = mode; pump_trace.clear(); network_getter_calls = 0;
         *Native<unsigned char**>(0x1379E14) = network;

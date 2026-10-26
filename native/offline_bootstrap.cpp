@@ -265,6 +265,26 @@ bool __fastcall SkipLocalNetworkStartup(void* self, void*) {
     ReportLocalStatus("local-network-startup-enabled");
     return false;
 }
+
+bool LocalSessionSearchReady(void* self) {
+    if (GetCurrentThreadId() != bootstrap_thread || !udp_port ||
+        !LocalConnectionReady(self)) return false;
+    auto* network = static_cast<unsigned char*>(self);
+    auto* owner = LocalUpdateOwner(network);
+    if (!owner || !LocalUpdateCore(network)) return false;
+    // Scope this to dispatching a search to our already-connected loopback
+    // service. Do not substitute global NAT readiness or enable hosting/joining.
+    return network[0x5c + 0x4c4] == 1 && owner[0x18] == 1 && owner[0x38] == 1 &&
+        *reinterpret_cast<int32_t*>(owner + 0x28) == 1 && owner[0x249] == 0;
+}
+
+bool __fastcall QueryLocalSessionSearch(void* self, void*) {
+    const bool ready = LocalSessionSearchReady(self);
+    static volatile LONG previous = -1;
+    if (InterlockedExchange(&previous, ready ? 1 : 0) != (ready ? 1 : 0))
+        ReportLocalStatus(ready ? "local-session-search-ready" : "local-session-search-not-ready");
+    return ready;
+}
 const Patch Patches[] = {
     {0xD3C62D, {0xe8,0x1e,0x6f,0x10,0x00}, reinterpret_cast<const void*>(&ConstructLocalFacade)},
     {0xD4A083, {0xe8,0xc8,0x94,0x0f,0x00}, reinterpret_cast<const void*>(&ConstructLocalFacade)},
@@ -285,6 +305,7 @@ const Patch ConnectPatches[] = {
     {0xED6C2B, {0xe8,0x00,0x06,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalLoginStatus)},
     // Replace the complete five-byte MOV EAX,[EDX+28]; CALL EAX sequence.
     {0xED480A, {0x8b,0x42,0x28,0xff,0xd0}, reinterpret_cast<const void*>(&SkipLocalNetworkStartup)},
+    {0xED6C3A, {0xe8,0x31,0x06,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalSessionSearch)},
     {0x1091B08, {0xc0,0x56,0xc9,0x00,0x00}, reinterpret_cast<const void*>(&UpdateLocalGame), true}
 };
 

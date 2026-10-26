@@ -186,7 +186,7 @@ Validation: 147 bootstrap/bridge checks, 88 platform checks, 18 connection-state
 checks, 38 network-guard checks, 14 original-byte guards and the real local
 configuration/fingerprint rejection test pass. No game is launched by these tests.
 
-## Local network startup policy (candidate)
+## Local network startup policy
 
 A live read-only observation identified the startup gate: `ED480A` invokes the
 platform offline predicate through vtable offset `+0x28`; `ED4815` stores its
@@ -206,7 +206,27 @@ hook. All network operations remain subject to the loopback guard.
 
 Validation: 161 bootstrap checks, 88 platform checks, 18 connection-state checks,
 38 network-guard checks, 15 original-byte comparisons and real configuration
-validation pass. Actual startup completion still needs a user-started game run.
+validation pass. A user-started run confirmed native master startup success,
+owner attachment, interface presence, 2,886 queue ticks and 5,812 core ticks in
+three minutes. Local Login/Register remains connected. Native network readiness
+is still false and no search RPC has been observed.
+
+## Local session-search eligibility (candidate)
+
+The local probe replaces only the readiness call at `ED6C3A` inside session
+search. Its policy requires the actual connected local facade (no pending login),
+the current guarded owner/core, bootstrap thread, configured service port,
+completed master start, owner attachment, interface presence, a successful
+network result and no optional owner `+0x249` dependency. Pending/error results,
+disconnects and incomplete/replaced objects remain ineligible. No native NAT
+flag is changed, and other readiness callers, hosting and joining are untouched.
+This permits an experimental request to the loopback service; it does not
+establish a successful server response or playable multiplayer. The underlying
+native readiness failure remains unresolved.
+
+Validation: 185 bootstrap checks, 88 platform, 18 connection-state, 38 network
+guard checks, 16 byte comparisons and the real configuration test pass.
+The candidate has not yet been tested in the actual game.
 
 ## Fast menu startup
 
