@@ -49,11 +49,14 @@ Package outputs/S7-LAN-Routen-Diagnose.zip (nine entries), SHA256:
 tools/installer/update_join_routes.py requires service 8ccac3f... and retains
 the current menu/adapter, using backup Before-join-route-diagnostic-v1.
 
-User has been asked to close BOTH games and apply Routen-Diagnose.cmd on PC 2,
-without restarting. PC 1 deployment is pending closure; extract the verified
-ZIP beside its starter, run S7-Routen-Diagnose/update_join_routes.py with bundled
-Python, then the no-game LAN host preflight. Check host processes/ports first.
-After both copies match, request exactly one public four-slot join attempt.
+User confirmed both games closed and Routen-Diagnose.cmd installed on PC 2.
+Host process/port checks found no running game or service. PC 1 then installed
+the verified ZIP with bundled Python; the service hash matches the candidate.
+The no-game LAN host preflight passed. New content ID:
+640b0ef37afc7aba18955aac14aa0e9d717f388ec2b6433fa1110cc1e21ef847.
+User has been asked to create a public four-slot lobby on PC 1, start PC 2,
+attempt exactly one join and leave both games open. The error is still expected;
+inspect the next run's fixed host-route rejection reason before changing policy.
 
 ### Current: real JoinSession received; first pending reply prepared
 
