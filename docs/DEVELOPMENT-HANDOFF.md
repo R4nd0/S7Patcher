@@ -23,7 +23,17 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
-### Current: signed native RVCID representation; tested candidate pending deployment
+### Current: signed native RVCID representation; deployed, real join pending
+
+User confirms Kennung-Update installed on PC 2. Initial PC 1 check still found
+game PID 19428 plus launcher/service; no loaded files were changed. After a
+second closure confirmation, game/service were gone and ports 9110/9111 free.
+Verified nine-entry ZIP extracted with exclusive writes; bundled transactional
+updater completed and installed service hash 7d61a238... matches the candidate.
+Content ID: aff2af7d7629615553ed5beeb964ecc374ca51778f358e9b4d5c99538cdb9e00.
+Host --check-only passed for .125 / .85 without launching the game. User asked
+to create public four-slot lobby on PC 1, attempt exactly one PC 2 join, and
+leave both games and starter windows open. Await actual result and logs.
 
 User reports join failure. Host run 20261026-191237-fe39c5e9 has two registrations,
 create/update/search and one JoinSession_V1 rejected as
@@ -52,12 +62,8 @@ wrong-source rejection checked. Requires service 044931d8..., creates backup
 LocalData/Before-signed-route-v1. Uses unchanged transactional updater; no native
 adapter/archive changes. Starter checks all extraction siblings before Python.
 
-User asked to close both games, apply Kennung-Update.cmd plus full sibling folder
-on PC 2, and not restart. PC 1 remains on 044931d8... pending confirmation.
-After confirmation check game/service processes, clean only identified orphan
-if needed, extract verified ZIP to test root, run bundled Python
-S7-Kennung-Update/update_signed_route.py --bundle <root>, then LAN host check-only.
-Request one public four-slot join attempt and inspect reply ACK/follow-up.
+Both installations and PC 1 no-game preflight now completed as recorded above.
+Next inspect the requested public four-slot join attempt for reply ACK/follow-up.
 Real join, reverse hosting, match startup and synchronization remain unverified.
 
 ### Current: embedded Storm endpoint identified; candidate projection ready
