@@ -41,12 +41,17 @@ Deliverable outputs/S7-LAN-Dienst-Update.zip (nine entries), SHA256:
 Expected content ID after updating:
 5ca87dd0e322d9666bc001d680440a3e2896ad1133a1009a1f628f5c54cf014f.
 
-User has been asked to close BOTH games and run Dienst-Update.cmd on PC 2,
-without restarting. PC 1 deployment is pending confirmed closure. Do not
-overwrite the running service; check for an orphan from its last launcher
-before the next preflight. The active copies still use the old service until
-this update. No completed membership, host notification, match startup or
-desync-free gameplay has been established. Continue after the paired update.
+User confirmed both games closed and Dienst-Update.cmd installed on PC 2.
+PC 1 was then updated from the verified ZIP with the transactional updater.
+Host process/port checks found no running game or service before deployment.
+The installed service hash is
+8ccac3f143a3a205cb2bc0cc877cea9085fd255c0cef37822d1c666c8c56fc20;
+the content ID matches the expected value above. The LAN host preflight on
+192.168.178.125 with peer 192.168.178.85 passed without launching a game.
+User has been asked to create a public four-slot lobby on PC 1, start PC 2,
+attempt exactly one join, and leave both games open. Runtime result pending.
+No completed membership, host notification, match startup or desync-free
+gameplay has been established. Inspect the next run's join result/reason.
 
 ### Current: menu gate confirmed, native join dispatch update ready
 
