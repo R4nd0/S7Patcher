@@ -22,8 +22,8 @@ namespace S7Patcher.Source
             int split = text.IndexOf(marker, StringComparison.Ordinal);
             if (split < prefix.Length || text.IndexOf('#') != split || text.LastIndexOf('#') != split) return false;
             reason = "local-join-storm-connection-mismatch";
-            if (!uint.TryParse(text.AsSpan(prefix.Length, split - prefix.Length), NumberStyles.None,
-                CultureInfo.InvariantCulture, out uint connection) || connection == 0 || connection != host.ConnectionId) return false;
+            if (!TryReadConnection(text.AsSpan(prefix.Length, split - prefix.Length), out uint connection)
+                || connection != host.ConnectionId) return false;
             int offset = split + marker.Length;
             string[] names = ["PeerGUID", "Version", "Platform", "Gw", "Address", "PeerDescriptorBaseEnd", "ProfileID", "RoutingOption"];
             Dictionary<string, string> values = new(StringComparer.Ordinal);
@@ -72,6 +72,22 @@ namespace S7Patcher.Source
             projected = text[..addressesStart] + string.Join(',', owned) + text[(addressesStart + addressesLength)..];
             reason = "local-join-storm-route-owned";
             return true;
+        }
+
+        private static bool TryReadConnection(ReadOnlySpan<char> text, out uint connection)
+        {
+            connection = 0;
+            // StationURL's numeric map holds the same 32 bits but serializes high
+            // values as signed decimal. Compare the bits, never discard ownership.
+            if (text.StartsWith("-", StringComparison.Ordinal))
+            {
+                if (!int.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int signed)
+                    || signed >= 0 || !text.SequenceEqual(signed.ToString(CultureInfo.InvariantCulture))) return false;
+                connection = unchecked((uint)signed);
+                return true;
+            }
+            return uint.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out connection)
+                && connection != 0 && text.SequenceEqual(connection.ToString(CultureInfo.InvariantCulture));
         }
     }
 }

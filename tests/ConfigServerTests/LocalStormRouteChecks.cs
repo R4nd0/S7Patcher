@@ -1,10 +1,11 @@
 using System.Text;
+using System.Globalization;
 using S7Patcher.Source;
 
 internal static class LocalStormRouteChecks
 {
     internal static string Route(uint connection, string endpoints = "127.0.0.1:3074") =>
-        "prudp:/RVCID=" + connection + "#Storm=PeerGUID{InventedPeerNotAnIdentity}Version{1000000000000000001}"
+        "prudp:/RVCID=" + unchecked((int)connection).ToString(CultureInfo.InvariantCulture) + "#Storm=PeerGUID{InventedPeerNotAnIdentity}Version{1000000000000000001}"
         + "Platform{1}Gw{v(0)t(-)g()}Address{" + endpoints + "}PeerDescriptorBaseEnd{}"
         + "ProfileID{00000000-0000-0000-0000-000000000077}RoutingOption{32}";
 
@@ -12,6 +13,19 @@ internal static class LocalStormRouteChecks
     {
         int passed = 0;
         void Check(bool b, string s) { if (!b) throw new Exception(s); passed++; }
+        foreach (uint id in new uint[] { 1, 0x7fffffff, 0x80000000, 0xc0000001, 0xffffffff })
+        {
+            using var fixedPeer = new LocalLoginRpcEngine.RegisteredPeer(new byte[16], id, "prudp:/address=127.0.0.1;port=3074");
+            string native = Route(id);
+            string unsigned = "prudp:/RVCID=" + id.ToString(CultureInfo.InvariantCulture) + native[native.IndexOf('#')..];
+            Check(LocalStormRoute.TryProject(native, fixedPeer, out var signedResult, out _) && signedResult == native, "Native signed RVCID rejected or changed");
+            Check(LocalStormRoute.TryProject(unsigned, fixedPeer, out var unsignedResult, out _) && unsignedResult == unsigned, "Unsigned RVCID regression");
+            using var wrongPeer = new LocalLoginRpcEngine.RegisteredPeer(new byte[16], id ^ 1, fixedPeer.PublicUrl);
+            Check(!LocalStormRoute.TryProject(native, wrongPeer, out var denied, out var why) && denied == null
+                && why == "local-join-storm-connection-mismatch", "Signed RVCID bypassed ownership");
+            foreach (string invalid in new[] { "", "0", "-0", "+1", "01", "-01", "-2147483649", "4294967296", " 1", "1 ", "--1", "1.0", "0xffffffff" })
+                Check(!LocalStormRoute.TryProject("prudp:/RVCID=" + invalid + native[native.IndexOf('#')..], fixedPeer, out _, out _), "Noncanonical or overflow RVCID accepted");
+        }
         using var host = RegisteredHostChecks.CreateRegistered();
         using var guest = RegisteredHostChecks.CreateRegistered();
         host.TryCopyRegisteredPeer(out var peer);
@@ -23,7 +37,7 @@ internal static class LocalStormRouteChecks
         Check(!LocalStormRoute.TryProject(Route(hp.ConnectionId, "192.0.2.1:3074"), hp, out _, out var reason)
             && reason == "local-join-storm-no-owned-endpoint", "Foreign-only endpoints accepted");
         foreach (string bad in new[] {
-            mixed.Replace("RVCID=" + hp.ConnectionId, "RVCID=0"), mixed + "|" + mixed,
+            "prudp:/RVCID=0" + mixed[mixed.IndexOf('#')..], mixed + "|" + mixed,
             mixed.Replace("#Storm=", "#Other="), mixed.Replace("#Storm=", ";port=3074#Storm="),
             mixed.Replace("Address{", "Address{{"), mixed.Replace("RoutingOption{32}", "RoutingOption{32}Address{127.0.0.1:3074}"),
             mixed.Replace("Gw{v(0)t(-)g()}", "Gw{v(0)t(-)g(example.com)}"),

@@ -23,6 +23,43 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
+### Current: signed native RVCID representation; tested candidate pending deployment
+
+User reports join failure. Host run 20261026-191237-fe39c5e9 has two registrations,
+create/update/search and one JoinSession_V1 rejected as
+local-join-storm-connection-mismatch. Read-only guarded inspection of test game
+PID 19428's known creation URL vector shows RVCID is a negative decimal fitting
+int32 (not a uint32 decimal). No raw route or identity values emitted or saved.
+Static hash-checked original confirms D43437 -> E5EAE0 -> E5EA00 stores the same
+32-bit value in the numeric StationURL map (E5EA6E); E5DB89..E5DBAA serializes it
+with format %s%s%d at E5DB9B. The previous unsigned-only parser rejects high-bit
+connection IDs despite their valid native representation.
+
+LocalStormRoute now accepts canonical negative int32 or nonzero uint32 decimal,
+compares the identical uint32 bits to registered host.ConnectionId, and retains
+the original route spelling. Zero, plus sign, whitespace, leading zeros,
+overflow and mismatched identities fail. Endpoint ownership is unchanged.
+5,394 service checks pass, with deterministic boundary IDs and encrypted joins
+using int.MinValue and -1 spellings in opposite host directions. This verifies
+the parser correction, not a successful real-client join or live identity match.
+
+Build work/server-signed-route, tests work/signed-route-tests. Service SHA256:
+7d61a238e8af9355a9054fdf22debf6ca1c5777ebed154aba90a35d40568bafe.
+outputs/S7-LAN-Kennung-Update.zip (nine files) SHA256:
+a18671a58632182ec55b039b2c971f8253e3a04f6e8556f901a6887422035f14.
+Packaged updater matches source; exact old/new payload hashes, ZIP CRC and
+wrong-source rejection checked. Requires service 044931d8..., creates backup
+LocalData/Before-signed-route-v1. Uses unchanged transactional updater; no native
+adapter/archive changes. Starter checks all extraction siblings before Python.
+
+User asked to close both games, apply Kennung-Update.cmd plus full sibling folder
+on PC 2, and not restart. PC 1 remains on 044931d8... pending confirmation.
+After confirmation check game/service processes, clean only identified orphan
+if needed, extract verified ZIP to test root, run bundled Python
+S7-Kennung-Update/update_signed_route.py --bundle <root>, then LAN host check-only.
+Request one public four-slot join attempt and inspect reply ACK/follow-up.
+Real join, reverse hosting, match startup and synchronization remain unverified.
+
 ### Current: embedded Storm endpoint identified; candidate projection ready
 
 Subsequent PC 1 launcher failure was a local port collision, not a join result.

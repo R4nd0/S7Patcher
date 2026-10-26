@@ -549,9 +549,14 @@ internal static class LocalLoginSessionChecks
             using Fixture second = new(keepAlive: true, sessions: registry);
             var host = direction % 2 == 0 ? first : second;
             var visitor = direction % 2 == 0 ? second : first;
-            host.Register(); visitor.Register();
             var hostRpc = (LocalLoginRpcEngine)typeof(PrudpLocalLoginSession)
                 .GetField("rpc", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(host.Session)!;
+            // Deterministically exercise signed StationURL serialization in both
+            // encrypted host directions, rather than depending on random IDs.
+            if (direction >= 2)
+                typeof(LocalLoginRpcEngine).GetField("rvConnectionId", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .SetValue(hostRpc, direction == 2 ? 0x80000000u : 0xffffffffu);
+            host.Register(); visitor.Register();
             hostRpc.TryCopyRegisteredPeer(out var registeredHost);
             using var hostPeer = registeredHost;
             string route = direction < 2 ? LocalSessionDisplayChecks.Route + (direction == 0 ? "" : "#label=fixture")

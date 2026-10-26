@@ -206,3 +206,23 @@ Build work/server-storm-route, service SHA256:
 044931d88c501a11a792067af97935ba1a3920cb85c54fbf140f0c4948c2f787.
 S7-LAN-Spieladresse-Update.zip requires the preceding Adress-Update. Both test
 copies must be closed before applying; real-client acceptance remains pending.
+
+## Signed native connection identifier
+
+Run 19:12:37 rejects one real join as local-join-storm-connection-mismatch.
+Guarded read-only inspection finds a negative int32 decimal in the host's
+creation URL. Original EXE hash is unchanged. Setter E5EAE0 calls E5EA00,
+which stores the 32-bit value in the numeric map at E5EA6E. Serializer
+E5DB89..E5DBAA uses %s%s%d at E5DB9B: values with the high bit set become negative.
+The previous uint.TryParse rejected that representation before comparing IDs.
+
+The parser now recognizes canonical negative int32 and positive uint32 decimal,
+reinterprets negative values as the same 32 bits, and still requires equality
+with the registered host. It preserves the supplied spelling in the projected
+reply and retains all endpoint checks. It rejects zero, negative zero, explicit
+plus, leading zeros, whitespace, overflow and foreign connection IDs.
+Deterministic checks cover 1, int.MaxValue, int.MinValue, 0xc0000001 and uint.MaxValue;
+encrypted two-peer joins use int.MinValue and -1 in opposite host directions.
+Full suite: 5,394 checks. S7-LAN-Kennung-Update.zip requires Spieladresse-Update.
+This correction has not yet been tested with a real client; the observed error
+alone does not establish equality between live registration and route ID bits.
