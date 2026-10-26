@@ -211,7 +211,7 @@ owner attachment, interface presence, 2,886 queue ticks and 5,812 core ticks in
 three minutes. Local Login/Register remains connected. Native network readiness
 is still false and no search RPC has been observed.
 
-## Local session-search eligibility (candidate)
+## Local session-search eligibility and sandbox configuration
 
 The local probe replaces only the readiness call at `ED6C3A` inside session
 search. Its policy requires the actual connected local facade (no pending login),
@@ -224,9 +224,26 @@ This permits an experimental request to the loopback service; it does not
 establish a successful server response or playable multiplayer. The underlying
 native readiness failure remains unresolved.
 
-Validation: 185 bootstrap checks, 88 platform, 18 connection-state, 38 network
-guard checks, 16 byte comparisons and the real configuration test pass.
-The candidate has not yet been tested in the actual game.
+The first live search passed this gate and entered `C8DCA0`, then crashed at
+`AB0E30` with access violation `0xC0000005`. Static verification traces this
+to `D43F50`: it reads `matchmakingSandboxName` from the deliberately null
+borrowed Ubi facade at `RV+54 -> facade+0C`. No search RPC reached the service.
+
+The correction replaces only `C8DCC5 -> D43F50`, returning the same empty
+sandbox used by the local direct-mode login. The original caller supplies a
+fresh 24-byte small-string result, receives its pointer in EAX and expects
+callee cleanup of four stack bytes. The replacement initializes inline data,
+length 0 and capacity 15, requiring no foreign allocator or destructor. The
+caller retains its original copy/destruction lifecycle. Current ownership,
+thread, probe and actual local readiness are checked before constructing the
+result. Search additionally requires its helper at owner `+108` to exist.
+Other Ubi configuration readers are unchanged and may need separate work.
+
+Validation: 211 bootstrap checks (including repeated native calling-convention
+tests, buffer canaries, missing helper and rejected-context preservation), 88
+platform, 18 connection-state, 38 network-guard checks, 17 byte comparisons and
+the real configuration test pass. The correction is deployed with backup and
+passing no-game-launch preflight. Live verification is pending.
 
 ## Fast menu startup
 

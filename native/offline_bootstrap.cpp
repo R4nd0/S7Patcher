@@ -271,7 +271,8 @@ bool LocalSessionSearchReady(void* self) {
         !LocalConnectionReady(self)) return false;
     auto* network = static_cast<unsigned char*>(self);
     auto* owner = LocalUpdateOwner(network);
-    if (!owner || !LocalUpdateCore(network)) return false;
+    if (!owner || !LocalUpdateCore(network) ||
+        !*reinterpret_cast<void**>(owner + 0x108)) return false;
     // Scope this to dispatching a search to our already-connected loopback
     // service. Do not substitute global NAT readiness or enable hosting/joining.
     return network[0x5c + 0x4c4] == 1 && owner[0x18] == 1 && owner[0x38] == 1 &&
@@ -284,6 +285,36 @@ bool __fastcall QueryLocalSessionSearch(void* self, void*) {
     if (InterlockedExchange(&previous, ready ? 1 : 0) != (ready ? 1 : 0))
         ReportLocalStatus(ready ? "local-session-search-ready" : "local-session-search-not-ready");
     return ready;
+}
+
+// D43F50 returns a freshly constructed 24-byte native small string through
+// a stack output pointer, EAX=output, RET 4. Its only search caller C8DCC5
+// immediately copies the value and frees it only when capacity >= 16.
+// This is not qString and must never contain a pointer owned by our CRT.
+struct NativeSmallString {
+    char inline_data[16];
+    uint32_t length;
+    uint32_t capacity;
+};
+static_assert(sizeof(NativeSmallString) == 24, "native small string is 24 bytes");
+bool ConstructLocalSearchSandbox(void* self, NativeSmallString* output) {
+    if (!output || initialization != 2 || !local_connect_probe ||
+        GetCurrentThreadId() != bootstrap_thread) return false;
+    auto* network = *Native<unsigned char**>(0x1379E14);
+    if (!LocalSessionSearchReady(network)) return false;
+    auto* owner = LocalUpdateOwner(network);
+    if (!owner || self != owner + 0x50) return false;
+    // The local direct-mode login uses an empty sandbox. Preserve that value
+    // here instead of dereferencing the deliberately absent borrowed Ubi facade.
+    *output = {};
+    output->capacity = 15;
+    return true;
+}
+NativeSmallString* __fastcall GetLocalSearchSandbox(void* self, void*, NativeSmallString* output) {
+    if (!ConstructLocalSearchSandbox(self, output)) Stop(NativeGameObjectMismatch);
+    static bool reported = false;
+    if (!reported) { reported = true; ReportLocalStatus("local-session-search-sandbox-ready"); }
+    return output;
 }
 const Patch Patches[] = {
     {0xD3C62D, {0xe8,0x1e,0x6f,0x10,0x00}, reinterpret_cast<const void*>(&ConstructLocalFacade)},
@@ -306,6 +337,7 @@ const Patch ConnectPatches[] = {
     // Replace the complete five-byte MOV EAX,[EDX+28]; CALL EAX sequence.
     {0xED480A, {0x8b,0x42,0x28,0xff,0xd0}, reinterpret_cast<const void*>(&SkipLocalNetworkStartup)},
     {0xED6C3A, {0xe8,0x31,0x06,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalSessionSearch)},
+    {0xC8DCC5, {0xe8,0x86,0x62,0x0b,0x00}, reinterpret_cast<const void*>(&GetLocalSearchSandbox)},
     {0x1091B08, {0xc0,0x56,0xc9,0x00,0x00}, reinterpret_cast<const void*>(&UpdateLocalGame), true}
 };
 

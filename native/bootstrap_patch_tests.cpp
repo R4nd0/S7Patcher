@@ -201,6 +201,8 @@ int main() {
     network[0x5c + 0x4c4] = 1;
     owner[0x18] = 1; owner[0x38] = 1;
     *reinterpret_cast<int32_t*>(owner + 0x28) = 1;
+    check(!LocalSessionSearchReady(network)); // Missing search helper.
+    *reinterpret_cast<void**>(owner + 0x108) = owner;
     check(LocalSessionSearchReady(network) && owner[0x3a] == 0);
     for (auto* flag : {network + 0x5c + 0x4c4, owner + 0x18, owner + 0x38, owner + 0x88}) {
         *flag = 0; check(!LocalSessionSearchReady(network)); *flag = 1;
@@ -221,6 +223,34 @@ int main() {
     check(!LocalSessionSearchReady(network)); *reinterpret_cast<void**>(facade + 0x0c) = nullptr;
     check(!LocalSessionSearchReady(nullptr) && !LocalSessionSearchReady(owner));
     check(LocalSessionSearchReady(network) && owner[0x3a] == 0);
+    // Check the returned native small-string layout, surrounding stack memory
+    // and thiscall/fastcall callee cleanup through the actual patched target.
+    struct SandboxFixture { uint32_t before; NativeSmallString value; uint32_t after; } sandbox;
+    memset(&sandbox, 0xa5, sizeof(sandbox));
+    using SandboxGetter = NativeSmallString* (__thiscall*)(void*, NativeSmallString*);
+    check(FakeJump(0xD43F50, reinterpret_cast<const void*>(&GetLocalSearchSandbox)));
+    for (int iteration = 0; iteration < 3; ++iteration) {
+        check(Native<SandboxGetter>(0xD43F50)(owner + 0x50, &sandbox.value) == &sandbox.value);
+        check(sandbox.before == 0xa5a5a5a5 && sandbox.after == 0xa5a5a5a5);
+        check(sandbox.value.length == 0 && sandbox.value.capacity == 15 &&
+            sandbox.value.inline_data[0] == 0 && sandbox.value.inline_data[15] == 0);
+    }
+    const auto unchanged = sandbox;
+    check(!ConstructLocalSearchSandbox(nullptr, &sandbox.value));
+    check(!ConstructLocalSearchSandbox(owner, &sandbox.value));
+    check(!ConstructLocalSearchSandbox(owner + 0x50, nullptr));
+    bootstrap_thread = 0;
+    check(!ConstructLocalSearchSandbox(owner + 0x50, &sandbox.value));
+    bootstrap_thread = GetCurrentThreadId(); local_connect_probe = false;
+    check(!ConstructLocalSearchSandbox(owner + 0x50, &sandbox.value));
+    local_connect_probe = true; initialization = 1;
+    check(!ConstructLocalSearchSandbox(owner + 0x50, &sandbox.value));
+    initialization = 2; owner[0x98] = 1;
+    check(!ConstructLocalSearchSandbox(owner + 0x50, &sandbox.value));
+    owner[0x98] = 0; *reinterpret_cast<void**>(facade + 0x0c) = owner;
+    check(!ConstructLocalSearchSandbox(owner + 0x50, &sandbox.value));
+    *reinterpret_cast<void**>(facade + 0x0c) = nullptr;
+    check(memcmp(&sandbox, &unchanged, sizeof(sandbox)) == 0);
     for (int mode = 0; mode <= 8; ++mode) {
         pump_mode = mode; pump_trace.clear(); network_getter_calls = 0;
         *Native<unsigned char**>(0x1379E14) = network;

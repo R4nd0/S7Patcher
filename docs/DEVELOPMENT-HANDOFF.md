@@ -96,7 +96,7 @@ Owner interface-present is 1 and its result is success (1), but readiness
 `+0x3A` remains 0. No session search RPC reached the service yet. This change is
 committed/pushed as `fafb4c2`; the earlier core bridge is `23123b5`.
 
-### Local session-search policy: deployed, live verification pending
+### Local session-search policy: first live crash and deployed correction
 
 The new candidate replaces only `ED6C3A` (the readiness check within session
 search). It requires the real local connected/not-pending facade, current owned
@@ -113,9 +113,24 @@ Build: `work/native-search-build`. Validation: 185 bootstrap, 88 platform,
 configuration/fingerprint validation pass. Candidate `ebd75de` was deployed after
 the user closed S7 and the host process check confirmed it was stopped. The
 previous adapter is retained as `LocalData/adapter-fafb4c2.dll`. Bundle hashes
-and the no-game-launch preflight pass. A bounded passive observer is prepared
-for the user's next launch and counts search entry/dispatch without recording
-request payloads. Next verify that the real search reaches the local service. Its
+and the no-game-launch preflight passed. The user reported an error/exit. The
+bounded observer confirmed search entry and dispatch after successful native
+startup, then process termination. Windows recorded access violation
+`0xC0000005` at game offset `0x6B0E30` (`AB0E30`). The search helper calls
+`D43F50`, which dereferences the null borrowed Ubi facade to obtain
+`matchmakingSandboxName`. No search RPC reached the local service.
+
+The correction adds one guarded call replacement at `C8DCC5`, returning a
+fresh native inline small string with the same empty sandbox used for local
+login. It checks local state, thread and RV ownership; the search gate also
+requires the helper at owner `+108`. Validation: 211 bootstrap, 88 platform,
+18 connection-state, 38 network-guard checks, 17 original-byte checks and the
+real configuration/fingerprint test pass. Build: `work/native-search-sandbox-build`.
+It is deployed after host confirmation that S7 exited; previous candidate is
+retained as `LocalData/adapter-ebd75de.dll`. Bundle hashes and no-game-launch
+preflight passed. A bounded observer awaits the user's next launch.
+
+Next verify that the real search reaches the local service. Its
 existing two-response RPC budget still only supports Login/Register; a new
 search RPC is expected to need protocol identification and implementation.
 
