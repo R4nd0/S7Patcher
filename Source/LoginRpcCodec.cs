@@ -61,6 +61,7 @@ namespace S7Patcher.Source
                 if (method.SequenceEqual("MatchmakingProtocol::SearchSessions_V1"u8)) return "matchmaking-search-sessions-v1";
                 if (method.SequenceEqual("MatchmakingProtocol::CreateSession_V1"u8)) return "matchmaking-create-session-v1";
                 if (method.SequenceEqual("MatchmakingProtocol::CreateSession2_V1"u8)) return "matchmaking-create-session2-v1";
+                if (method.SequenceEqual("MatchmakingProtocol::GetSession_V1"u8)) return "matchmaking-get-session-v1";
                 return "matchmaking-other-method";
             }
             if (protocol.SequenceEqual(ProtocolBytes))

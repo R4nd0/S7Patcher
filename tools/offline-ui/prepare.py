@@ -1,4 +1,4 @@
-"""Stage fast main-menu startup and hidden online promotions in a new directory.
+"""Stage fast startup, hidden promotions and login-based session creation UI.
 
 Uses the same fingerprint checks and full archive verification as the LAN
 diagnostic. Never installs or launches the game. Requires the original HE build.

@@ -12,17 +12,30 @@ state now enables the multiplayer menu. The user opened an empty session list.
 
 The current native candidate passed 354 adapter checks, 38 network-guard checks
 and 18 original-byte comparisons, plus configuration validation. The
-current search-capable service passes 1,926 checks.
+current create-record candidate passes 2,498 service checks and 20,216 isolated
+RPC codec assertions. Its UI archive verifies all 284 entries and parses.
 These are separate results, not evidence of a playable LAN match.
 
-## Current blocker: create-session request gate and missing server handler
+## Current blocker: deploy and verify create-record response / first-visit button
 
 The SpaceId transfer and real `SearchSessions_V1` exchange are live-verified
 at transport level: 16 empty search replies, 18 acknowledgements including
 Login/Register, no rejection or expiry in the recorded sample. The user
-opened game settings, but creating a session showed a server error without
-sending another RPC. A scoped create-request gate is prepared; the service
-does not yet create sessions. Joining, match startup and LAN remain absent.
+opened game settings. The scoped create gate is now live-verified: two
+`CreateSession_V1` requests reached the service, which had no handler yet.
+A bounded shared session registry and native-shaped create response are now
+prepared; no game acceptance is claimed. `GetSession`, nonempty search results,
+joining, match startup and LAN remain absent. See `LOCAL-SESSION-CREATION.md`.
+
+The user's first-visit disabled create button is a separate Lua transition bug:
+the original screen disables create when NATReady changes true to false but
+retains that false state across screen recreation. The prepared archive refreshes
+create from actual login each update, retaining quickmatch/join NAT rules.
+The candidate is `work/offline-ui-create-ready`, with service build
+`work/server-create-records` staged as `Server-Create-Records` in the test bundle.
+The active launcher still selects `Server-Create-Diagnostic`; loaded files have
+not been replaced. Close S7 before applying `work/deploy_create_records.py`,
+then run the no-game-launch preflight and request one first-visit/create test.
 
 Earlier observations established the following startup/readiness blockers,
 subsequently addressed by the scoped changes documented below.
@@ -220,7 +233,7 @@ rejections or expirations. The game stayed connected and open. ACKs establish
 delivery; there is still no direct observation of its internal completion
 callback. The user then opened game settings and tried creating a session.
 
-### Create Session gate: deployed, awaiting live request
+### Create Session gate: deployed and request live-verified
 
 The user supplied a screenshot of `SERVER-FEHLER / KANN KEINE NEUE SITZUNG
 ANLEGEN!` on map selection. No create RPC reached the endpoint. In the exact
@@ -253,6 +266,12 @@ launch the test copy and try creating one session. A create error remains
 possible because the handler is not yet implemented. Do not inject diagnostic
 libraries or rerun the successful deployment transaction.
 
+The subsequent user run sent two recognized `CreateSession_V1` requests, both
+rejected by the old search-only handler. This confirms the native create gate
+works. The read-only snapshot retained actual connected state, helper SpaceId
+and owner attachment with the global NAT-ready flag false. No native adapter
+change is required for the next create-record service/UI test.
+
 ## Local workspace (not portable paths)
 
 The containing output directory holds `S7-Local.code-workspace` and the separate
@@ -271,7 +290,8 @@ The original installation is `C:/Spiele/thesettlers7` and must remain unchanged.
 
 Initialized and queried successfully on 2026-10-26 using TokenSave 7.15.0.
 The initial index contains 80 source/artifact files and 1,587 symbols.
-Use an absolute `graph_root` for MCP queries. `tokensave sync` refreshes local
+Omit `graph_root` when this repository is already served; use its absolute root
+only from a server serving another project. `tokensave sync` refreshes local
 changes; the index is ignored by Git. No global settings or Git hooks were
 installed. No Cairn journal was initialized.
 

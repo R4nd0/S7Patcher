@@ -50,6 +50,31 @@
           "reason": "Keep fbPanel hidden when online state changes"
         }
       ]
+    },
+    {
+      "path": "Script/local/menu/panel/menu/play/multiplayer/sessionList.lua",
+      "source_sha256": "873ce830e0805dcffff7e66a5eaab9c14c31199b19a4c7d472a672db5655cc4a",
+      "patched_sha256": "09c82acb19aea58bf32218b18569c28c0a1749cb93e4b656920f25bf8e53a3ce",
+      "edits": [
+        {
+          "offset": 25106,
+          "before_hex": "655b6e283732295d5b6e28323934295d286c5b6e28323437295d29",
+          "after_utf8": "",
+          "reason": "Refresh create-button state from actual login on every update; keep NAT rules for quickmatch and join"
+        },
+        {
+          "offset": 25231,
+          "before_hex": "655b6e283732295d5b6e28323935295d286c5b6e28323437295d29",
+          "after_utf8": "",
+          "reason": "Refresh create-button state from actual login on every update; keep NAT rules for quickmatch and join"
+        },
+        {
+          "offset": 25262,
+          "before_hex": "696628655b6e283434295d5b6e28323933295d28293d3d66616c7365297468656e",
+          "after_utf8": "if e[n(44)][n(287)]() then\ne[n(72)][n(295)](l[n(247)])else\ne[n(72)][n(294)](l[n(247)])end\nif(e[n(44)][n(293)]()==false)then",
+          "reason": "Refresh create-button state from actual login on every update; keep NAT rules for quickmatch and join"
+        }
+      ]
     }
   ]
 }

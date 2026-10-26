@@ -20,6 +20,8 @@
     <Compile Include="../../Source/ReliableMessageAssembler.cs" Link="ReliableMessageAssembler.cs" />
     <Compile Include="../../Source/LoginRpcCodec.cs" Link="LoginRpcCodec.cs" />
     <Compile Include="../../Source/LocalSessionSearchCodec.cs" Link="LocalSessionSearchCodec.cs" />
+    <Compile Include="../../Source/LocalSessionCreationCodec.cs" Link="LocalSessionCreationCodec.cs" />
+    <Compile Include="../../Source/LocalSessionRegistry.cs" Link="LocalSessionRegistry.cs" />
     <Compile Include="../../Source/LoginRpcArgumentShape.cs" Link="LoginRpcArgumentShape.cs" />
     <Compile Include="../../Source/LocalLoginRpcEngine.cs" Link="LocalLoginRpcEngine.cs" />
   </ItemGroup>

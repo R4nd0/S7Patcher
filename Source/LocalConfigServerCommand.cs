@@ -156,6 +156,7 @@ namespace S7Patcher.Source
             // Sender endpoints and cookies are process-local, bounded and never logged.
             Dictionary<IPEndPoint, PrudpProbePeer> peers = new();
             Dictionary<IPEndPoint, PrudpLocalLoginSession> loginSessions = new();
+            using LocalSessionRegistry sessions = new();
             try
             {
                 udp.Client.Bind(new IPEndPoint(IPAddress.Loopback, options.UdpPort));
@@ -174,7 +175,7 @@ namespace S7Patcher.Source
                     ConfigurationPath = ConfigurationPath, AuthenticationImplemented = false, UdpProtocolImplemented = false,
                     SigningKeyPersistence = "memory-only",
                     Message = options.LocalKeepAliveProbe
-                        ? "Experimental local Login/Register responses and bounded empty session searches enabled; no Ubisoft authentication, hosting, joining or playable LAN. Plaintext stays bounded in memory."
+                        ? "Experimental local Login/Register, empty searches and bounded session records enabled; no Ubisoft authentication, complete lobby, joining or playable LAN. Plaintext stays bounded in memory."
                         : options.LocalLoginProbe
                         ? "Experimental local Login/Register responses enabled with run-local identities; no Ubisoft authentication, lobby, matchmaking or playable LAN. Plaintext stays bounded in memory."
                         : options.DataCryptoProbe
@@ -326,7 +327,7 @@ namespace S7Patcher.Source
                                 if (options.LocalLoginProbe && !loginSessions.ContainsKey(packet.RemoteEndPoint))
                                     loginSessions.Add(packet.RemoteEndPoint, new(peer, packet.RemoteEndPoint,
                                         "prudp:/address=127.0.0.1;port=" + udpPort.ToString(CultureInfo.InvariantCulture)
-                                        + ";sid=1;stream=3;type=2", Environment.TickCount64, options.LocalKeepAliveProbe));
+                                        + ";sid=1;stream=3;type=2", Environment.TickCount64, options.LocalKeepAliveProbe, sessions));
                                 emit(new() { Event = "connect-probe-reply-sent", DatagramLength = reply.Length,
                                     AuthenticationImplemented = false, UdpProtocolImplemented = false });
                             }

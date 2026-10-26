@@ -102,6 +102,8 @@ byte[] DiagnosticRequest(string protocol, string method, byte[] body)
     Length(request); return request;
 }
 byte[] search = DiagnosticRequest("MatchmakingProtocol", "MatchmakingProtocol::SearchSessions_V1", [0, 255, 128]);
+Check(LoginRpcCodec.ClassifyPostLoginRequest(DiagnosticRequest("MatchmakingProtocol", "MatchmakingProtocol::GetSession_V1", []))
+    == "matchmaking-get-session-v1", "Known session lookup header not classified");
 Check(LoginRpcCodec.ClassifyPostLoginRequest(search) == "matchmaking-search-sessions-v1", "Known search header not classified");
 Check(LoginRpcCodec.ClassifyPostLoginRequest(DiagnosticRequest("MatchmakingProtocol", "MatchmakingProtocol::CreateSession_V1", [])) == "matchmaking-create-session-v1"
     && LoginRpcCodec.ClassifyPostLoginRequest(DiagnosticRequest("MatchmakingProtocol", "MatchmakingProtocol::CreateSession2_V1", [])) == "matchmaking-create-session2-v1", "Known create headers not classified");

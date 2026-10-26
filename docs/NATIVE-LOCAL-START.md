@@ -333,6 +333,12 @@ and fast startup; source/build checks alone would not establish that outcome.
 
 ## Validation so far
 
+The scoped create gate from `7b5bbd9` is live-verified: two real
+`CreateSession_V1` requests reached the service. The next candidate changes the
+service and create-button Lua only; the deployed native adapter remains intact.
+See [local session creation](LOCAL-SESSION-CREATION.md) for the pending response
+test, first-visit button correction and remaining lobby limitations.
+
 - x86 builds with `/W4 /WX`, no warnings or errors.
 - 88 synthetic platform/save checks; 38 host network-guard checks, including
   local TCP/UDP roundtrips and external-call rejection.

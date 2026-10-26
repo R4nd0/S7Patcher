@@ -132,8 +132,9 @@ internal static class LocalLoginSessionChecks
         }
         finally { CryptographicOperations.ZeroMemory(envelope); if (expanded != null) CryptographicOperations.ZeroMemory(expanded); }
     }
-    private static void VerifySearchResponse(byte[] packet, byte[] key, uint callId, byte serverSession)
+    private static void VerifySearchResponse(byte[] packet, byte[] key, uint callId, byte serverSession, byte[] expected = null)
     {
+        expected ??= LocalSessionSearchChecks.EmptyResponse(callId);
         if (!PrudpDataPacketDecoder.TryDecode(packet, out var data, out _, 0) || data.BytesConsumed != packet.Length
             || packet[0] != 0x31 || packet[1] != 0x3a || packet[2] != 0x32 || packet[3] != serverSession || packet[10] != 0
             || BinaryPrimitives.ReadUInt32LittleEndian(packet.AsSpan(4)) != ClientCookie)
@@ -149,9 +150,9 @@ internal static class LocalLoginSessionChecks
                 using ZLibStream zlib = new(input, CompressionMode.Decompress);
                 using MemoryStream output = new(); zlib.CopyTo(output); expanded = output.ToArray();
             }
-            if (expanded.Length != 84 || BinaryPrimitives.ReadUInt16LittleEndian(expanded.AsSpan(82))
+            if (expanded.Length != expected.Length + 2 || BinaryPrimitives.ReadUInt16LittleEndian(expanded.AsSpan(expected.Length))
                 != BinaryPrimitives.ReadUInt16LittleEndian(packet.AsSpan(8))
-                || !expanded.AsSpan(0, 82).SequenceEqual(LocalSessionSearchChecks.EmptyResponse(callId)))
+                || !expanded.AsSpan(0, expected.Length).SequenceEqual(expected))
                 throw new Exception("Search response differs from fixed native wire vector");
         }
         finally { CryptographicOperations.ZeroMemory(envelope); if (expanded != null) CryptographicOperations.ZeroMemory(expanded); }
@@ -163,7 +164,7 @@ internal static class LocalLoginSessionChecks
         internal readonly byte[] Key;
         internal readonly byte ServerSession;
         internal readonly List<ConfigServerEvent> Events = new();
-        internal Fixture(long now = 100, bool keepAlive = false)
+        internal Fixture(long now = 100, bool keepAlive = false, LocalSessionRegistry sessions = null)
         {
             using ECDiffieHellman client = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
             using ECDsa signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
@@ -174,7 +175,7 @@ internal static class LocalLoginSessionChecks
             Peer.Connect.TryGetReply(packet, request, out byte[] reply);
             ServerSession = reply[3];
             Key = NativeCngFixtures.Derive(client, reply.AsSpan(82, 72).ToArray());
-            Session = new(Peer, new(IPAddress.Loopback, 40000), "prudp:/address=127.0.0.1;port=9111;sid=1;stream=3;type=2", now, keepAlive);
+            Session = new(Peer, new(IPAddress.Loopback, 40000), "prudp:/address=127.0.0.1;port=9111;sid=1;stream=3;type=2", now, keepAlive, sessions);
         }
         internal byte[] Data(ushort sequence, byte part, ReadOnlySpan<byte> content) => LocalLoginSessionChecks.Data(ServerCookie, Key, sequence, part, content);
         internal void Login() => Session.ProcessData(Data(6, 0, Request(false)), Events.Add);
@@ -341,7 +342,7 @@ internal static class LocalLoginSessionChecks
         using (Fixture fixture = new(keepAlive: true))
         {
             fixture.Register();
-            for (ushort i = 0; i < PrudpLocalLoginSession.MaximumSearchResponses; ++i)
+            for (ushort i = 0; i < PrudpLocalLoginSession.MaximumPostLoginResponses; ++i)
             {
                 byte[] packet = fixture.Data((ushort)(8 + i), 0, LocalSessionSearchChecks.Request(i));
                 fixture.Session.ProcessData(packet, fixture.Events.Add);
@@ -369,6 +370,50 @@ internal static class LocalLoginSessionChecks
                 fixture.Session.ProcessData(fixture.Data(i, 0, LocalSessionSearchChecks.Request(i)), fixture.Events.Add);
             Check(fixture.Session.PendingCount == 2 && fixture.Events.Count(e => e.Event == "local-session-search-response-queued") == 2,
                 "Search pending window exceeded");
+        }
+        using (LocalSessionRegistry registry = new())
+        using (Fixture host = new(keepAlive: true, sessions: registry))
+        using (Fixture visitor = new(keepAlive: true, sessions: registry))
+        {
+            host.Register(); visitor.Register();
+            byte[] create = host.Data(8, 0, LocalSessionCreationChecks.Request());
+            host.Session.ProcessData(create, host.Events.Add);
+            host.Session.ProcessData(create, host.Events.Add);
+            Check(registry.Count == 1 && host.Session.PendingCount == 1, "Create transport retry duplicated record");
+            byte[] reply = host.Session.TakeDue(200, host.Events.Add).Single();
+            VerifySearchResponse(reply, host.Key, 0x12345678, host.ServerSession, LocalSessionCreationChecks.Response()); passed++;
+            Check(ReferenceEquals(reply, host.Session.TakeDue(1200, host.Events.Add).Single()), "Create retry ciphertext changed");
+            Check(host.Session.TryAcknowledge(Ack(ServerCookie, 3)) && reply.All(b => b == 0), "Create reply ACK not cleared");
+            host.Session.ProcessData(host.Data(9, 0, LocalSessionCreationChecks.Request(7)), host.Events.Add);
+            reply = host.Session.TakeDue(1300, host.Events.Add).Single();
+            VerifySearchResponse(reply, host.Key, 7, host.ServerSession, LocalSessionCreationChecks.Response(7)); passed++;
+            Check(registry.Count == 1 && host.Session.TryAcknowledge(Ack(ServerCookie, 4)), "Application create retry duplicated record");
+            visitor.Session.ProcessData(visitor.Data(8, 0, LocalSessionSearchChecks.Request()), visitor.Events.Add);
+            Check(visitor.Session.PendingCount == 0 && visitor.Events.Any(e => e.Reason == "nonempty-session-catalogue-not-yet-supported"),
+                "Other peer received false empty catalogue");
+            visitor.Session.ProcessData(visitor.Data(9, 0, LocalSessionCreationChecks.Request()), visitor.Events.Add);
+            reply = visitor.Session.TakeDue(1400, visitor.Events.Add).Single();
+            VerifySearchResponse(reply, visitor.Key, 0x12345678, visitor.ServerSession, LocalSessionCreationChecks.Response(sessionId: 2)); passed++;
+            Check(visitor.Session.TryAcknowledge(Ack(ServerCookie, 3)) && registry.Count == 2, "Second owner did not obtain separate record");
+            host.Session.Dispose(); Check(registry.Count == 1, "Host teardown affected another owner");
+            visitor.Session.TakeDue(120100, visitor.Events.Add);
+            Check(visitor.Session.Closed && registry.Count == 0, "Owner expiry leaked session record");
+            Check(host.Events.Concat(visitor.Events).All(e => !JsonSerializer.Serialize(e, ConfigServerJsonContext.Default.ConfigServerEvent).Contains("invented-")),
+                "Create events leaked body fields");
+        }
+        foreach (bool keepAlive in new[] { false, true })
+        {
+            using LocalSessionRegistry registry = new();
+            using Fixture fixture = new(keepAlive: keepAlive, sessions: registry);
+            if (!keepAlive) fixture.Register();
+            else
+            {
+                fixture.Login(); fixture.Session.TakeDue(100, fixture.Events.Add); fixture.Session.TryAcknowledge(Ack(ServerCookie, 1));
+                fixture.Session.ProcessData(fixture.Data(7, 0, Request(true)), fixture.Events.Add);
+            }
+            fixture.Session.ProcessData(fixture.Data(8, 0, LocalSessionCreationChecks.Request()), fixture.Events.Add);
+            Check(registry.Count == 0 && !fixture.Events.Any(e => e.Event == "local-session-create-response-queued"),
+                "Create accepted without opt-in or registration ACK");
         }
         foreach (bool lifetime in new[] { false, true })
         {

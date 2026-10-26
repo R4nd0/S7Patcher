@@ -7,7 +7,8 @@ using System.Security.Cryptography;
 namespace S7Patcher.Source
 {
     // Single-threaded bounded experiment, not a complete PRUDP endpoint. Every
-    // plaintext message is consumed in memory, then zeroed. Timers are probe policy.
+    // plaintext message is consumed in memory, then zeroed. Valid create bodies
+    // live in the bounded registry until owner teardown. Timers are probe policy.
     internal sealed class PrudpLocalLoginSession : IDisposable
     {
         internal const int RetryMilliseconds = 1000;
@@ -15,23 +16,26 @@ namespace S7Patcher.Source
         internal const int LifetimeMilliseconds = 120000;
         internal const int KeepAliveMaximumMilliseconds = 1200000;
         internal const int PingReplyIntervalMilliseconds = 100;
-        internal const int MaximumSearchResponses = 32;
+        internal const int MaximumPostLoginResponses = 32;
         private readonly PrudpProbePeer peer;
         private readonly ReliableMessageAssembler assembler;
         private readonly LocalLoginRpcEngine rpc;
         private readonly byte[] key;
         private readonly long createdAt;
         private readonly bool keepAlive;
+        private readonly LocalSessionRegistry sessions;
+        private readonly bool ownsRegistry;
         private long lastPingAt, nextPingReplyAt;
         private readonly Dictionary<ushort, Pending> pending = new();
         private ushort nextOutgoing = 1;
         private int responseCount;
         private int postLoginObservations;
-        private int searchResponseCount;
+        private int postLoginResponseCount;
         private bool registrationAcknowledged;
         private bool closed;
 
-        internal PrudpLocalLoginSession(PrudpProbePeer peer, IPEndPoint endpoint, string authUrl, long now, bool keepAlive = false)
+        internal PrudpLocalLoginSession(PrudpProbePeer peer, IPEndPoint endpoint, string authUrl, long now, bool keepAlive = false,
+            LocalSessionRegistry sessions = null)
         {
             if (peer?.ConnectReplySent != true || peer.Connect == null)
                 throw new ArgumentException("Established CONNECT context required");
@@ -43,6 +47,8 @@ namespace S7Patcher.Source
             createdAt = now;
             lastPingAt = now;
             this.keepAlive = keepAlive;
+            this.sessions = sessions ?? new();
+            ownsRegistry = sessions == null;
         }
 
         internal int PendingCount => pending.Count;
@@ -93,7 +99,8 @@ namespace S7Patcher.Source
                     bool search = responseCount == 2;
                     string reason;
                     // Login/Register keep their two-response budget. The opt-in
-                    // keepalive service can additionally answer bounded searches.
+                    // keepalive service can additionally answer bounded searches
+                    // and create requests, sharing the same post-login budget.
                     if (search)
                     {
                         if (postLoginObservations < 8)
@@ -102,12 +109,12 @@ namespace S7Patcher.Source
                             emit(new() { Event = "local-post-login-request-observed",
                                 Reason = LoginRpcCodec.ClassifyPostLoginRequest(message) });
                         }
-                        if (!keepAlive || !registrationAcknowledged || searchResponseCount >= MaximumSearchResponses || pending.Count >= 2)
+                        if (!keepAlive || !registrationAcknowledged || postLoginResponseCount >= MaximumPostLoginResponses || pending.Count >= 2)
                         {
                             emit(new() { Event = "local-login-message-rejected", Reason = "response-budget-exhausted" });
                             continue;
                         }
-                        if (!LocalSessionSearchCodec.TryReply(message, out response, out reason))
+                        if (!TryReplyToSessionRequest(message, out response, out reason))
                         {
                             emit(new() { Event = "local-login-message-rejected", Reason = reason });
                             continue;
@@ -127,8 +134,10 @@ namespace S7Patcher.Source
                     byte[] encoded = peer.Connect.CreateDataPacket(nextOutgoing, response, key);
                     pending.Add(nextOutgoing, new(encoded));
                     nextOutgoing = unchecked((ushort)(nextOutgoing + 1));
-                    if (search) searchResponseCount++; else responseCount++;
-                    emit(new() { Event = search ? "local-session-search-response-queued" : "local-login-response-queued", Reason = reason,
+                    if (search) postLoginResponseCount++; else responseCount++;
+                    emit(new() { Event = !search ? "local-login-response-queued"
+                        : LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-create-session-v1"
+                            ? "local-session-create-response-queued" : "local-session-search-response-queued", Reason = reason,
                         AuthenticationImplemented = false, UdpProtocolImplemented = false });
                 }
                 finally
@@ -141,6 +150,21 @@ namespace S7Patcher.Source
                 emit(new() { Event = "local-login-assembly-observed", Reason = assembler.LastDropReason.ToString(),
                     BufferedFragments = assembler.BufferedFragmentCount, AssemblingFragments = assembler.FragmentsInCurrentMessage });
             return result;
+        }
+
+        private bool TryReplyToSessionRequest(ReadOnlySpan<byte> message, out byte[] response, out string reason)
+        {
+            if (LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-create-session-v1")
+                return LocalSessionCreationCodec.TryReply(message, sessions, this, out response, out reason);
+            // Until MatchmakingSession serialization is implemented, never claim
+            // an empty catalogue after any local peer has actually created one.
+            if (sessions.Count != 0)
+            {
+                response = null;
+                reason = "nonempty-session-catalogue-not-yet-supported";
+                return false;
+            }
+            return LocalSessionSearchCodec.TryReply(message, out response, out reason);
         }
 
         internal bool TryAcknowledge(ReadOnlySpan<byte> packet)
@@ -194,6 +218,8 @@ namespace S7Patcher.Source
         {
             if (closed) return;
             closed = true;
+            sessions.RemoveOwner(this);
+            if (ownsRegistry) sessions.Dispose();
             foreach (Pending sent in pending.Values) CryptographicOperations.ZeroMemory(sent.Packet);
             pending.Clear(); assembler.Dispose(); rpc.Dispose(); CryptographicOperations.ZeroMemory(key);
         }

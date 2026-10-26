@@ -130,6 +130,7 @@ def prepare(installation, output, specification, *, profile="lan-diagnostic"):
         manifest["notes"] = [
             "Skips startup movies and the menu intro/click gate; preserves first-run profile initialization.",
             "Hides main-menu Uplay/shop promotions and disables the two external shop callbacks.",
+            "Updates the create-session button from actual login each frame; keeps NAT checks for quickmatch and join.",
             "A missing-profile dialog can still appear when a profile must be created.",
             "This archive change does not remove the native launcher dependency or implement LAN.",
             "Original installation and user settings were not modified; runtime validation is still required.",
