@@ -4,10 +4,10 @@ using S7Patcher.Source;
 
 internal static class LocalStormRouteChecks
 {
-    internal static string Route(uint connection, string endpoints = "127.0.0.1:3074") =>
+    internal static string Route(uint connection, string endpoints = "127.0.0.1:3074", bool emptyProfile = false) =>
         "prudp:/RVCID=" + unchecked((int)connection).ToString(CultureInfo.InvariantCulture) + "#Storm=PeerGUID{InventedPeerNotAnIdentity}Version{1000000000000000001}"
         + "Platform{1}Gw{v(0)t(-)g()}Address{" + endpoints + "}PeerDescriptorBaseEnd{}"
-        + "ProfileID{00000000-0000-0000-0000-000000000077}RoutingOption{32}";
+        + "ProfileID{" + (emptyProfile ? "" : "00000000-0000-0000-0000-000000000077") + "}RoutingOption{32}";
 
     internal static int Run()
     {
@@ -23,6 +23,15 @@ internal static class LocalStormRouteChecks
             using var wrongPeer = new LocalLoginRpcEngine.RegisteredPeer(new byte[16], id ^ 1, fixedPeer.PublicUrl);
             Check(!LocalStormRoute.TryProject(native, wrongPeer, out var denied, out var why) && denied == null
                 && why == "local-join-storm-connection-mismatch", "Signed RVCID bypassed ownership");
+            string empty = Route(id, emptyProfile:true);
+            Check(LocalStormRoute.TryProject(empty, fixedPeer, out var emptyResult, out _) && emptyResult == empty,
+                "Native empty ProfileID rejected or changed");
+            Check(!LocalStormRoute.TryProject(empty, wrongPeer, out _, out _), "Empty ProfileID bypassed registered host identity");
+            Check(!LocalStormRoute.TryProject(Route(id, "192.0.2.1:3074", emptyProfile:true), fixedPeer, out _, out _),
+                "Empty ProfileID bypassed endpoint ownership");
+            foreach (string invalidProfile in new[] { " ", "x", "-", "00000000000000000000000000000077" })
+                Check(!LocalStormRoute.TryProject(empty.Replace("ProfileID{}", "ProfileID{" + invalidProfile + "}"), fixedPeer, out _, out _),
+                    "Malformed nonempty ProfileID accepted");
             foreach (string invalid in new[] { "", "0", "-0", "+1", "01", "-01", "-2147483649", "4294967296", " 1", "1 ", "--1", "1.0", "0xffffffff" })
                 Check(!LocalStormRoute.TryProject("prudp:/RVCID=" + invalid + native[native.IndexOf('#')..], fixedPeer, out _, out _), "Noncanonical or overflow RVCID accepted");
         }

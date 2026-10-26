@@ -23,6 +23,36 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
+### Current: empty native ProfileID supported; candidate awaits deployment
+
+Latest user join failure: 20261026-192411-de939fec-lan-server.jsonl, two registered
+peers and one JoinSession_V1 rejection local-join-storm-descriptor-values.
+RVCID comparison now passes. Guarded read-only snapshot of test PID 33568 finds
+empty ProfileID in the expected Storm blocks. Native writer C96F64..C96F96 and
+reader C8FB60 (zero-length substring allowed; returns true C8FC03) confirm it is
+a supported spelling. Original EXE hash checked, no raw IDs/routes saved.
+LocalStormRoute accepts empty or D-format GUID here, preserving it and keeping
+registered identity and endpoint ownership checks. See LOCAL-SESSION-JOIN.md.
+
+5,463 service checks pass, including encrypted empty-profile joins in both
+host directions and identity/address rejection. User asked to close both games,
+apply Profilfeld-Update on PC 2 and not restart. After confirmation check host
+processes/ports, extract verified ZIP, run bundled Python
+S7-Profilfeld-Update/update_empty_profile.py --bundle <test-root>, then host
+--check-only and request one public four-slot join attempt. Real LAN join,
+reverse hosting, match startup and synchronization remain unverified.
+
+Read-only live-shape harness passes current descriptor/host-only projection
+with synthetic registration, not live admission. Build work/server-empty-profile,
+tests work/empty-profile-tests. Service SHA256:
+da48ed8c0751c482b6b85fb37a084336f2a19665792f0e515b5365c9665d478d.
+outputs/S7-LAN-Profilfeld-Update.zip has nine files; SHA256:
+4c714ee6a816d112a3379696c431f95e0be22bfa8b79442e6c8bddbb3b4cc8fb.
+ZIP CRC, packaged/source updater equality, old/new payload hashes and wrong-source
+rejection pass. Requires 7d61a238...; backup LocalData/Before-empty-profile-v1.
+Transactional updater unchanged; no native/archive edits. Both installations
+remain on Kennung-Update until user confirms closed games and PC 2 update.
+
 ### Current: signed native RVCID representation; deployed, real join pending
 
 User confirms Kennung-Update installed on PC 2. Initial PC 1 check still found

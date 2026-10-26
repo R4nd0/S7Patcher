@@ -49,7 +49,9 @@ namespace S7Patcher.Source
                 || !uint.TryParse(values["Platform"], NumberStyles.None, CultureInfo.InvariantCulture, out _)
                 || !Regex.IsMatch(values["Gw"], @"\Av\([0-9]\)t\(-\)g\(\)\z", RegexOptions.CultureInvariant)
                 || values["PeerDescriptorBaseEnd"] != ""
-                || !Guid.TryParseExact(values["ProfileID"], "D", out _)
+                // Native C8FB60 accepts an empty ProfileID block. This descriptor
+                // field is not the registered identity used to authorize joins.
+                || (values["ProfileID"].Length != 0 && !Guid.TryParseExact(values["ProfileID"], "D", out _))
                 || !uint.TryParse(values["RoutingOption"], NumberStyles.None, CultureInfo.InvariantCulture, out _)) return false;
             reason = "local-join-storm-endpoints";
             string[] endpoints = values["Address"].Split(',');

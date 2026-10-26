@@ -226,3 +226,28 @@ encrypted two-peer joins use int.MinValue and -1 in opposite host directions.
 Full suite: 5,394 checks. S7-LAN-Kennung-Update.zip requires Spieladresse-Update.
 This correction has not yet been tested with a real client; the observed error
 alone does not establish equality between live registration and route ID bits.
+
+## Empty descriptor profile field
+
+Run 19:24:11 reaches local-join-storm-descriptor-values, so the preceding
+registered RVCID comparison passed. Guarded read-only inspection of PID 33568
+shows the expected ordered descriptor blocks, with ProfileID empty. Other
+observed shapes match the supported format. Original-hash-checked native
+C96F64..C96F96 writes ProfileID{ plus its string plus } without a length check.
+C8FB60 finds both delimiters, copies their substring (including zero length)
+at C8FBB4..C8FBE4, and returns true at C8FC03. This empty spelling is supported
+by the game; our GUID-only validation incorrectly rejected it.
+
+LocalStormRoute now accepts empty or valid D-format GUID ProfileID, preserves
+the field exactly and does not use it for authorization. Nonempty malformed
+values, foreign registered RVCIDs and foreign endpoints remain rejected.
+Encrypted fixtures cover empty/nonempty profiles in both host directions,
+including signed connection IDs. A read-only live-shape harness accepts the
+current descriptor and retains only the expected host LAN endpoint. The harness
+substitutes a synthetic registration ID; it is not a live admission test.
+The real client still needs to test the candidate join response. Full service
+suite: 5,463 checks pass.
+
+Candidate service SHA256:
+da48ed8c0751c482b6b85fb37a084336f2a19665792f0e515b5365c9665d478d.
+S7-LAN-Profilfeld-Update.zip requires Kennung-Update. No adapter or archive changes.
