@@ -47,15 +47,22 @@ auf Spieler". Both display names are LocalPlayer, so the name alone cannot
 identify the disconnected participant. This is a connection/participation
 failure, without a verified simulation-checksum mismatch or established cause.
 
-As of the next-turn process check, the exact old PC1 game, launcher and service
-are all gone. Do not treat the old owned PID file as proof that they run.
-The currently pending user request asks PC2 to close S7 and its starter fully
-and remain closed. Only after that confirmation, relaunch the unchanged PC1
-LAN host, let the user create the public lobby, then start PC2 with its existing
-matching test copy. Collect the already delivered extended turn observation on
-PC2 immediately after match load, before the next disconnect. No new patch or
-game/adapter/service change is needed for that controlled comparison. There is
-no PC2 remote access. Do not start a fresh host while an old PC2 can contact it.
+The user confirmed PC2 and its starter fully closed. PC1 was then restarted
+with the unchanged a16f02cb test copy: new launcher PID 52688 and game PID
+25472, exact path and parent verified, real Login/Register responses ACKed.
+Current owned metadata is work/pc1-v2-owned-launch.json; stdout/stderr use
+work/pc1-turn-comparison-20261027-104006.*.log. Latest service log is
+LocalData/20261027-104015-4f8af8a5-lan-server.jsonl. Verify live ownership
+again before any stop; old PID 60304/51088 records below are historical.
+
+The currently pending request asks the user to create the public four-slot
+PC1 lobby, start PC2 with its existing matching copy (role 2, local .85,
+host .125), join/start and immediately run Eingabe-Diagnose.cmd from the
+Runden-Diagnose package on PC2. The full returned output must include
+command_turn_offset. Both games should stay open. This is the missing early
+guest turn measurement, not another patch or a fixed-latency claim. No
+game/adapter/service files changed. There is no PC2 remote access. Do not
+start a fresh host while an old PC2 can contact it.
 
 At the earlier post-notification check, PC1's owned game/launcher and exact
 child service still ran. Its read-only counters continued regularly, at about
