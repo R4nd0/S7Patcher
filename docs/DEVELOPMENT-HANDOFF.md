@@ -16,7 +16,8 @@ the lobby and sends a join request. With the catalogue-route correction, the
 user confirmed a successful real two-PC join and a running LAN match. Guest
 commands were delayed about 30 seconds. The corrected build now keeps the
 guest horizon at five turns in real LAN observations; the user confirms
-responsive inputs. Sustained stability still awaits confirmation.
+responsive inputs and ten additional minutes of play without errors.
+Longer stability and reverse real-PC hosting still await confirmation.
 The one-PC two-client laboratory now completes
 native admission and the service success report, and the user confirmed both
 players visibly occupy the same lobby. The user subsequently confirmed both
@@ -26,7 +27,7 @@ direction (A hosts, B joins) also reached a running match, confirmed by the user
 Longer synchronization remains unverified. The successful lab used service
 work/server-pair-activity and adapter work/native-pair-core-resume. Those owned
 lab games and service are now stopped. The prepared real LAN host is
-work/installer-network-pump-realtest-v2, currently running the real LAN match.
+work/installer-network-pump-realtest-v2, now stopped for the reverse-host test.
 
 The historical baseline passed 354 adapter checks, 38 network-guard checks
 and 18 original-byte comparisons, plus configuration validation. The
@@ -55,11 +56,24 @@ offset=1, target=1, desired=5, unknown latency and regular updates (31..33).
 These samples are not simultaneous and do not establish clock/checksum equality.
 The host protocol showed no leave/migration/expiry event at this observation.
 
-The user now confirms "Befehle wirken zeitnah; Langzeittest laeuft". The
-remaining request is at least ten more minutes of actions with both games
-left open, followed by a connection/stability report. Do not
-claim the disconnect solved or stable synchronization. After this check,
-reverse real-PC hosting remains required. The full installer builder now
+The user subsequently confirmed "Zehn Minuten ohne Fehler, Befehle zeitnah"
+after the request for ten additional minutes of actions. Before intentional
+shutdown, the host's fixed event counts still contained one join reservation
+and one member confirmation, with no leave/migration/expiry/disconnect/error
+event. This is a bounded gameplay result, not proof of long-run stability or
+simulation checksum equality; the earlier disconnect's cause remains open.
+
+PC1 game38040/launcher46912 were deliberately closed after exact path/parent
+checks; both and their service are confirmed gone. The pending user request
+asks PC2 to close its game AND starter, restart Test-LAN-Verbindung.cmd with
+role1, local192.168.178.85/peer192.168.178.125, and create a public four-player
+lobby with a free slot. Once that is ready, launch the SAME PC1 test root as
+role client, local192.168.178.125/peer192.168.178.85, with a new owned-launch
+record. PC2 now owns the coordinator; do not start PC1 in host mode or change
+payloads/content IDs. Verify PC1 login, then ask the user to join/start and
+observe both directions of input. No reverse real-PC result exists yet.
+
+The full installer builder now
 pins the corrected adapter. Full test package v3 is now rebuilt and verified:
 outputs/S7-LAN-Multiplayer-Testpaket-v3-2026-10-27.zip, 249 entries,
 48,246,299 bytes, SHA256 c43a43a6908b3001008dbe74a34d02a13a90e717196c4838564fb0312c703e71.

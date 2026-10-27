@@ -10,8 +10,11 @@ do not equate a working lobby or reliable packet delivery with deterministic pla
 Both separate PCs have joined the same lobby and loaded a running match.
 The corrected native adapter keeps the guest command horizon at five turns
 instead of growing with every turn; the user confirms responsive commands.
-A sustained test is running. An earlier peer-left/waiting-for-player failure
-has no verified cause, and reverse hosting between the real PCs is untested.
+The user then confirmed ten additional minutes of play with timely commands
+and no errors. The host log contained no disconnect/expiry event before
+intentional shutdown for the reverse-host test. An earlier peer-left/waiting-
+for-player failure has no verified cause, and reverse real-PC hosting remains
+untested.
 Neither checksum equality nor freedom from desynchronization is established.
 See DEVELOPMENT-HANDOFF.md for current builds, hashes and observations.
 
