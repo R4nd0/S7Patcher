@@ -12,8 +12,10 @@ state now enables the multiplayer menu. The user opened an empty session list.
 With `95603b5`, the user also reached the created lobby with player slots.
 Login, Register, search, create and update each received an acknowledged reply;
 there were no rejected requests in that observed run. A second PC discovers
-the lobby and sends a join request; that
-two-PC join is still unverified. The one-PC two-client laboratory now completes
+the lobby and sends a join request. With the catalogue-route correction, the
+user confirmed a successful real two-PC join and a running LAN match. Guest
+commands are delayed about 30 seconds; this remains a blocking gameplay issue.
+The one-PC two-client laboratory now completes
 native admission and the service success report, and the user confirmed both
 players visibly occupy the same lobby. The user subsequently confirmed both
 instances load the map and the match runs, then confirmed five minutes of play
@@ -22,7 +24,7 @@ direction (A hosts, B joins) also reached a running match, confirmed by the user
 Longer synchronization remains unverified. The successful lab used service
 work/server-pair-activity and adapter work/native-pair-core-resume. Those owned
 lab games and service are now stopped. The prepared real LAN host is
-work/installer-network-pump-realtest-v2, currently closed while PC2 updates.
+work/installer-network-pump-realtest-v2, currently running the real LAN match.
 
 The historical baseline passed 354 adapter checks, 38 network-guard checks
 and 18 original-byte comparisons, plus configuration validation. The
@@ -31,9 +33,59 @@ RPC codec previously passed 20,288 isolated assertions. Its UI archive verifies
 all 284 entries and parses.
 These are separate results, not evidence of a playable LAN match.
 
-## Current step: nonempty catalogue and second-client join
+## Current step: guest commands delayed in the running two-PC LAN match
 
-### Latest: real LAN target rejected locally; catalogue route correction staged
+### Latest: real LAN join and match start confirmed; guest input latency
+
+PC2 installed the catalogue-route update into its current test folder. The
+user confirmed both players occupy the same lobby, then both PCs load the map
+and the match runs. Host observations include native configured-peer game UDP,
+native host admission and ReportJoinSuccess/local-join-member-confirmed.
+This establishes real LAN join and start in one host direction. It does not
+establish the reverse real-PC host direction or sustained synchronization.
+
+After about five minutes, the user reported guest building and movement
+commands become effective about 30 seconds late. Host commands act immediately;
+game clocks are approximately equal, and both PCs display the delayed action
+at the same time. Guest selections and target/build-site markers react
+immediately. This narrows the issue to the guest command path; its cause is
+not yet established. Do not call this a passed sustained-play test or claim
+the simulations' checksums match. Keep both running games open for diagnosis.
+
+PC1's narrow read-only counters show core dispatches, owner updates, manager
+updates and echo updates advance regularly. All three update counts match
+(about 29-42 per two-second sample), with two core phases per update. Its
+master_started/core_enabled/external_boundaries/natural_updates_seen flags
+are 1 and master_state is 1. A stalled host update chain is not supported by
+this observation. No live native function was called or memory modified.
+
+The pending user request is to run Eingabe-Diagnose.cmd on PC2 while the match
+remains open and paste its complete ten-second output. Artifact
+outputs/S7-LAN-Eingabe-Diagnose-2026-10-27.zip has three entries, 4,132 bytes,
+and passed CRC verification. The CMD and entire S7-Eingabe-Diagnose folder
+must be extracted together beside PC2's currently used LAN starter. It reads
+only known type-guarded flags and adapter counters after exact EXE/adapter
+hash, image-size, process-path and launcher-parent checks. No injection,
+writes, packet contents, identities, descriptors or tickets are collected.
+Adapter counter RVAs came from a private relink map whose complete .text and
+.data bytes and section locations match the deployed DLL; do not ship that map.
+
+PC1 owned game PID 60304, launcher PID 51088; verify exact paths and ownership
+again before any future stop. State: work/pc1-v2-owned-launch.json; stdout:
+work/pc1-catalogue-route-host.stdout.log. A future coordinated restart must
+close PC2 before launching a fresh host service to avoid the existing stale
+CONNECT-context problem. No automatic reconnect correction is claimed.
+
+The full v3 installer is staged only in work/installer-lan-v3. A complete
+fresh installation at work/installer-lan-v3-realtest copied all 54 original
+files, applied archive patches and passed portable local check-only startup.
+Its full content ID matches the current two-PC test: a16f02cbd9a6a0ced9e60435b515143b151fc366c3d7c9e6230bc9147f8f032b.
+Twelve installer tests pass. Its builder pins the current service and adapter,
+and its text describes role selection and a new, not-yet-created target
+subfolder. No v3 ZIP has been published. Guest latency, reverse real-PC hosting
+and longer matches remain required before a stable release.
+
+### Previous: real LAN target rejected locally; catalogue route correction staged
 
 After the coordinated restart, both real PCs completed Login/Register. PC2
 found the lobby, received an acknowledged JoinSession reservation, then reported

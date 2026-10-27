@@ -13,7 +13,8 @@ import compatibility as content
 from install import write_json, FORMAT
 
 PYTHON_SHA256 = '90905e64a840557d8c1bc4f5b74db3d7ee85e3ffb217611cac1c7813acea4159'
-ADAPTER_SHA256 = 'c3de5276657c61df27ac8be9f0597ce91749469bffb9ef59bc6e55847d2ca4ec'
+ADAPTER_SHA256 = 'a59def58f827508d06c95e2787762681f19da4f74390cf205b19f500eaa60b1e'
+SERVICE_SHA256 = 'a4e300b091e289175f4866f82303b78e05b77aa82cffe958324b6c591d622914'
 ARCHIVE_SHA256 = '2b1ad77ab1afda98e9d9aab8bbc91279607e1bbbac506d2b52de675550de08ad'
 
 
@@ -26,6 +27,8 @@ def build(adapter, service, dotnet, python_zip, output):
         raise ValueError('Output overlaps package inputs')
     if content.digest(adapter) != ADAPTER_SHA256 or content.digest(python_zip) != PYTHON_SHA256:
         raise ValueError('Adapter or Python distribution fingerprint mismatch')
+    if content.digest(service / 'S7Patcher.dll') != SERVICE_SHA256:
+        raise ValueError('Service fingerprint does not match the tested LAN build')
     version = '10.0.13'
     for path in (dotnet / 'dotnet.exe', dotnet / 'host/fxr' / version / 'hostfxr.dll',
                  dotnet / 'shared/Microsoft.NETCore.App' / version / 'System.Private.CoreLib.dll'):
@@ -61,23 +64,28 @@ def build(adapter, service, dotnet, python_zip, output):
         'files': content.inventory(output, ('Payload', 'Runtime', 'Tools'))})
     (output / 'Installieren.cmd').write_text('@echo off\n"%~dp0Runtime\\python\\python.exe" -B "%~dp0Tools\\installer\\install.py" --package "%~dp0."\npause\n', encoding='ascii')
     (output / 'LIESMICH.txt').write_text(
-        'S7 Patch-Installer: LAN-Verbindungstest\n\n'
+        'S7 LAN-Testpaket v3: vollstaendige Installation\n\n'
         'Paket vollstaendig entpacken und Installieren.cmd starten.\n'
         'Den eigenen S7-History-Installationsordner und einen neuen Testordner eingeben.\n'
+        'Den Ziel-Unterordner vorher nicht anlegen. Alle bisherigen Korrekturen sind enthalten.\n'
         'Eine separate Kopie benoetigt etwa 7 GB freien Speicher. Das Original bleibt erhalten.\n'
         'Python und .NET sind enthalten; keine Systeminstallation oder Administratorrechte erforderlich.\n\n'
         'Enthalten: Entwicklungsmodus, bekannte Zusatzinhalte, volle Kampagnenauswahl, maximal vier physische CPU-Kerne ohne SMT.\n'
         'Kampagnenauswahl und CPU-Zuordnung sind im Spiel bestaetigt; weitere Belohnungen noch nicht vollstaendig geprueft.\n'
-        'Diese Version bereitet lokale Tests vor. Beitritt und Hosting zwischen PCs sind noch nicht freigegeben.\n'
+        'Dies ist die getestete LAN-Version fuer weitere Spieltests, noch keine stabile Freigabe.\n'
         'Das gleiche Paket ist fuer beide PCs vorgesehen. Lokale Spielerkennungen entstehen auf jedem PC neu.\n'
         'Nur dieses Paket weitergeben, niemals die vorbereitete Spielkopie oder LocalData.\n'
         'Dateistand-pruefen.cmd prueft die vorbereitete Kopie; compatibility.json enthaelt nur Dateinamen und Pruefsummen.\n'
         'Test-LAN-Verbindung.cmd verbindet zwei explizit angegebene PCs fuer den Sitzungstest.\n'
         'Zuerst Host starten, danach den Mitspieler. Auf beiden PCs dieselbe Paketversion verwenden.\n'
         'TCP 9110 und UDP 9111 muessen am Host fuer den anderen PC erreichbar sein.\n'
-        'Beitritt und gemeinsamer Partiestart sind mit zwei Instanzen auf einem PC bestaetigt.\n'
-        'Dieses Paket uebertraegt die Netzwerkkorrektur auf die originale History-EXE.\n'
-        'Beitritt, Hosting in beiden Richtungen und laengere Partien zwischen getrennten PCs muessen noch geprueft werden.\n'
+        'Host: Auswahl 1, eigene IPv4-Adresse und die Adresse des Mitspielers eingeben.\n'
+        'Mitspieler: Auswahl 2, eigene IPv4-Adresse und die Adresse des Hosts eingeben.\n'
+        'Eine oeffentliche Lobby mit freiem Platz erstellen; der Mitspieler waehlt sie aus und tritt bei.\n'
+        'Das Starterfenster waehrend des Spielens geoeffnet lassen.\n'
+        'Beitritt und gemeinsamer Partiestart sind mit zwei getrennten PCs im LAN bestaetigt.\n'
+        'Bekanntes Problem: Befehle des Mitspielers werden derzeit etwa 30 Sekunden verzoegert wirksam.\n'
+        'Hostrichtungswechsel und laengere Partien zwischen getrennten PCs werden noch geprueft.\n'
         'Der LAN-Dienst endet mit dem Hostspiel, spaetestens nach 24 Stunden.\n'
         'Gleiche Dateien verhindern nicht alle Synchronisationsfehler der Spielsimulation.\n', encoding='utf-8')
     (output / 'RUNTIME-SOURCES.txt').write_text(

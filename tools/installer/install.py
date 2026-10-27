@@ -148,7 +148,7 @@ def prepare(package, source, destination, emit=print):
     (destination / 'LIESMICH.txt').write_text(
         'S7 lokale Testkopie\n\nStart-S7-Test.cmd startet den lokalen Test.\n'
         'Test-LAN-Verbindung.cmd bietet Host/Mitspieler fuer den Sitzungstest.\n'
-        'Host zuerst starten, dann den Mitspieler. Beitritt/Partiestart bleiben in Entwicklung.\n'
+        'Host zuerst starten, dann den Mitspieler. Beide Spiele vor einem gemeinsamen Neustart schliessen.\n'
         'Dateistand-pruefen.cmd prueft Spiel und Patch auf Veraenderungen.\n'
         'compatibility.json kann zum Vergleich auf den zweiten PC kopiert werden.\n'
         'Gleiche Dateien allein garantieren keine desyncfreie Simulation.\n'
@@ -160,7 +160,7 @@ def prepare(package, source, destination, emit=print):
     with (destination / 'Test-LAN-Verbindung.cmd').open('x', encoding='ascii') as stream:
         stream.write('@echo off\n"%~dp0Runtime\\python\\python.exe" -B "%~dp0Launcher\\launch_lan.py" --bundle "%~dp0."\npause\n')
     incomplete.unlink()
-    emit('Testkopie ist vorbereitet. LAN-Host/Beitritt sind noch nicht freigegeben.')
+    emit('Testkopie ist vorbereitet. Start: Test-LAN-Verbindung.cmd.')
     return destination
 
 
@@ -170,9 +170,9 @@ def main():
     parser.add_argument('--source'); parser.add_argument('--destination')
     args = parser.parse_args()
     try:
-        print('S7 Patch-Vorbereitung: getrennte Testkopie, noch kein spielbares LAN.')
+        print('S7 LAN-Vorbereitung: getrennte Testkopie.')
         source = args.source or input('S7-Installationsordner: ').strip().strip('"')
-        destination = args.destination or input('Neuer Ordner fuer die Testkopie: ').strip().strip('"')
+        destination = args.destination or input('Neuer Ziel-Unterordner (vorher nicht anlegen): ').strip().strip('"')
         if not source or not destination: raise ValueError('Beide Ordner werden benoetigt.')
         prepare(Path(args.package), Path(source), Path(destination))
         return 0
