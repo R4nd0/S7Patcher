@@ -232,7 +232,7 @@ using (CancellationTokenSource metadataStop = new())
             "Minimum DATA packet was not passively classified");
         Check(observed[6].PacketType == "data" && observed[6].ChecksumMatchesZeroSeed == false,
             "DATA checksum mismatch concealed structural classification");
-        string[] allowed = ["event", "datagram_length", "datagrams_received", "udp_protocol_implemented",
+        string[] allowed = ["event", "elapsed_milliseconds", "datagram_length", "datagrams_received", "udp_protocol_implemented",
             "packet_type", "checksum_matches_zero_seed", "bytes_consumed", "known_peer", "connect_reply_sent",
             "routing_matches", "client_session_matches", "header_cookie_matches"];
         foreach (ConfigServerEvent item in observed)
@@ -300,6 +300,15 @@ await Cli(2, "--local-config-server", "--local-session-display-probe", "--local-
 await Cli(2, "--local-config-server", "--local-session-display-probe", "true");
 string cliOutput = await Cli(0, "--local-config-server", "--http-port", "0", "--udp-port", "0", "--seconds", "1");
 Check(cliOutput.Contains("configuration-server-ready") && cliOutput.Contains("configuration-server-stopped"), "CLI server dispatch did not complete");
+long previousEventTime = -1;
+foreach (string line in cliOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+{
+    using JsonDocument record = JsonDocument.Parse(line);
+    long timestamp = record.RootElement.GetProperty("elapsed_milliseconds").GetInt64();
+    Check(timestamp >= 0 && timestamp >= previousEventTime, "CLI event times are missing, negative or out of order");
+    previousEventTime = timestamp;
+}
+Check(previousEventTime >= 500, "Stopped event does not use elapsed service time");
 foreach (string[] options in new string[][] {
     ["--handshake-metadata", "--http-port", "0", "--seconds", "1"],
     ["--http-port", "0", "--handshake-metadata", "--seconds", "1"],

@@ -109,7 +109,7 @@ internal static class PrudpSynProbeChecks
         }
         Check(events.Any(item => item.Event == "udp-datagram-observed" && item.PacketType == "syn"
             && item.ChecksumMatchesZeroSeed == true), "SYN mode did not imply passive metadata");
-        string[] allowed = ["event", "datagram_length", "authentication_implemented", "udp_protocol_implemented"];
+        string[] allowed = ["event", "elapsed_milliseconds", "datagram_length", "authentication_implemented", "udp_protocol_implemented"];
         foreach (ConfigServerEvent item in events.Where(item => item.Event == "syn-probe-reply-sent"))
         {
             using JsonDocument log = JsonDocument.Parse(JsonSerializer.Serialize(item, ConfigServerJsonContext.Default.ConfigServerEvent));

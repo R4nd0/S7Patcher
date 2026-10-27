@@ -17,10 +17,13 @@ This mode rejects both lab EXEs and enables no lab address/profile behavior.
 The original network guard still requires the explicit configured LAN peer.
 Lab builds imply this pump feature; baseline builds retain their old behavior.
 
-This transfers observed behavior to an original-EXE candidate, not proof of
-two-computer multiplayer. The laboratory match is still running while that
-candidate and its installer are independently checked. Longer games, reverse
-hosting, simulation synchronization and two-PC joining remain unqualified.
+The original-EXE candidate has now reached a shared lobby and running match
+between two real LAN PCs. Guest commands were delayed about 30 seconds, then
+PC1 displayed a peer-left notice while PC2 waited for a player. This remains
+an incomplete experimental bridge. Reverse real-PC hosting, longer matches
+and simulation synchronization remain unqualified; see DEVELOPMENT-HANDOFF.md
+for current evidence and the controlled diagnostic step. No checksum equality
+or absence of desynchronization is claimed.
 
 ## Components and boundaries
 

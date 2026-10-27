@@ -208,7 +208,7 @@ internal static class PrudpDataCryptoProbeChecks
         Check(cryptoEvents.Length == 4 && cryptoEvents.Count(item => item.Reason == "decoded-sequence-matched") == 2,
             "Loopback native-encrypted fixtures not decoded or attempts counted incorrectly");
         Check(cryptoEvents.Any(item => item.Reason == "invalid-cbc-length") && cryptoEvents.Any(item => item.Reason == "empty-body-bypassed"), "Failure/bypass outcomes missing");
-        string[] allowed = ["event", "reason", "serialized_payload_length", "decrypted_envelope_length", "decoded_payload_length",
+        string[] allowed = ["event", "elapsed_milliseconds", "reason", "serialized_payload_length", "decrypted_envelope_length", "decoded_payload_length",
             "compressed", "sequence_matches", "authentication_implemented", "udp_protocol_implemented"];
         foreach (var item in cryptoEvents)
         {

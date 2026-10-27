@@ -21,6 +21,9 @@ namespace S7Patcher.Source
         private string authenticationUrl, registeredPublicUrl;
         private uint did, rvConnectionId;
         private bool loginHandled, registerHandled, disposed;
+        // Fixed transport categories, not a claim about the game's current host.
+        // No address, port, display name or player identifier is logged.
+        internal string ObservedTransportRole { get; }
 
         internal LocalLoginRpcEngine(byte clientSourceVirtualPort, IPEndPoint observedLoopbackPeer, string serverAuthUrl, LocalNetworkPolicy network = null)
         {
@@ -36,6 +39,8 @@ namespace S7Patcher.Source
             sourceSid = (byte)(clientSourceVirtualPort & 15);
             observedAddress = observedLoopbackPeer.Address.ToString();
             observedPort = observedLoopbackPeer.Port;
+            ObservedTransportRole = IPAddress.IsLoopback(observedLoopbackPeer.Address) ? "loopback"
+                : network.IsServerAddress(observedLoopbackPeer.Address) ? "service-local" : "configured-peer";
             try
             {
                 do { RandomNumberGenerator.Fill(profileId); } while (ReservedProfile(profileId));

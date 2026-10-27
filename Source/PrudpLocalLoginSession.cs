@@ -72,6 +72,12 @@ namespace S7Patcher.Source
         internal int PendingCount => pending.Count;
         internal bool Closed => closed;
 
+        private void Emit(Action<ConfigServerEvent> sink, ConfigServerEvent record)
+        {
+            record.SourceRole = rpc.ObservedTransportRole;
+            sink(record);
+        }
+
         internal bool TryReplyToPing(ReadOnlySpan<byte> packet, long now, Action<ConfigServerEvent> emit, out byte[] reply)
         {
             reply = null;
@@ -90,7 +96,7 @@ namespace S7Patcher.Source
                 ? now - createdAt >= maximumMilliseconds || now - lastActivityAt >= idleMilliseconds
                 : now - createdAt >= LifetimeMilliseconds;
             if (!expired) return false;
-            emit(new() { Event = "local-login-session-expired", Reason = !keepAlive ? "probe-lifetime-ended"
+            Emit(emit, new() { Event = "local-login-session-expired", Reason = !keepAlive ? "probe-lifetime-ended"
                 : now - createdAt >= maximumMilliseconds ? "keepalive-maximum-ended" : "keepalive-idle-timeout" });
             Dispose(); return true;
         }
@@ -111,7 +117,7 @@ namespace S7Patcher.Source
                 plaintext => queued = assembler.AddFragment(sequence, part, plaintext));
             if (result.SequenceMatches != true) return result;
             if (queued != ReliableEnqueueResult.Accepted)
-                emit(new() { Event = "local-login-fragment-observed", Reason = queued.ToString() });
+                Emit(emit, new() { Event = "local-login-fragment-observed", Reason = queued.ToString() });
             while (assembler.TryTakeMessage(out byte[] message))
             {
                 byte[] response = null;
@@ -133,12 +139,12 @@ namespace S7Patcher.Source
                         {
                             string operation = LoginRpcCodec.ClassifyPostLoginRequest(message);
                             if (observedOperations.Add(operation))
-                                emit(new() { Event = "local-post-login-request-observed", Reason = operation });
+                                Emit(emit, new() { Event = "local-post-login-request-observed", Reason = operation });
                         }
                         int responseLimit = lanKeepAlive ? LanResponsesPerWindow : MaximumPostLoginResponses;
                         if (!keepAlive || !registrationAcknowledged || postLoginResponseCount >= responseLimit || pending.Count >= ReliableResponseQueue.MaximumResponses)
                         {
-                            emit(new() { Event = "local-login-message-rejected", Reason = "response-budget-exhausted" });
+                            Emit(emit, new() { Event = "local-login-message-rejected", Reason = "response-budget-exhausted" });
                             continue;
                         }
                         if (LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-report-join-failure-v1")
@@ -149,7 +155,7 @@ namespace S7Patcher.Source
                             {
                                 joinFailureObserved = true;
                                 bool valid = sessions.TryObserveJoinFailure(this, rpc, message, out uint sessionKind, out int length, out reason, out var category);
-                                emit(new() { Event = "local-session-join-failure-observed", Reason = reason,
+                                Emit(emit, new() { Event = "local-session-join-failure-observed", Reason = reason,
                                     ReportedSessionKind = valid ? sessionKind : null, ReportTextLength = valid ? length : null,
                                     ReportedFailureCategory = valid ? category : null });
                             }
@@ -157,19 +163,19 @@ namespace S7Patcher.Source
                         }
                         if (!TryReplyToSessionRequest(message, out response, out reason))
                         {
-                            emit(new() { Event = "local-login-message-rejected", Reason = reason });
+                            Emit(emit, new() { Event = "local-login-message-rejected", Reason = reason });
                             continue;
                         }
                     }
                     else if (!rpc.TryHandle(message, out response, out reason))
                     {
-                        emit(new() { Event = "local-login-message-rejected", Reason = reason });
+                        Emit(emit, new() { Event = "local-login-message-rejected", Reason = reason });
                         continue;
                     }
                     if (!pending.TryEnqueue(response,
                         (sequence, part, bytes) => peer.Connect.CreateDataPacket(sequence, bytes, key, part)))
                     {
-                        emit(new() { Event = "local-login-message-rejected", Reason = "response-fragment-limit" });
+                        Emit(emit, new() { Event = "local-login-message-rejected", Reason = "response-fragment-limit" });
                         Dispose();
                         break;
                     }
@@ -179,7 +185,7 @@ namespace S7Patcher.Source
                     // duplicates, ACKs and rejected/budget-exhausted calls are not.
                     if (keepAlive && registrationAcknowledged && now.HasValue)
                         lastActivityAt = Math.Max(lastActivityAt, now.Value);
-                    emit(new() { Event = !search ? "local-login-response-queued"
+                    Emit(emit, new() { Event = !search ? "local-login-response-queued"
                         : LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-create-session-v1"
                             ? "local-session-create-response-queued"
                             : LoginRpcCodec.ClassifyPostLoginRequest(message) == "matchmaking-update-session-v1"
@@ -201,7 +207,7 @@ namespace S7Patcher.Source
                 }
             }
             if (!closed)
-                emit(new() { Event = "local-login-assembly-observed", Reason = assembler.LastDropReason.ToString(),
+                Emit(emit, new() { Event = "local-login-assembly-observed", Reason = assembler.LastDropReason.ToString(),
                     BufferedFragments = assembler.BufferedFragmentCount, AssemblingFragments = assembler.FragmentsInCurrentMessage });
             return result;
         }
@@ -267,7 +273,7 @@ namespace S7Patcher.Source
             var packets = pending.TakeDue(now, out bool timedOut);
             if (timedOut)
             {
-                emit(new() { Event = "local-login-session-expired", Reason = "response-ack-timeout" });
+                Emit(emit, new() { Event = "local-login-session-expired", Reason = "response-ack-timeout" });
                 Dispose();
             }
             return packets;

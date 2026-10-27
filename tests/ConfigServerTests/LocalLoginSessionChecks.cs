@@ -164,7 +164,8 @@ internal static class LocalLoginSessionChecks
         internal readonly byte[] Key;
         internal readonly byte ServerSession;
         internal readonly List<ConfigServerEvent> Events = new();
-        internal Fixture(long now = 100, bool keepAlive = false, LocalSessionRegistry sessions = null, LocalNetworkPolicy network = null)
+        internal Fixture(long now = 100, bool keepAlive = false, LocalSessionRegistry sessions = null, LocalNetworkPolicy network = null,
+            IPAddress observedAddress = null)
         {
             using ECDiffieHellman client = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
             using ECDsa signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
@@ -175,7 +176,7 @@ internal static class LocalLoginSessionChecks
             Peer.Connect.TryGetReply(packet, request, out byte[] reply);
             ServerSession = reply[3];
             Key = NativeCngFixtures.Derive(client, reply.AsSpan(82, 72).ToArray());
-            Session = new(Peer, new(network?.PeerAddress ?? IPAddress.Loopback, 40000),
+            Session = new(Peer, new(observedAddress ?? network?.PeerAddress ?? IPAddress.Loopback, 40000),
                 "prudp:/address=" + (network?.BindAddress ?? IPAddress.Loopback) + ";port=9111;sid=1;stream=3;type=2",
                 now, keepAlive, sessions, network);
         }
@@ -242,10 +243,43 @@ internal static class LocalLoginSessionChecks
         return passed;
     }
 
+    private static int RunTransportRoleChecks()
+    {
+        int passed = 0;
+        void Check(bool ok, string why) { if (!ok) throw new Exception(why); passed++; }
+        foreach (bool reversed in new[] { false, true })
+        {
+            Check(LocalNetworkPolicy.TryCreate(reversed ? "192.168.10.20" : "192.168.10.10",
+                reversed ? "192.168.10.10" : "192.168.10.20", out var policy), "Role policy fixture");
+            foreach (var (address, role) in new[] { (policy.BindAddress, "service-local"),
+                (policy.PeerAddress, "configured-peer"), (IPAddress.Loopback, "loopback") })
+            {
+                using var fixture = new Fixture(keepAlive: true, network: policy, observedAddress: address);
+                fixture.Register();
+                fixture.Session.ProcessData(fixture.Data(8, 0, LocalSessionCreationChecks.Request(
+                    body: Ddl("invented-secret-body"), method: "MatchmakingProtocol::MigrateSession_V1")), fixture.Events.Add);
+                Check(fixture.Events.Any(e => e.Event == "local-post-login-request-observed"
+                    && e.Reason == "matchmaking-migrate-session-v1" && e.SourceRole == role), "Migration caller role missing");
+                Check(fixture.Events.Any(e => e.Event == "local-login-message-rejected"
+                    && e.Reason == "unsupported-session-operation" && e.SourceRole == role), "Rejection caller role missing");
+                Check(fixture.Session.PendingCount == 0, "Diagnostics fabricated a migration response");
+                fixture.Session.TakeDue(100 + PrudpLocalLoginSession.LanIdleMilliseconds, fixture.Events.Add);
+                Check(fixture.Events.Any(e => e.Event == "local-login-session-expired" && e.SourceRole == role), "Expiry role missing");
+                foreach (var item in fixture.Events)
+                {
+                    string json = JsonSerializer.Serialize(item, ConfigServerJsonContext.Default.ConfigServerEvent);
+                    Check(item.SourceRole == role && !json.Contains("192.168.") && !json.Contains("prudp:/")
+                        && !json.Contains("invented-secret-body"), "Role diagnostics expose endpoint or request data");
+                }
+            }
+        }
+        return passed;
+    }
+
     internal static int Run()
     {
         if (!OperatingSystem.IsWindows()) { Console.WriteLine("SKIP: native BCrypt local-login session checks require Windows."); return 0; }
-        int passed = RunLanLifetimeChecks();
+        int passed = RunLanLifetimeChecks() + RunTransportRoleChecks();
         void Check(bool value, string label) { if (!value) throw new Exception(label); passed++; }
         // A busy browser may send RPCs instead of PINGs. Advancing receive
         // timestamps must extend only successfully handled registered activity.

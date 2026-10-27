@@ -1,6 +1,7 @@
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -162,6 +163,19 @@ namespace S7Patcher.Source
 
         internal static async Task RunAsync(LocalConfigServerOptions options, Action<ConfigServerEvent> emit, CancellationToken cancellation)
         {
+            // Order diagnostics on one monotonic process clock. Wall-clock file
+            // timestamps cannot establish the sequence of a live match failure.
+            long started = Stopwatch.GetTimestamp();
+            object eventLock = new();
+            Action<ConfigServerEvent> sink = emit;
+            emit = record =>
+            {
+                lock (eventLock)
+                {
+                    record.ElapsedMilliseconds = Stopwatch.GetElapsedTime(started).Ticks / TimeSpan.TicksPerMillisecond;
+                    sink(record);
+                }
+            };
             if (options.LocalSessionDisplayProbe || options.LocalCatalogueProbe) options.LocalKeepAliveProbe = true;
             if (options.LocalKeepAliveProbe) options.LocalLoginProbe = true;
             LocalNetworkPolicy network = options.Network ?? throw new ArgumentException("Missing network policy");
@@ -561,6 +575,8 @@ namespace S7Patcher.Source
 
     internal sealed class ConfigServerEvent
     {
+        public long? ElapsedMilliseconds { get; set; }
+        public string SourceRole { get; set; }
         public uint? ReportedSessionKind { get; init; }
         public string ReportedFailureCategory { get; init; }
         public int? ReportTextLength { get; init; }

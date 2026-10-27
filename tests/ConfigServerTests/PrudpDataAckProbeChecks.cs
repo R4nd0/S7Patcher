@@ -127,7 +127,7 @@ internal static class PrudpDataAckProbeChecks
         Check(events.Any(item => item.PacketType == "data" && item.ClientSessionMatches == false), "Session mismatch not observed");
         Check(events.Any(item => item.PacketType == "data" && item.HeaderCookieMatches == false), "Cookie mismatch not observed");
         Check(!events.Any(item => item.Event == "data-crypto-probe-observed"), "DATA ACK mode implicitly decrypted payloads");
-        string[] allowed = ["event", "reason", "datagram_length", "authentication_implemented", "udp_protocol_implemented"];
+        string[] allowed = ["event", "elapsed_milliseconds", "reason", "datagram_length", "authentication_implemented", "udp_protocol_implemented"];
         foreach (var item in events.Where(item => item.Event.StartsWith("data-ack-probe-")))
         {
             using JsonDocument log = JsonDocument.Parse(JsonSerializer.Serialize(item, ConfigServerJsonContext.Default.ConfigServerEvent));

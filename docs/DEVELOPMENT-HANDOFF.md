@@ -41,19 +41,40 @@ After the extended PC2 measurement was requested, the user reported "gerade
 desync" and supplied a screenshot saying "Ein Spieler hat das Spiel verlassen.
 [LocalPlayer]". That image itself establishes a peer-left notification, not
 an explicit checksum/desynchronization error. Do not dismiss the user's
-report or assert which failure occurred without the other PC's message.
-The currently pending question asks which PC shows this image and the exact
-message/error number on the other PC. No restart or further round test was
-requested. Keep both games open if possible; there is no PC2 remote access.
+report or assert which failure occurred from this image alone. The user now
+confirms the image is PC1, nobody intentionally left, and PC2 showed "Warten
+auf Spieler". Both display names are LocalPlayer, so the name alone cannot
+identify the disconnected participant. This is a connection/participation
+failure, without a verified simulation-checksum mismatch or established cause.
 
-PC1's exact owned game/launcher and its exact child service are still running.
-The post-notification read-only counters still advance regularly, at about
+As of the next-turn process check, the exact old PC1 game, launcher and service
+are all gone. Do not treat the old owned PID file as proof that they run.
+The currently pending user request asks PC2 to close S7 and its starter fully
+and remain closed. Only after that confirmation, relaunch the unchanged PC1
+LAN host, let the user create the public lobby, then start PC2 with its existing
+matching test copy. Collect the already delivered extended turn observation on
+PC2 immediately after match load, before the next disconnect. No new patch or
+game/adapter/service change is needed for that controlled comparison. There is
+no PC2 remote access. Do not start a fresh host while an old PC2 can contact it.
+
+At the earlier post-notification check, PC1's owned game/launcher and exact
+child service still ran. Its read-only counters continued regularly, at about
 ten command turns/second, offset=1, target=1, desired=5. The redacted service
 log records one unsupported MigrateSession_V1 request followed by valid
 keepalive ACKs, without a recorded session-expiry event or service error.
-That request's relationship to the failure is unproved: log records currently
+The final saved host log later records two LeaveSession requests: a host record
+removal succeeded, then the other request was rejected for owner/space mismatch.
+The old log cannot say which physical PC requested migration or correlate it
+to the screenshot. That request's relationship to the failure is unproved:
+deployed log records currently
 have no per-event timestamps, and open-file size/mtime is not a reliable
 event chronology. Do not fabricate a migration success reply as a fix.
+Static serializer research confirms MigrateSession has two DDL strings, a
+32-bit source session ID, a list of 16-byte UUID-shaped values and a 32-bit
+MatchmakingLockState with an extension-map class version. Its reply consumes
+one 32-bit output, not a void result. Source request E528B0/E529C2-E52A46,
+UUID-list serializer E51480/EAFBC0, response E55FF0. Full host-transfer and
+new-ID semantics remain unproved; no migration handler was added.
 The current original game log contains none of the searched desync, timeout,
 peer-left, disconnect or migration terms. No profiles, accounts, replay
 contents, minidumps, live identifiers or packet payloads were inspected.
@@ -64,6 +85,30 @@ work/pc1-after-peer-left-counters.txt preserves the bounded observation.
 These are private diagnostics, not release artifacts or Git inputs. No
 loaded game/adapter/service files were changed. Guest latency and this
 disconnect both block release; the installer text now states both limits.
+
+### Prepared diagnostics: monotonic event time and fixed transport role
+
+The private candidate work/server-event-chronology (SHA256
+9fee81c2cfcba864b46834b69458ddc32118ba7c951012dad8ea69b4e7bcb640)
+adds elapsed_milliseconds to ordered server events and source_role to existing
+local-login/session events. Roles are fixed loopback/service-local/configured-peer
+categories derived from the already validated configured transport address.
+They do not claim which peer is currently the native game host, expose no
+addresses/ports/player identifiers/payloads and change no wire protocol,
+membership, allowlist, response budgets or expiry. Request, rejection and
+expiry observations now retain that source category. The running test copies
+and matching a16f02cb content ID have NOT been updated; no diagnostic-only
+user reinstall or standalone update package has been requested.
+
+Checks: 8,712 default and 11,174 lab configuration-server assertions pass,
+including real HTTP/UDP, CNG, lifetime/cleanup, fixed-field privacy checks and
+CLI event chronology. New transport-role fixtures cover both LAN directions,
+local/remote/loopback origins, rejected migration, expiry, no fabricated reply
+and no endpoint/request data in logs. Builds have zero warnings/errors.
+The lab candidate and tests are work/server-event-chronology-lab and
+work/tests-event-chronology-lab; default tests work/tests-event-chronology.
+The full-installer builder still deliberately pins the deployed tested service,
+not this private diagnostic candidate. No new stable LAN release is claimed.
 
 PC2 installed the catalogue-route update into its current test folder. The
 user confirmed both players occupy the same lobby, then both PCs load the map
