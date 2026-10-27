@@ -17,8 +17,9 @@ user confirmed a successful real two-PC join and a running LAN match. Guest
 commands were delayed about 30 seconds. The corrected build now keeps the
 guest horizon at five turns in real LAN observations; the user confirms
 responsive inputs and ten additional minutes of play without errors.
-Both real-PC host directions now join and start successfully. Longer
-stability, including the reverse direction's sustained input test, is pending.
+Both real-PC host directions now join and start successfully. The reverse
+sustained test subsequently reported a connection loss or other error;
+exact messages and host evidence are pending. Stability remains a blocker.
 The one-PC two-client laboratory now completes
 native admission and the service success report, and the user confirmed both
 players visibly occupy the same lobby. The user subsequently confirmed both
@@ -37,7 +38,54 @@ RPC codec previously passed 20,288 isolated assertions. Its UI archive verifies
 all 284 entries and parses.
 These are separate results, not evidence of a playable LAN match.
 
-## Current step: verify corrected latency in both real LAN host directions
+## Current step: investigate the failure during sustained reverse LAN play
+
+### Latest: reverse play reported a failure; preserve both running games
+
+After successful reverse join/start, the user selected "Verbindungsabbruch
+oder andere Fehlermeldung" in the ten-minute test question. Exact messages
+on PC1 and PC2, and approximate elapsed match time, have been requested but
+not returned. Do not label this a confirmed checksum desync or attribute a
+cause yet. Both games and starters must remain open; do not restart or deploy.
+
+PC1 is still the exact owned game36300/launcher42824, with no launcher stderr.
+Its latest fixed native labels retain connected login, real join completion,
+the unknown-latency horizon correction and natural-core resume observation.
+The bounded post-failure observer reports command_turn=UINT_MAX throughout,
+actual/target=1, desired=5, latency=UINT_MAX, known samples=0. Core dispatches
+advance64 and owner/manager/echo32 per two seconds. This is a reset/nonplaying
+turn value with the update loop still alive, not evidence that the latency
+fix regressed in an active match. No live identifiers or game calls are read.
+
+The active host/coordinator is PC2, so PC1 has no current service log. Its
+latest local host log belongs to the previous intentionally closed game and
+must not be attributed to this failure; it now contains the expected shutdown
+leave/migration sequence after the earlier pre-shutdown observation.
+
+Prepared tools/installer/connection_report.py and Verbindungsbericht.cmd read
+only a bounded tail of the newest strictly named host-service log and fixed
+native labels. Events/reasons/roles are explicit allowlists; unknown text,
+addresses, arbitrary JSON fields and paths are never emitted. The report
+includes the host run's timestamp without its random suffix and warns that
+the host log may predate the current game. Old logs have no event clock/role;
+the helper does not invent either. Reparse/symlink paths are rejected and
+oversized records/tails are bounded. It makes no writes and uses no game
+memory/process/account/profile/configuration access.
+
+Four meaningful fixture tests pass: unknown-property/text/type redaction,
+no invented clock/source for old logs, malformed/bounded chronology, newest
+host-log and last-native-start selection. It also ran against the old PC1
+log/current labels to validate actual formats, without treating them as PC2
+evidence. ZIP outputs/S7-LAN-Verbindungsbericht-2026-10-27.zip has3 entries,
+3863 bytes; CRC/extracted bytes match. SHA256:
+67f442acf92d46ca8144d75a4d31f7eb0fee315283ca8c856dd77cf627decad9.
+
+The current second user question asks PC2 to extract the CMD AND entire
+S7-Verbindungsbericht folder into its current installed test root, run the
+CMD there while games remain open, and return all output. No patch install
+or restart is needed. Await the exact message and this current-host report
+before choosing the next protocol/transport change. The private timed-log
+service remains undeployed and native/service/content IDs are unchanged.
 
 ### Latest: corrected guest horizon verified in a real two-PC LAN match
 
@@ -81,11 +129,11 @@ Owner/manager/echo advance together (51..160 per two seconds); core dispatches
 are twice that count. These counts vary with updates, while command turns
 advance about ten per second; no precise cross-PC clock comparison is made.
 
-The CURRENT pending request asks for ten minutes of actions on BOTH PCs in
+The previous request asked for ten minutes of actions on BOTH PCs in
 this reverse-host match, then a report on timely inputs and continued
 connection. Both games/starters must remain open. No ten-minute reverse-run
-result is available yet. Do not restart, patch files or claim long-term
-stability while waiting for that gameplay observation.
+success result is available: a failure was reported instead, as recorded
+above. Do not restart, patch files or claim long-term stability.
 
 The full installer builder now
 pins the corrected adapter. Full test package v3 is now rebuilt and verified:

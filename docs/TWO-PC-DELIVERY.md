@@ -16,7 +16,9 @@ intentional shutdown for the reverse-host test. An earlier peer-left/waiting-
 for-player failure has no verified cause. Reverse real-PC hosting now also
 joins and starts successfully, confirmed by the user. PC1 as guest keeps its
 actual and target horizon at five turns during command turns 209..309. The
-ten-minute gameplay test in that direction is pending.
+ten-minute gameplay test in that direction subsequently reported a connection
+loss or other error. Exact messages and the PC2 host log are pending. This
+keeps sustained stability unaccepted; successful join/start is still valid.
 Neither checksum equality nor freedom from desynchronization is established.
 See DEVELOPMENT-HANDOFF.md for current builds, hashes and observations.
 
