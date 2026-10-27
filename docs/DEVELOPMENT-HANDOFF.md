@@ -17,7 +17,8 @@ user confirmed a successful real two-PC join and a running LAN match. Guest
 commands were delayed about 30 seconds. The corrected build now keeps the
 guest horizon at five turns in real LAN observations; the user confirms
 responsive inputs and ten additional minutes of play without errors.
-Longer stability and reverse real-PC hosting still await confirmation.
+Both real-PC host directions now join and start successfully. Longer
+stability, including the reverse direction's sustained input test, is pending.
 The one-PC two-client laboratory now completes
 native admission and the service success report, and the user confirmed both
 players visibly occupy the same lobby. The user subsequently confirmed both
@@ -27,7 +28,7 @@ direction (A hosts, B joins) also reached a running match, confirmed by the user
 Longer synchronization remains unverified. The successful lab used service
 work/server-pair-activity and adapter work/native-pair-core-resume. Those owned
 lab games and service are now stopped. The prepared real LAN host is
-work/installer-network-pump-realtest-v2, now stopped for the reverse-host test.
+work/installer-network-pump-realtest-v2, now running as the reverse-test guest.
 
 The historical baseline passed 354 adapter checks, 38 network-guard checks
 and 18 original-byte comparisons, plus configuration validation. The
@@ -36,7 +37,7 @@ RPC codec previously passed 20,288 isolated assertions. Its UI archive verifies
 all 284 entries and parses.
 These are separate results, not evidence of a playable LAN match.
 
-## Current step: unknown-latency sentinel causes runaway guest command horizon
+## Current step: verify corrected latency in both real LAN host directions
 
 ### Latest: corrected guest horizon verified in a real two-PC LAN match
 
@@ -64,14 +65,27 @@ event. This is a bounded gameplay result, not proof of long-run stability or
 simulation checksum equality; the earlier disconnect's cause remains open.
 
 PC1 game38040/launcher46912 were deliberately closed after exact path/parent
-checks; both and their service are confirmed gone. The pending user request
-asks PC2 to close its game AND starter, restart Test-LAN-Verbindung.cmd with
-role1, local192.168.178.85/peer192.168.178.125, and create a public four-player
-lobby with a free slot. Once that is ready, launch the SAME PC1 test root as
-role client, local192.168.178.125/peer192.168.178.85, with a new owned-launch
-record. PC2 now owns the coordinator; do not start PC1 in host mode or change
-payloads/content IDs. Verify PC1 login, then ask the user to join/start and
-observe both directions of input. No reverse real-PC result exists yet.
+checks; both and their service were confirmed gone. The user then confirmed
+PC2 hosts a public lobby, after closing/restarting its game and starter with
+role1, local192.168.178.85/peer192.168.178.125. PC1's SAME test root restarted
+as role client, local192.168.178.125/peer192.168.178.85. Its new owned launcher
+is 42824/game 36300, recorded in work/pc1-v2-owned-launch.json. Content matching
+and local login connected were confirmed. PC2 owns the current coordinator;
+no new local service was launched on PC1 and no payload/content ID changed.
+
+The user now confirms "Beitritt und Partiestart funktionieren" for this
+reverse real-PC direction. The same bounded read-only observer on PC1 as
+guest reports command_turn=209..309, actual offset=target=desired=5 throughout,
+UINT_MAX latency, zero known samples, natural_updates_seen=0 and active core.
+Owner/manager/echo advance together (51..160 per two seconds); core dispatches
+are twice that count. These counts vary with updates, while command turns
+advance about ten per second; no precise cross-PC clock comparison is made.
+
+The CURRENT pending request asks for ten minutes of actions on BOTH PCs in
+this reverse-host match, then a report on timely inputs and continued
+connection. Both games/starters must remain open. No ten-minute reverse-run
+result is available yet. Do not restart, patch files or claim long-term
+stability while waiting for that gameplay observation.
 
 The full installer builder now
 pins the corrected adapter. Full test package v3 is now rebuilt and verified:

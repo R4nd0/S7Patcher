@@ -13,8 +13,10 @@ instead of growing with every turn; the user confirms responsive commands.
 The user then confirmed ten additional minutes of play with timely commands
 and no errors. The host log contained no disconnect/expiry event before
 intentional shutdown for the reverse-host test. An earlier peer-left/waiting-
-for-player failure has no verified cause, and reverse real-PC hosting remains
-untested.
+for-player failure has no verified cause. Reverse real-PC hosting now also
+joins and starts successfully, confirmed by the user. PC1 as guest keeps its
+actual and target horizon at five turns during command turns 209..309. The
+ten-minute gameplay test in that direction is pending.
 Neither checksum equality nor freedom from desynchronization is established.
 See DEVELOPMENT-HANDOFF.md for current builds, hashes and observations.
 

@@ -20,8 +20,9 @@ Lab builds imply this pump feature; baseline builds retain their old behavior.
 The original-EXE candidate has now reached a shared lobby and running match
 between two real LAN PCs. Guest commands were delayed about 30 seconds, then
 PC1 displayed a peer-left notice while PC2 waited for a player. This remains
-an incomplete experimental bridge. Reverse real-PC hosting, longer matches
-and simulation synchronization remain unqualified; see DEVELOPMENT-HANDOFF.md
+an incomplete experimental bridge. Both real-PC hosting directions now join
+and start, but longer matches and simulation synchronization remain
+unqualified; see DEVELOPMENT-HANDOFF.md
 for current evidence and the controlled diagnostic step. No checksum equality
 or absence of desynchronization is claimed.
 
@@ -33,7 +34,10 @@ not supply fake latency samples, alter clocks or disable synchronization
 checks. Both PCs have the matching update. During a real LAN match, PC2's
 actual and target horizon now remain five across command turns 1133..1233
 with an unknown latency ring; PC1 retains its original one-turn host horizon.
-The user confirms responsive guest inputs; sustained stability remains pending.
+The user confirms responsive guest inputs and ten additional error-free minutes
+with PC1 hosting. With roles reversed, the user confirms join/start and the
+observer on PC1 as guest retains five-turn actual/target horizons at turns
+209..309. The reverse sustained gameplay test remains pending.
 See DEVELOPMENT-HANDOFF.md for hashes, counters, tests and the pending step.
 
 ## Components and boundaries

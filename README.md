@@ -15,10 +15,12 @@ A portable **preparation installer** is now available in `tools/installer/`.
 It makes a separate copy from each PC's own supported installation, includes
 its runtimes, and checks game/patch/content fingerprints before local startup.
 The current guarded adapter and service have completed a real two-PC join and
-running match. The guest's growing command delay is corrected: its horizon
+match start with either PC hosting. The guest's growing command delay is
+corrected: its horizon
 stays at five turns and the user confirms responsive commands through ten
-additional minutes of play without errors. Longer stability, an earlier
-connection loss and reverse real-PC hosting still need verification. See
+additional minutes of play without errors with PC1 hosting. Longer stability,
+an earlier connection loss and sustained play with PC2 hosting still need
+verification. See
 [two-PC delivery and synchronization acceptance](docs/TWO-PC-DELIVERY.md).
 
 The inspected Ubisoft Connect build contains a native LAN Join function that returns success without joining a peer. The experimental bridge uses the game's native session transport through its local matchmaking service instead. See [LAN research](docs/LAN-RESEARCH.md) and the [current development handoff](docs/DEVELOPMENT-HANDOFF.md).
