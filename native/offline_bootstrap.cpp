@@ -288,6 +288,50 @@ void RememberLabCoreFrame(unsigned char* core) {
     lab_last_scheduler = scheduler;
     lab_last_core_frame = *reinterpret_cast<unsigned int*>(scheduler + 0x78);
 }
+
+void __fastcall SetLocalTurnOffset(void* self, void*, unsigned int requested) {
+    const DWORD entry_error = GetLastError();
+    unsigned int selected = requested;
+    bool used_default = false;
+    if (initialization == 2 && local_connect_probe && GetCurrentThreadId() == bootstrap_thread) {
+        auto* network = *Native<unsigned char**>(0x1379E14);
+        auto* main = *Native<unsigned char**>(0x13A5210);
+        if (LocalUpdateOwner(network) && main &&
+            *reinterpret_cast<uintptr_t*>(main) == image_base + 0x113F2C0 - PreferredBase &&
+            self && *reinterpret_cast<void**>(main + 0x18) == self &&
+            *static_cast<uintptr_t*>(self) == image_base + 0x113F424 - PreferredBase) {
+            auto* latency = *reinterpret_cast<unsigned char**>(network + 0xa58);
+            if (latency && *reinterpret_cast<uintptr_t*>(latency) == image_base + 0x1140188 - PreferredBase && latency[0x18]) {
+                // ED2EA0 initializes twenty samples to UINT_MAX. ED2DE0 returns
+                // their minimum; ECF59F otherwise divides the unknown sentinel
+                // by 66 and increases the guest offset on every command turn.
+                unsigned int minimum = UINT32_MAX;
+                for (unsigned int i = 0; i < 20; ++i) {
+                    const auto value = *reinterpret_cast<unsigned int*>(latency + 0x44 + i * 4);
+                    if (value < minimum) minimum = value;
+                }
+                if (minimum == UINT32_MAX) {
+                    auto* state = static_cast<unsigned char*>(self);
+                    // Use the game's own desired turn horizon (normally five),
+                    // not a fabricated latency sample. With no desired horizon,
+                    // retain the existing target. Real samples keep native policy.
+                    selected = state[0x60] ? state[0x60] : *reinterpret_cast<unsigned int*>(state + 0x28);
+                    used_default = true;
+                }
+            }
+        }
+    }
+    using Setter = void (__thiscall*)(void*, unsigned int);
+    SetLastError(entry_error);
+    Native<Setter>(0xECC870)(self, selected);
+    const DWORD result_error = GetLastError();
+    static bool reported = false;
+    if (used_default && !reported) {
+        reported = true;
+        ReportLocalStatus("local-command-offset-unknown-latency-default");
+    }
+    SetLastError(result_error);
+}
 #endif
 
 bool __fastcall QueryLocalLoginStatus(void* self, void*) {
@@ -758,6 +802,8 @@ const Patch ConnectPatches[] = {
     {0xED673B, {0xe8,0x30,0x0b,0x00,0x00}, reinterpret_cast<const void*>(&QueryLocalSessionJoin)},
     {0xC8DCC5, {0xe8,0x86,0x62,0x0b,0x00}, reinterpret_cast<const void*>(&GetLocalSearchSandbox)},
 #ifdef S7_LOCAL_NETWORK_PUMP
+    {0xECF5D8, {0xe8,0x93,0xd2,0xff,0xff}, reinterpret_cast<const void*>(&SetLocalTurnOffset)},
+    {0xECF5F4, {0xe8,0x77,0xd2,0xff,0xff}, reinterpret_cast<const void*>(&SetLocalTurnOffset)},
     {0xC0E809, {0xe8,0x02,0x6e,0x01,0x00}, reinterpret_cast<const void*>(&ObserveLabTicketRequest)},
     {0xC256DA, {0xe8,0x91,0x27,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketReferenceMissing)},
     {0xC24C09, {0xe8,0x62,0x32,0xa3,0xff}, reinterpret_cast<const void*>(&ObserveLabTicketStateRejection)},

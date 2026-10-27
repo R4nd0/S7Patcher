@@ -25,6 +25,14 @@ and simulation synchronization remain unqualified; see DEVELOPMENT-HANDOFF.md
 for current evidence and the controlled diagnostic step. No checksum equality
 or absence of desynchronization is claimed.
 
+The latest candidate fixes a demonstrated runaway guest command horizon when
+the native latency ring contains only UINT_MAX (unknown). Two guarded calls
+to the original turn-offset setter use the game's own desired horizon until
+a real sample exists; then the original adaptation is preserved. This does
+not supply fake latency samples, alter clocks or disable synchronization
+checks. PC1 is updated, and the real LAN retest awaits PC2's matching update.
+See DEVELOPMENT-HANDOFF.md for hashes, counters, tests and the pending step.
+
 ## Components and boundaries
 
 `native/local_platform.cpp` implements the verified x86 startup, offline

@@ -5,6 +5,13 @@
 void ReportLocalStatus(const char*) { SetLastError(12345); }
 namespace {
 #ifdef S7_LOCAL_NETWORK_PUMP
+void* turn_setter_self = nullptr;
+unsigned int turn_setter_value = 0;
+void __fastcall FakeTurnOffsetSetter(void* self, void*, unsigned int value) {
+    turn_setter_self = self; turn_setter_value = value;
+    *reinterpret_cast<unsigned int*>(static_cast<unsigned char*>(self) + 0x28) = value;
+    SetLastError(6789);
+}
 uintptr_t lab_join_arguments[6]{};
 int lab_join_code = 1;
 const char* lab_rejection_literal = nullptr;
@@ -406,7 +413,7 @@ int main() {
     policy[0x80] = 0;
     check(!SkipLocalNetworkStartup(policy, nullptr) && policy[0x80] == 0);
     *Native<void**>(0x13789D0) = nullptr;
-    alignas(4) unsigned char network[0xa1c]{};
+    alignas(4) unsigned char network[0xa80]{};
     alignas(4) unsigned char owner[0x2a8]{};
     *Native<unsigned char**>(0x1379E14) = network;
     PumpOfflineBootstrap(); check(!pump_active); // Null owner.
@@ -447,6 +454,63 @@ int main() {
     *reinterpret_cast<void**>(owner + 0x100) = owner;
     *reinterpret_cast<void**>(owner + 0x104) = owner;
     *reinterpret_cast<void**>(owner + 0x110) = owner;
+#ifdef S7_LOCAL_NETWORK_PUMP
+    {
+        alignas(4) unsigned char main[0x48]{}, state[0x100]{}, latency[0x98]{};
+        *Native<unsigned char**>(0x13A5210) = main;
+        *reinterpret_cast<uintptr_t*>(main) = image_base + 0x113F2C0 - PreferredBase;
+        *reinterpret_cast<void**>(main + 0x18) = state;
+        *reinterpret_cast<uintptr_t*>(state) = image_base + 0x113F424 - PreferredBase;
+        *reinterpret_cast<void**>(network + 0xa58) = latency;
+        *reinterpret_cast<uintptr_t*>(latency) = image_base + 0x1140188 - PreferredBase;
+        latency[0x18] = 1; state[0x60] = 5;
+        auto* samples = reinterpret_cast<unsigned int*>(latency + 0x44);
+        for (unsigned int i = 0; i < 20; ++i) samples[i] = UINT32_MAX;
+        check(FakeJump(0xECC870, reinterpret_cast<const void*>(&FakeTurnOffsetSetter)));
+        SetLocalTurnOffset(state, nullptr, 1083);
+        check(turn_setter_self == state && turn_setter_value == 5 && GetLastError() == 6789);
+        // Reproduce six hours of the original unknown-latency increment path.
+        // The real wrapper feeds the fake native setter; only native smoothing
+        // is represented by the one-step convergence below.
+        unsigned int offset = 1;
+        for (unsigned int turn = 0; turn < 216000; ++turn) {
+            SetLocalTurnOffset(state, nullptr, offset + 1);
+            if (offset < turn_setter_value) ++offset;
+            else if (offset > turn_setter_value) --offset;
+        }
+        check(offset == 5 && turn_setter_value == 5);
+        for (unsigned int index : {0u, 19u}) for (unsigned int measured : {0u, 1u, 66u, 1000u, UINT32_MAX - 1}) {
+            samples[index] = measured;
+            for (unsigned int requested : {0u, 2u, 1083u, UINT32_MAX}) {
+                SetLocalTurnOffset(state, nullptr, requested);
+                check(turn_setter_value == requested && GetLastError() == 6789);
+            }
+            samples[index] = UINT32_MAX;
+        }
+        state[0x60] = 0; *reinterpret_cast<unsigned int*>(state + 0x28) = 7;
+        SetLocalTurnOffset(state, nullptr, 1083); check(turn_setter_value == 7);
+        state[0x60] = 5;
+        local_connect_probe = false;
+        SetLocalTurnOffset(state, nullptr, 9); check(turn_setter_value == 9); local_connect_probe = true;
+        bootstrap_thread = 0;
+        SetLocalTurnOffset(state, nullptr, 10); check(turn_setter_value == 10); bootstrap_thread = GetCurrentThreadId();
+        initialization = 1;
+        SetLocalTurnOffset(state, nullptr, 11); check(turn_setter_value == 11); initialization = 2;
+        *reinterpret_cast<void**>(main + 0x18) = nullptr;
+        SetLocalTurnOffset(state, nullptr, 12); check(turn_setter_value == 12);
+        *reinterpret_cast<void**>(main + 0x18) = state;
+        *reinterpret_cast<uintptr_t*>(latency) = 0;
+        SetLocalTurnOffset(state, nullptr, 13); check(turn_setter_value == 13);
+        *reinterpret_cast<uintptr_t*>(latency) = image_base + 0x1140188 - PreferredBase;
+        latency[0x18] = 0;
+        SetLocalTurnOffset(state, nullptr, 14); check(turn_setter_value == 14); latency[0x18] = 1;
+        *reinterpret_cast<void**>(facade + 0x0c) = owner;
+        SetLocalTurnOffset(state, nullptr, 15); check(turn_setter_value == 15);
+        *reinterpret_cast<void**>(facade + 0x0c) = nullptr;
+        *Native<unsigned char**>(0x13A5210) = nullptr;
+        *reinterpret_cast<void**>(network + 0xa58) = nullptr;
+    }
+#endif
     owner[0x78] = 1; // A real connection is already requested in this fixture.
     pump_network = network; pump_owner = owner;
     check(FakeJump(0xE82240, reinterpret_cast<const void*>(&FakeNetworkGetter)));

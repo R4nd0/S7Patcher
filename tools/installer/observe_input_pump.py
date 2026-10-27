@@ -14,7 +14,10 @@ import struct
 import time
 
 EXE = '4ef51632a8a193050ebe8ef3f3fe38a9b240b4aa57ff62a4f381bc0f539df64f'
-ADAPTER = 'a59def58f827508d06c95e2787762681f19da4f74390cf205b19f500eaa60b1e'
+ADAPTERS = {
+    'a59def58f827508d06c95e2787762681f19da4f74390cf205b19f500eaa60b1e': (0x3dfae, 0x3e040, 0x3e044, 0x3e048),
+    '0d5fdd965485f0ad7414802c9012a203a71df4ab358422737952667d9308b650': (0x3dfd6, 0x3e068, 0x3e06c, 0x3e070),
+}
 
 
 class Module(c.Structure):
@@ -33,9 +36,12 @@ def observe(root):
     root = Path(root).resolve(strict=True)
     expected = root / 'Base/Bin/Settlers7R.exe'
     adapter = expected.with_name('uplay_r1_loader.dll')
-    for path, checksum in ((expected, EXE), (adapter, ADAPTER)):
-        if hashlib.sha256(path.read_bytes()).hexdigest() != checksum:
-            raise ValueError('Diese Diagnose unterstuetzt nur den bekannten aktuellen Test-Dateistand.')
+    if hashlib.sha256(expected.read_bytes()).hexdigest() != EXE:
+        raise ValueError('Diese Diagnose braucht die bekannte History-EXE.')
+    checksum = hashlib.sha256(adapter.read_bytes()).hexdigest()
+    if checksum not in ADAPTERS:
+        raise ValueError('Diese Diagnose unterstuetzt nur den bekannten aktuellen Test-Dateistand.')
+    counter_rvas = ADAPTERS[checksum]
     k = c.WinDLL('kernel32', use_last_error=True)
     k.OpenProcess.argtypes = [w.DWORD, w.BOOL, w.DWORD]; k.OpenProcess.restype = w.HANDLE
     k.CloseHandle.argtypes = [w.HANDLE]
@@ -108,9 +114,9 @@ def observe(root):
             scheduler = typed(u32(implementation + 4), 0x109959c)
             flags = {'master_started':read(master + 0x4c4,1)[0], 'core_enabled':read(master + 0x4c7,1)[0],
                      'external_boundaries':read(network + 0x30,1)[0], 'master_state':u32(master + 0x400),
-                     'natural_updates_seen':read(adapter_base + 0x3dfae,1)[0]}
-            counters = {'core_dispatches':u32(scheduler + 0x78), 'owner_updates':u32(adapter_base + 0x3e040),
-                        'manager_updates':u32(adapter_base + 0x3e044), 'echo_updates':u32(adapter_base + 0x3e048)}
+                     'natural_updates_seen':read(adapter_base + counter_rvas[0],1)[0]}
+            counters = {'core_dispatches':u32(scheduler + 0x78), 'owner_updates':u32(adapter_base + counter_rvas[1]),
+                        'manager_updates':u32(adapter_base + counter_rvas[2]), 'echo_updates':u32(adapter_base + counter_rvas[3])}
             # 535250 returns CMain; EC9A80 sets its table; ECA030 returns +18.
             # ED0150 sets CStateEngine's table. ECD7D0 increments +20 and
             # schedules at +20 +24 +1; ECC750 moves +24 towards +28.
@@ -121,6 +127,12 @@ def observe(root):
                           'command_turn_offset':u32(engine + 0x24),
                           'command_offset_target':u32(engine + 0x28),
                           'desired_turn_offset':read(engine + 0x60,1)[0]})
+            # ED2EA0 initializes the twenty-sample latency ring to UINT_MAX;
+            # ED2DE0 reads its minimum. 66F930 sets this exact object's table.
+            latency = typed(u32(network + 0xa58), 0x1140188)
+            samples = [u32(latency + 0x44 + 4*i) for i in range(20)]
+            flags.update({'latency_min_ms':min(samples),
+                          'latency_known_samples':sum(value != 0xffffffff for value in samples)})
             return scheduler, counters, flags
         previous, counters, flags = sample(); started = time.monotonic()
         print(json.dumps({'event':'input-pump-observation-start', **flags}), flush=True)

@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'tools/installer'), str(ROOT / 'tools/lan')]
 import update_join_menu as update
 import compatibility as content
+import update_turn_offset as turn_update
 
 
 class MenuUpdateTests(unittest.TestCase):
@@ -167,6 +168,27 @@ class MenuUpdateTests(unittest.TestCase):
         self.assertEqual((self.root / plan.target).read_bytes(), b'new service')
         content.verify(self.root)
         self.assertIn('bereits', update.run(self.root, {}, plan))
+
+    def test_turn_offset_package_plan_payload_and_idempotence(self):
+        folder = self.root / 'update_payload'; folder.mkdir()
+        binary = folder / 'uplay_r1_loader.dll'; binary.write_bytes(b'corrupted adapter')
+        old = self.values['Base/Bin/uplay_r1_loader.dll']
+        old_id = content.verify(self.root)['content_id']
+        with patch.object(turn_update, '__file__', str(folder / 'update_turn_offset.py')), \
+             patch.object(turn_update, 'OLD_ADAPTER', update.sha256(old)), \
+             patch.object(turn_update, 'NEW_ADAPTER', update.sha256(b'new turn adapter')), \
+             patch.object(turn_update, 'MENU', update.sha256(self.values[update.ARCHIVE])):
+            plan = turn_update.plan()
+            with self.assertRaises(ValueError): update.run(self.root, {}, plan)
+            self.assertEqual((self.root / plan.target).read_bytes(), old)
+            self.assertEqual(content.verify(self.root)['content_id'], old_id)
+            binary.write_bytes(b'new turn adapter')
+            update.run(self.root, {}, plan)
+            self.assertEqual((self.root / plan.target).read_bytes(), b'new turn adapter')
+            self.assertEqual((self.root / update.ARCHIVE).read_bytes(), self.values[update.ARCHIVE])
+            self.assertNotEqual(content.verify(self.root)['content_id'], old_id)
+            self.assertEqual((self.root / 'LocalData' / plan.backup / plan.target).read_bytes(), old)
+            self.assertIn('bereits', update.run(self.root, {}, plan))
 
     def test_service_update_rejects_wrong_existing_binary(self):
         (self.root / 'Server/S7Patcher.dll').write_bytes(b'other service')

@@ -33,9 +33,85 @@ RPC codec previously passed 20,288 isolated assertions. Its UI archive verifies
 all 284 entries and parses.
 These are separate results, not evidence of a playable LAN match.
 
-## Current step: delayed guest commands followed by a reported desync/disconnect
+## Current step: unknown-latency sentinel causes runaway guest command horizon
 
-### Latest: real LAN join and match start confirmed; guest input latency
+### Latest: targeted native correction built and installed on PC1; PC2 update pending
+
+The repeated real LAN match reached play. PC2 returned the extended observation:
+command_turn=1082..1180, offset=1082..1180, target=1083..1181, desired=5;
+its owner/manager/echo counts still advance together, about 30 per two seconds.
+PC1's contemporaneous comparison has offset=1 and target=1. A further narrow,
+type-guarded read of PC1's native latency module found all twenty samples at
+UINT_MAX, no known samples, attached=1, ring index=0. No live identifier was read.
+
+Static proof: ED2EA0 resets the latency ring to UINT_MAX; ED2DE0 returns its
+minimum; ED7530 reads it through Network+a58. ECF59F divides the returned value
+by 66, adds 2, then ECF5F4 grows the guest's target by one each turn. The host
+skips this branch. Unknown latency is therefore treated as an enormous time.
+Native ECC750 moves the actual horizon toward that target. This matches the
+guest's observed one-per-turn runaway and the growing input delay. It does
+not establish the cause of the later disconnect or checksum synchronization.
+
+SetLocalTurnOffset intercepts only the two original ECC870 setter callsites
+ECF5D8/ECF5F4 in the opt-in LocalNetworkPump/lab build. For the verified local
+owner, CMain/CStateEngine association and attached typed latency module, an
+all-UINT_MAX ring now selects the state's own desired horizon (normally five).
+A zero desired horizon retains the previous target. Any real sample, including
+zero, passes the original requested target unchanged. No latency value, clock,
+ready flag, packet or identity is fabricated/changed. The original setter and
+its ABI/last-error semantics remain; no extra thread or injected call exists.
+The fixed once-only status is local-command-offset-unknown-latency-default.
+
+Candidate work/native-turn-offset-default/uplay_r1_loader.dll SHA256:
+0d5fdd965485f0ad7414802c9012a203a71df4ab358422737952667d9308b650.
+Checks: 937 bootstrap, 76 network, 88 platform, 18 connect, 14 CPU. Baseline:
+359 bootstrap/72 network; lab: 939 bootstrap/80 network. All builds /W4 /WX,
+zero errors. Tests exercise the actual wrapper and native-setter stub, six
+hours of synthetic unknown-latency turn growth, known sample endpoints/zero,
+unchanged arguments, disabled mode, thread, ownership and module guards.
+All 65 native patch guards match the unchanged original EXE. The old private
+verify_native_call_guards.py does not correctly handle all pointer slots;
+use work/verify_network_pump_guards.py, which checks the actual pointer widths.
+
+Artifact outputs/S7-LAN-Befehlsvorlauf-Update-2026-10-27.zip: 11 files, 136,479
+bytes, CRC/pinned DLL verified, no game files or LocalData. It contains both
+Befehlsvorlauf-Update.cmd and Runden-Diagnose.cmd plus the complete
+S7-Befehlsvorlauf-Update folder. The existing transactional updater preserves
+backup/locks/inventory and rejects unexpected bytes. Seventeen updater tests
+pass, including the actual new plan's corrupted payload, successful update,
+backup, unchanged menu and idempotent repeat. On the unused real installed copy
+work/installer-lan-v3-realtest, actual update/repeat/full content validation and
+portable no-game preflight passed. Only the adapter changed in its content
+inventory; service/menu/launcher stayed identical.
+
+PC1's owned game PID25472/launcher52688 were then safely closed using exact
+path/parent checks, and the launcher cleaned its own service. PC1's actual
+work/installer-network-pump-realtest-v2 now has the candidate too. Both updated
+copies have full content ID:
+d1db6b1a9ffb00bc3cb88db0ea29decaef50bd47b9744206530bb1ea00552b43.
+The deployed service remains a4e300b0 (not the private timed-log candidate).
+
+The CURRENT pending user request asks PC2 to close S7 AND its starter, fully
+extract this ZIP into the existing test folder (CMD files beside the existing
+LAN starter; entire data folder together), run Befehlsvorlauf-Update.cmd and
+return its completion/content ID (d1db6b1a...). Keep both games closed until
+PC2 confirms; do not poison another fresh host handshake with an old client.
+Then restart PC1, create the public lobby, join/start on PC2 and immediately
+run the NEW Runden-Diagnose.cmd on PC2. It supports both exact adapter hashes
+and includes the latency minimum/known-sample count. Old Eingabe-Diagnose.cmd
+may still invoke its previous script. Confirm the guest offset stays around
+five with responsive commands, then test duration/disconnect and reverse host.
+No live match with this correction has yet run; no stable release is claimed.
+
+Observer RVAs were proved by a private relink whose .text/.data bytes, virtual
+sizes and section RVAs exactly match the candidate; image size remains 44000.
+New RVAs: natural 3dfd6, owner 3e068, manager 3e06c, echo 3e070. The old mapping
+is retained behind its exact hash. Updated observer also ran successfully on
+the live old host before shutdown. Private MAP/binaries/disassembly stay out
+of Git. Full-installer v3 staging still pins the previous deployed adapter;
+do not publish it as the corrected build until the new LAN test succeeds.
+
+### Previous: real LAN join and match start confirmed; guest input latency
 
 After the extended PC2 measurement was requested, the user reported "gerade
 desync" and supplied a screenshot saying "Ein Spieler hat das Spiel verlassen.
