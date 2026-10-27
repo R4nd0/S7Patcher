@@ -85,6 +85,7 @@ def build(adapter, service, dotnet, python_zip, output):
         'Das Starterfenster waehrend des Spielens geoeffnet lassen.\n'
         'Beitritt und gemeinsamer Partiestart sind mit zwei getrennten PCs im LAN bestaetigt.\n'
         'Bekanntes Problem: Befehle des Mitspielers werden derzeit etwa 30 Sekunden verzoegert wirksam.\n'
+        'Im LAN-Test trat ausserdem ein Verbindungsabbruch auf; seine Ursache ist noch offen.\n'
         'Hostrichtungswechsel und laengere Partien zwischen getrennten PCs werden noch geprueft.\n'
         'Der LAN-Dienst endet mit dem Hostspiel, spaetestens nach 24 Stunden.\n'
         'Gleiche Dateien verhindern nicht alle Synchronisationsfehler der Spielsimulation.\n', encoding='utf-8')

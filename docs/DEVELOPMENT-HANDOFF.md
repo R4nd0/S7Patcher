@@ -33,9 +33,37 @@ RPC codec previously passed 20,288 isolated assertions. Its UI archive verifies
 all 284 entries and parses.
 These are separate results, not evidence of a playable LAN match.
 
-## Current step: guest commands delayed in the running two-PC LAN match
+## Current step: delayed guest commands followed by a reported desync/disconnect
 
 ### Latest: real LAN join and match start confirmed; guest input latency
+
+After the extended PC2 measurement was requested, the user reported "gerade
+desync" and supplied a screenshot saying "Ein Spieler hat das Spiel verlassen.
+[LocalPlayer]". That image itself establishes a peer-left notification, not
+an explicit checksum/desynchronization error. Do not dismiss the user's
+report or assert which failure occurred without the other PC's message.
+The currently pending question asks which PC shows this image and the exact
+message/error number on the other PC. No restart or further round test was
+requested. Keep both games open if possible; there is no PC2 remote access.
+
+PC1's exact owned game/launcher and its exact child service are still running.
+The post-notification read-only counters still advance regularly, at about
+ten command turns/second, offset=1, target=1, desired=5. The redacted service
+log records one unsupported MigrateSession_V1 request followed by valid
+keepalive ACKs, without a recorded session-expiry event or service error.
+That request's relationship to the failure is unproved: log records currently
+have no per-event timestamps, and open-file size/mtime is not a reliable
+event chronology. Do not fabricate a migration success reply as a fix.
+The current original game log contains none of the searched desync, timeout,
+peer-left, disconnect or migration terms. No profiles, accounts, replay
+contents, minidumps, live identifiers or packet payloads were inspected.
+
+Private work/peer-left-evidence-20261027 preserves only the known redacted
+service log, fixed native-status labels and owned launcher stdout/stderr.
+work/pc1-after-peer-left-counters.txt preserves the bounded observation.
+These are private diagnostics, not release artifacts or Git inputs. No
+loaded game/adapter/service files were changed. Guest latency and this
+disconnect both block release; the installer text now states both limits.
 
 PC2 installed the catalogue-route update into its current test folder. The
 user confirmed both players occupy the same lobby, then both PCs load the map
@@ -84,8 +112,9 @@ DesiredTurnOffset emitted in COrbitEvent. No native calls are made by the
 observer. PC1 advances 20 command turns every two seconds, with offset=1,
 target=1 and desired=5. Its bundled Python completed this extended observation.
 
-The pending user request is the matching PC2 measurement, without closing
-either game. Artifact outputs/S7-LAN-Runden-Diagnose-2026-10-27.zip has three
+The previous request was the matching PC2 measurement, without closing
+either game; it has not been returned and is superseded by the failure-message
+question above. Artifact outputs/S7-LAN-Runden-Diagnose-2026-10-27.zip has three
 entries, 4,378 bytes, verified CRC and exact Python/source equality. Extract
 the CMD and S7-Eingabe-Diagnose folder together into the same running test
 folder, replacing only the previous diagnostic files, then run the CMD and
