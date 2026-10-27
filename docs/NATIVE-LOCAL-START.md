@@ -30,7 +30,10 @@ the native latency ring contains only UINT_MAX (unknown). Two guarded calls
 to the original turn-offset setter use the game's own desired horizon until
 a real sample exists; then the original adaptation is preserved. This does
 not supply fake latency samples, alter clocks or disable synchronization
-checks. PC1 is updated, and the real LAN retest awaits PC2's matching update.
+checks. Both PCs have the matching update. During a real LAN match, PC2's
+actual and target horizon now remain five across command turns 1133..1233
+with an unknown latency ring; PC1 retains its original one-turn host horizon.
+The user confirms responsive guest inputs; sustained stability remains pending.
 See DEVELOPMENT-HANDOFF.md for hashes, counters, tests and the pending step.
 
 ## Components and boundaries

@@ -13,7 +13,7 @@ import compatibility as content
 from install import write_json, FORMAT
 
 PYTHON_SHA256 = '90905e64a840557d8c1bc4f5b74db3d7ee85e3ffb217611cac1c7813acea4159'
-ADAPTER_SHA256 = 'a59def58f827508d06c95e2787762681f19da4f74390cf205b19f500eaa60b1e'
+ADAPTER_SHA256 = '0d5fdd965485f0ad7414802c9012a203a71df4ab358422737952667d9308b650'
 SERVICE_SHA256 = 'a4e300b091e289175f4866f82303b78e05b77aa82cffe958324b6c591d622914'
 ARCHIVE_SHA256 = '2b1ad77ab1afda98e9d9aab8bbc91279607e1bbbac506d2b52de675550de08ad'
 
@@ -84,7 +84,8 @@ def build(adapter, service, dotnet, python_zip, output):
         'Eine oeffentliche Lobby mit freiem Platz erstellen; der Mitspieler waehlt sie aus und tritt bei.\n'
         'Das Starterfenster waehrend des Spielens geoeffnet lassen.\n'
         'Beitritt und gemeinsamer Partiestart sind mit zwei getrennten PCs im LAN bestaetigt.\n'
-        'Bekanntes Problem: Befehle des Mitspielers werden derzeit etwa 30 Sekunden verzoegert wirksam.\n'
+        'Der zuvor anwachsende Befehlsvorlauf des Mitspielers ist korrigiert; im LAN-Test bleibt er bei fuenf Runden.\n'
+        'Zeitnahe Befehle auf dem Mitspieler-PC sind bestaetigt; laengere Partien werden noch geprueft.\n'
         'Im LAN-Test trat ausserdem ein Verbindungsabbruch auf; seine Ursache ist noch offen.\n'
         'Hostrichtungswechsel und laengere Partien zwischen getrennten PCs werden noch geprueft.\n'
         'Der LAN-Dienst endet mit dem Hostspiel, spaetestens nach 24 Stunden.\n'

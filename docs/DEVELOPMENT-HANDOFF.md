@@ -14,7 +14,9 @@ Login, Register, search, create and update each received an acknowledged reply;
 there were no rejected requests in that observed run. A second PC discovers
 the lobby and sends a join request. With the catalogue-route correction, the
 user confirmed a successful real two-PC join and a running LAN match. Guest
-commands are delayed about 30 seconds; this remains a blocking gameplay issue.
+commands were delayed about 30 seconds. The corrected build now keeps the
+guest horizon at five turns in real LAN observations; the user confirms
+responsive inputs. Sustained stability still awaits confirmation.
 The one-PC two-client laboratory now completes
 native admission and the service success report, and the user confirmed both
 players visibly occupy the same lobby. The user subsequently confirmed both
@@ -35,7 +37,41 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: unknown-latency sentinel causes runaway guest command horizon
 
-### Latest: targeted native correction built and installed on PC1; PC2 update pending
+### Latest: corrected guest horizon verified in a real two-PC LAN match
+
+PC2 confirmed the full d1db6b1a9ffb00bc3cb88db0ea29decaef50bd47b9744206530bb1ea00552b43
+content ID after installing the turn-offset update. Both previous games were
+closed before PC1 restarted. The new owned launcher/game PIDs are 46912/38040,
+recorded in work/pc1-v2-owned-launch.json. Native login connected and the
+service recorded local-join-reservation-created and local-join-member-confirmed.
+
+The user then returned the NEW Runden-Diagnose output from PC2 during play:
+command_turn 1133..1233; actual offset, target and desired horizon all remain
+5 in every sample. Latency minimum remains UINT_MAX and known samples remain
+zero, demonstrating the intended unknown-latency branch without fabricated
+measurements. Owner/manager/echo advance together (29..31 per two seconds).
+The corresponding read-only PC1 observation at later turns 2898..2997 retains
+offset=1, target=1, desired=5, unknown latency and regular updates (31..33).
+These samples are not simultaneous and do not establish clock/checksum equality.
+The host protocol showed no leave/migration/expiry event at this observation.
+
+The user now confirms "Befehle wirken zeitnah; Langzeittest laeuft". The
+remaining request is at least ten more minutes of actions with both games
+left open, followed by a connection/stability report. Do not
+claim the disconnect solved or stable synchronization. After this check,
+reverse real-PC hosting remains required. The full installer builder now
+pins the corrected adapter. Full test package v3 is now rebuilt and verified:
+outputs/S7-LAN-Multiplayer-Testpaket-v3-2026-10-27.zip, 249 entries,
+48,246,299 bytes, SHA256 c43a43a6908b3001008dbe74a34d02a13a90e717196c4838564fb0312c703e71.
+Twelve synthetic installer tests pass. An actual fresh installation in
+work/installer-lan-v3-turn-offset-realtest copied 54 original game files;
+only the intended loader and menu archive differ from the original source.
+Its fully verified content ID exactly matches the current d1db6b1a build,
+and its bundled-runtime no-game-start preflight passed. ZIP CRC and every
+packaged payload hash passed; no game data or LocalData is distributed.
+This is a consolidated experimental installer, not a stable multiplayer release.
+
+### Correction implementation and deployment
 
 The repeated real LAN match reached play. PC2 returned the extended observation:
 command_turn=1082..1180, offset=1082..1180, target=1083..1181, desired=5;
@@ -91,7 +127,7 @@ copies have full content ID:
 d1db6b1a9ffb00bc3cb88db0ea29decaef50bd47b9744206530bb1ea00552b43.
 The deployed service remains a4e300b0 (not the private timed-log candidate).
 
-The CURRENT pending user request asks PC2 to close S7 AND its starter, fully
+The previous update request asked PC2 to close S7 AND its starter, fully
 extract this ZIP into the existing test folder (CMD files beside the existing
 LAN starter; entire data folder together), run Befehlsvorlauf-Update.cmd and
 return its completion/content ID (d1db6b1a...). Keep both games closed until
@@ -101,15 +137,16 @@ run the NEW Runden-Diagnose.cmd on PC2. It supports both exact adapter hashes
 and includes the latency minimum/known-sample count. Old Eingabe-Diagnose.cmd
 may still invoke its previous script. Confirm the guest offset stays around
 five with responsive commands, then test duration/disconnect and reverse host.
-No live match with this correction has yet run; no stable release is claimed.
+That update and live counter test are now complete as recorded above; no
+stable release is claimed.
 
 Observer RVAs were proved by a private relink whose .text/.data bytes, virtual
 sizes and section RVAs exactly match the candidate; image size remains 44000.
 New RVAs: natural 3dfd6, owner 3e068, manager 3e06c, echo 3e070. The old mapping
 is retained behind its exact hash. Updated observer also ran successfully on
 the live old host before shutdown. Private MAP/binaries/disassembly stay out
-of Git. Full-installer v3 staging still pins the previous deployed adapter;
-do not publish it as the corrected build until the new LAN test succeeds.
+of Git. The old full-installer v3 staging still contains the previous adapter;
+rebuild from the corrected builder before publishing a new full package.
 
 ### Previous: real LAN join and match start confirmed; guest input latency
 

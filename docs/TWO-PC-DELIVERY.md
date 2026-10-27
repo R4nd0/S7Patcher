@@ -5,7 +5,33 @@ own Ubisoft Connect History Edition installation. Either PC must be able to
 create a match and the other must be able to join. Avoid synchronization faults;
 do not equate a working lobby or reliable packet delivery with deterministic play.
 
-## Delivery implemented
+## Current real LAN status (2026-10-27)
+
+Both separate PCs have joined the same lobby and loaded a running match.
+The corrected native adapter keeps the guest command horizon at five turns
+instead of growing with every turn; the user confirms responsive commands.
+A sustained test is running. An earlier peer-left/waiting-for-player failure
+has no verified cause, and reverse hosting between the real PCs is untested.
+Neither checksum equality nor freedom from desynchronization is established.
+See DEVELOPMENT-HANDOFF.md for current builds, hashes and observations.
+
+The complete package builder now pins the corrected adapter and the verified
+catalogue-route service. Its LAN starter permits only the explicitly chosen
+pair. Manifest capability flags remain conservative experimental claims,
+not switches for enabling networking. Full content checks precede startup;
+they are not a network admission proof or a simulation checksum.
+
+The rebuilt v3 package passes 12 synthetic installer tests and a fresh
+54-file installation using the original game as source. Only the intended
+loader/menu archive differ in Base; the installed content ID matches both
+updated PCs (d1db6b1a...). Bundled-runtime preflight starts no game and passes.
+All 249 ZIP entries pass CRC and payload fingerprint verification. No previous
+incremental update is required when installing this consolidated test package.
+
+The sections below retain the earlier preparation milestones and original
+acceptance plan; their not-yet-implemented statements describe that stage.
+
+## Initial delivery implementation
 
 `tools/installer/build_package.py` builds an offline preparation package from
 the tested adapter, service, existing archive byte-deltas, pinned CPython
