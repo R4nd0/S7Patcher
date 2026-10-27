@@ -92,18 +92,23 @@ namespace S7Patcher.Source
             return valid;
         }
 
-#if S7_LOCAL_PAIR_LAB
-        internal static bool TryProjectLabCatalogueRoutes(DisplaySnapshot snapshot, out string reason)
+        internal static bool TryProjectCatalogueRoutes(DisplaySnapshot snapshot, out string reason)
         {
-            reason = "local-pair-catalogue-host-invalid";
+            reason = "local-catalogue-host-invalid";
             if (!LocalLoginRpcEngine.PrudpUrl.TryRead(snapshot.Host.PublicUrl, out var registered)) return false;
-            if (!registered.Address.Equals(System.Net.IPAddress.Parse("127.0.0.2"))
-                && !registered.Address.Equals(System.Net.IPAddress.Parse("127.0.0.3"))) return true;
+            bool project = LocalNetworkPolicy.TryPrivateAddress(registered.Address.ToString(), out _);
+#if S7_LOCAL_PAIR_LAB
+            project |= registered.Address.Equals(System.Net.IPAddress.Parse("127.0.0.2"))
+                || registered.Address.Equals(System.Net.IPAddress.Parse("127.0.0.3"));
+#endif
+            // Native discovery can cache the Storm descriptor before JoinSession
+            // returns. Both replies must advertise the same owned game routes.
+            // Only the copied snapshot is changed; host metadata remains intact.
+            if (!project) return true;
             if (!TryHostRoutes(snapshot.Metadata.Creation.StationUrls, snapshot.Host, out var routes, out reason)) return false;
             try { snapshot.Metadata.ReplaceCreationRoutes(routes); return true; }
             finally { CryptographicOperations.ZeroMemory(routes); }
         }
-#endif
 
         private static bool TryHostRoutes(ReadOnlySpan<byte> bytes, LocalLoginRpcEngine.RegisteredPeer host,
             out byte[] projection, out string reason)

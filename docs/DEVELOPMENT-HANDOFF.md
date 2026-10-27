@@ -21,8 +21,8 @@ with inputs on both sides and no reported desync/disconnection. The reverse
 direction (A hosts, B joins) also reached a running match, confirmed by the user.
 Longer synchronization remains unverified. The successful lab used service
 work/server-pair-activity and adapter work/native-pair-core-resume. Those owned
-lab games and service are now stopped. The active real LAN host is the prepared
-work/installer-network-pump-realtest-v2 copy described below.
+lab games and service are now stopped. The prepared real LAN host is
+work/installer-network-pump-realtest-v2, currently closed while PC2 updates.
 
 The historical baseline passed 354 adapter checks, 38 network-guard checks
 and 18 original-byte comparisons, plus configuration validation. The
@@ -33,7 +33,86 @@ These are separate results, not evidence of a playable LAN match.
 
 ## Current step: nonempty catalogue and second-client join
 
-### Latest: v2 installed on PC2; real LAN join fails during peer link
+### Latest: real LAN target rejected locally; catalogue route correction staged
+
+After the coordinated restart, both real PCs completed Login/Register. PC2
+found the lobby, received an acknowledged JoinSession reservation, then reported
+link-reach-failed again. Its user-supplied LAN-Status output confirms one game,
+bound UDP 3074/6200/9103, Private network and explicit inbound TCP/UDP Allow
+rules. Its fresh fixed labels include target-port-3074, destination-denied,
+target-outside-pair and access-denied, with no configured-peer target, sent,
+pending, self or loopback category. PC1 has no peer-game receive observation.
+Thus the guest attempts a native game destination outside the explicit pair;
+do not infer a particular wrong IP or weaken the address allowlist.
+
+The service previously filtered Storm routes in the join reply but only the
+lab build filtered discovery's copied snapshot. Native discovery can retain
+that descriptor before JoinSession returns. TryProjectCatalogueRoutes now uses
+the existing registered-host ownership/descriptor validator for private LAN
+hosts as well as the existing lab slots. Search and Join therefore advertise
+the same registered game routes. Ports and all other descriptor fields survive;
+stored host metadata, normal loopback behavior and address restrictions remain.
+No native adapter or game file changes in this milestone.
+
+Checks: 8,634 default and 11,097 lab service checks, including 108 new synthetic
+LAN catalogue checks for both host directions, foreign-first/last interfaces,
+all three native ports, matching search/join routes, stable responses, stored
+metadata immutability, foreign-only endpoint and connection-owner rejection.
+Real HTTP/UDP and existing lifecycle/crypto checks pass. Sixteen transactional
+updater checks pass. The actual PC1 update and idempotent repeat, full inventory
+verification and portable LAN-host preflight pass. Only Server/S7Patcher.dll
+changed; its dependencies and runtimes remain identical.
+
+Candidate service work/server-lan-catalogue-route has SHA256
+a4e300b091e289175f4866f82303b78e05b77aa82cffe958324b6c591d622914.
+Updated PC1 remains work/installer-network-pump-realtest-v2; content ID is
+a16f02cbd9a6a0ced9e60435b515143b151fc366c3d7c9e6230bc9147f8f032b.
+Artifact outputs/S7-LAN-Sitzungsliste-Update-2026-10-27.zip: 9 entries, 126,026
+bytes, CRC checked, no game files/LocalData. Exact source/target hashes, backup,
+session lock and complete inventory checks remain. The updater prints the new
+content ID to make selecting the same test folder easier.
+
+PC1's owned game and service were safely stopped before updating. PC1 is still
+closed; the no-game preflight service has exited. The user was asked to close
+PC2, apply Sitzungsliste-Update.cmd plus the entire S7-Sitzungsliste-Update
+folder to the same updated test copy, report the completion/content ID, and
+keep both game and starters closed. That response is pending. Do not start PC1
+until PC2 is confirmed closed/updated, to avoid poisoning another initial
+handshake with an old client. Then launch the owned host first, establish a
+public four-slot lobby, launch PC2 role 2, and observe one join attempt. This
+is a tested candidate correction, not yet a successful two-PC join or match.
+
+### Previous: matching diagnostic copies; clean restart after stalled CONNECT
+
+PC2 first failed before game launch after claiming the diagnostic update.
+Its reported content ID 3e5de8b16a041c4b10f547f3f509dfe8c148ab50242af254f14456eff71e308d
+exactly matched PC1's preserved pre-diagnostic compatibility.json. After asking
+for the update and file check from the same PC2 folder, the user confirmed the
+full current ID 43222cc4e8855fb9c41a8a4bcb44097f0145c213b528b312e4688dce9d66d94e.
+No reference-comparison download was needed and no content check was bypassed.
+
+The next PC2 game started but Multiplayer was disabled. The host's then-current
+service had only one Login/Register exchange (its own host), eleven CONNECT
+replies and repeated changed-connect-context rejection. Thus this run did not
+reach a new PC2 registered session or game join; do not confuse the old PC2
+native-status tail with a fresh diagnostic run. Source inspection confirms
+PrudpConnectProbe caches one CONNECT tuple per endpoint and deliberately rejects
+a changed tuple. The service does not replace it on subsequent SYN requests.
+The exact origin of the first incomplete PC2 handshake is not established.
+
+Both clients were closed in order: PC1 stopped using exact recorded path/parent
+checks and its launcher cleaned its service; the user then explicitly confirmed
+PC2 and all its starters were closed. Only after that confirmation was PC1
+restarted with a fresh service. No files or protocol checks changed. It completed
+real Login/Register with response ACKs. Current private stdout is
+work/pc1-clean-transport-host.stdout.log; owned game/launcher metadata remains
+work/pc1-v2-owned-launch.json. The user has been asked to create the public
+four-slot PC1 lobby first, then launch PC2 role 2 and join once. If disabled or
+failed, collect PC2 LAN-Status.cmd and the fresh host events. That response is
+recorded in the latest step above. Neither a fixed peer lifecycle nor a real
+two-PC match is claimed.
+
+### Previous: v2 installed on PC2; real LAN join fails during peer link
 
 The user confirmed the new v2 package was installed into a fresh PC2 test copy.
 Both owned local lab games/service were stopped through the path-checked helper.
@@ -85,16 +164,15 @@ only reads this copy's processes/ports, explicit application firewall rules,
 network profile and fixed labels since the latest bounded startup marker.
 Artifact outputs/S7-LAN-Transport-Diagnose-2026-10-27.zip contains 11 entries,
 133,433 bytes, CRC checked; no original game files or LocalData. The user has
-been asked to close PC2 and apply it to the newly installed v2 test copy, then
-report its completion without starting the game. That response is pending.
+been applied to the newly installed v2 test copy on PC2; the final matching ID
+and newer handshake problem are described above.
 
 PC1 was safely stopped and its launcher cleaned up its own service. It is now
 restarted with the diagnostic adapter at the same exact copy path and IPs;
 local connected state and ownership were rechecked. Current private stdout
 is work/pc1-transport-host.stdout.log, ownership work/pc1-v2-owned-launch.json.
-Next: after PC2 confirms updating, have PC1 create a new public lobby, then PC2
-start role 2 and try once. Collect PC1 labels locally and PC2 LAN-Status.cmd
-output. The adapter update is diagnostic, not a claimed fix for joining.
+The adapter update is diagnostic, not a claimed fix for joining. This first
+diagnostic host run was stopped before the clean coordinated restart above.
 
 ### Current: real one-PC match started; original-EXE LAN candidate
 

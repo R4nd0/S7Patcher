@@ -122,6 +122,6 @@ internal static class LocalSessionCatalogueChecks
         using var preview = new LocalSessionRegistry(true);
         Check(preview.TryCreate(ownerA, a, PublicBody(), out _, out _) && preview.TryLeave(ownerA, LocalSessionLeaveChecks.Body(), out _), "Preview setup");
         Check(!LocalSessionCatalogueCodec.TryGet(Get(), preview, viewer, out _, out _), "Retired preview fetchable");
-        return checks;
+        return checks + LocalLanCatalogueChecks.Run();
     }
 }

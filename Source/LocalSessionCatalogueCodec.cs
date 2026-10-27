@@ -33,9 +33,7 @@ namespace S7Patcher.Source
                         if (!IsPublic(snapshot.Metadata) || !Matches(snapshot.Metadata, query.Filters)) continue;
                         reason = "catalogue-record-incomplete";
                         if (!Complete(snapshot)) return false;
-#if S7_LOCAL_PAIR_LAB
-                        if (!LocalSessionRegistry.TryProjectLabCatalogueRoutes(snapshot, out reason)) return false;
-#endif
+                        if (!LocalSessionRegistry.TryProjectCatalogueRoutes(snapshot, out reason)) return false;
                         selected.Add(snapshot);
                     }
                     using var writer = new LocalSessionDisplayCodec.Writer();
