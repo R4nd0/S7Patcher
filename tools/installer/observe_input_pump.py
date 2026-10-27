@@ -1,6 +1,6 @@
 """Read-only counters for the exact, fingerprinted local test game and adapter.
 
-The three adapter RVAs were derived from a private relink map, with .text/.data
+The adapter RVAs were derived from a private relink map, with .text/.data
 bytes and section positions verified against this exact DLL. No game calls,
 injection, writes, packet contents, identities, tickets or descriptors.
 """
@@ -111,6 +111,16 @@ def observe(root):
                      'natural_updates_seen':read(adapter_base + 0x3dfae,1)[0]}
             counters = {'core_dispatches':u32(scheduler + 0x78), 'owner_updates':u32(adapter_base + 0x3e040),
                         'manager_updates':u32(adapter_base + 0x3e044), 'echo_updates':u32(adapter_base + 0x3e048)}
+            # 535250 returns CMain; EC9A80 sets its table; ECA030 returns +18.
+            # ED0150 sets CStateEngine's table. ECD7D0 increments +20 and
+            # schedules at +20 +24 +1; ECC750 moves +24 towards +28.
+            # +60 is the bounded DesiredTurnOffset sent by COrbitEvent.
+            main = typed(u32(at(0x13a5210)), 0x113f2c0)
+            engine = typed(u32(main + 0x18), 0x113f424)
+            flags.update({'command_turn':u32(engine + 0x20),
+                          'command_turn_offset':u32(engine + 0x24),
+                          'command_offset_target':u32(engine + 0x28),
+                          'desired_turn_offset':read(engine + 0x60,1)[0]})
             return scheduler, counters, flags
         previous, counters, flags = sample(); started = time.monotonic()
         print(json.dumps({'event':'input-pump-observation-start', **flags}), flush=True)

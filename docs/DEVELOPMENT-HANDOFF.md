@@ -59,8 +59,13 @@ master_started/core_enabled/external_boundaries/natural_updates_seen flags
 are 1 and master_state is 1. A stalled host update chain is not supported by
 this observation. No live native function was called or memory modified.
 
-The pending user request is to run Eingabe-Diagnose.cmd on PC2 while the match
-remains open and paste its complete ten-second output. Artifact
+PC2 returned all five successful samples: core_dispatches 60-64, and owner,
+manager and echo updates 30-32 each, per two seconds. All three counts match.
+Its flags match PC1 except natural_updates_seen=0. That flag only latches
+whether the original owner hook ran outside our supplied pump at any earlier
+time; it is not evidence that the current update chain is stalled.
+
+The original artifact
 outputs/S7-LAN-Eingabe-Diagnose-2026-10-27.zip has three entries, 4,132 bytes,
 and passed CRC verification. The CMD and entire S7-Eingabe-Diagnose folder
 must be extracted together beside PC2's currently used LAN starter. It reads
@@ -69,6 +74,22 @@ hash, image-size, process-path and launcher-parent checks. No injection,
 writes, packet contents, identities, descriptors or tickets are collected.
 Adapter counter RVAs came from a private relink map whose complete .text and
 .data bytes and section locations match the deployed DLL; do not ship that map.
+
+The extended observer additionally reads only four CStateEngine turn counters
+after CMain and CStateEngine table checks. Static proof: 535250 returns the
+global CMain, EC9A80 sets its table, ECA030 returns its +18 state engine,
+ED0150 sets the engine table, ECD7D0 increments +20 and schedules the next
+command batch at +20 +24 +1; ECC750 moves +24 toward +28. +60 is the bounded
+DesiredTurnOffset emitted in COrbitEvent. No native calls are made by the
+observer. PC1 advances 20 command turns every two seconds, with offset=1,
+target=1 and desired=5. Its bundled Python completed this extended observation.
+
+The pending user request is the matching PC2 measurement, without closing
+either game. Artifact outputs/S7-LAN-Runden-Diagnose-2026-10-27.zip has three
+entries, 4,378 bytes, verified CRC and exact Python/source equality. Extract
+the CMD and S7-Eingabe-Diagnose folder together into the same running test
+folder, replacing only the previous diagnostic files, then run the CMD and
+paste all output. It is still a read-only diagnostic, not a latency fix.
 
 PC1 owned game PID 60304, launcher PID 51088; verify exact paths and ownership
 again before any future stop. State: work/pc1-v2-owned-launch.json; stdout:
